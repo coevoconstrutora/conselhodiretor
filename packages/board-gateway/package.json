@@ -1,0 +1,33 @@
+{
+  "name": "@conselho/board-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@conselho/auth": "workspace:*",
+    "@conselho/board": "workspace:*",
+    "@conselho/db": "workspace:*",
+    "@conselho/shared-types": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.0",
+    "@conselho/providers": "workspace:*",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.6.0",
+    "@conselho/meetings": "workspace:*"
+  }
+}

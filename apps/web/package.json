@@ -1,0 +1,51 @@
+{
+  "name": "@conselho/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "create-user": "tsx scripts/create-user.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.0",
+    "@conselho/auth": "workspace:*",
+    "@conselho/board": "workspace:^",
+    "@conselho/board-gateway": "workspace:^",
+    "@conselho/crypto": "workspace:*",
+    "@conselho/db": "workspace:*",
+    "@conselho/engines": "workspace:^",
+    "@conselho/kb": "workspace:^",
+    "@conselho/llm-anthropic": "workspace:^",
+    "@conselho/providers": "workspace:*",
+    "@conselho/session": "workspace:*",
+    "@conselho/shared-types": "workspace:*",
+    "next": "^16.2.0",
+    "pg": "^8.21.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "zustand": "^5.0.14",
+    "@conselho/stt-deepgram": "workspace:*",
+    "@conselho/telemetry": "workspace:*",
+    "@conselho/meetings": "workspace:*",
+    "@conselho/meeting-report": "workspace:*",
+    "@conselho/audit": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "jsdom": "^29.1.1",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.0",
+    "tsx": "^4.19.0"
+  }
+}

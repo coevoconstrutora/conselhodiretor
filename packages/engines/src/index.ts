@@ -1,0 +1,37 @@
+export {
+  TriggerDetector,
+  ENGENHARIA_TRIGGERS,
+  VENDAS_TRIGGERS,
+  MERCADO_TRIGGERS,
+  ARQUITETURA_TRIGGERS,
+  LEGAL_TRIGGERS,
+  CS_TRIGGERS,
+  CFO_TRIGGERS,
+  FUTURISTA_TRIGGERS,
+  ALL_TRIGGERS,
+  type AgentTriggerDef,
+  type TriggerMatch,
+} from './triggers';
+export {
+  scoreMatch,
+  RelevanceGate,
+  AgentRateLimiter,
+  PriorityQueue,
+  Deduplicator,
+  PauseGate,
+  BoardGatekeeper,
+  type Candidate,
+  type ScorerConfig,
+  type RateLimiterConfig,
+  type DedupConfig,
+  type PauseGateConfig,
+  type GatekeeperConfig,
+  type GateDecision,
+  type DedupResult,
+} from './gate';
+export {
+  keywordSet,
+  jaccard,
+  SemanticDeduplicator,
+  type SemanticDedupResult,
+} from './semantic-dedup';

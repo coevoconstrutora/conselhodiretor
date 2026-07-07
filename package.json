@@ -1,0 +1,26 @@
+{
+  "name": "conselho",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.4.1",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @conselho/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "format": "prettier --check \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
+    "create-user": "pnpm --filter @conselho/web create-user"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^3.2.0"
+  }
+}

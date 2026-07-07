@@ -1,0 +1,265 @@
+@import 'tailwindcss';
+
+/* Design tokens (identidade CONSELHO — padrão corporativo B2B):
+   NAVY profundo como cor PRIMÁRIA (autoridade, decisão) + cinza-ardósia como
+   secundário + superfícies neutras frias (cinza-gelo, não marfim). Cantos
+   quase retos (--radius pequeno) e sombras rasas — linguagem de dashboard
+   financeiro/empresarial, não de spa/clínica.
+   Nota de contraste: `--brand` é um navy escuro o bastante para texto branco
+   passar AA (5:1) e para servir de texto navy sobre branco (4.5:1). O tom
+   médio de aço (steel blue) vive em `--accent`, usado em filetes e eyebrow. */
+:root {
+  --brand: 219 55% 26%;
+  --brand-tint: 217 45% 48%;
+  --secondary: 220 9% 38%;
+  --surface: 210 20% 98%;
+  --surface-muted: 214 16% 93%;
+  --surface-deep: 222 47% 12%;
+  --accent-gold: 210 30% 55%;
+  --text: 222 20% 14%;
+  --text-muted: 220 9% 40%;
+  --attn: 30 90% 46%;
+  --attn-critical: 4 78% 49%;
+  --attn-bg: 36 70% 95%;
+  --suggest: 200 42% 42%;
+  --hypothesis: 318 24% 48%;
+  --synthesis: 220 9% 46%;
+  --success: 152 40% 32%;
+  --focus-ring: 217 55% 45%;
+  --agent-engenharia: 200 45% 32%;
+  --agent-vendas: 10 45% 42%;
+  --agent-mercado: 265 30% 42%;
+  --agent-arquitetura: 190 35% 34%;
+  --agent-legal: 4 50% 38%;
+  --agent-cs: 168 30% 34%;
+  --agent-cfo: 217 45% 38%;
+  --agent-futurista: 250 24% 46%;
+  --agent-presidente: 219 55% 26%;
+  --radius: 3px;
+}
+
+@theme inline {
+  --color-brand: hsl(var(--brand));
+  --color-brand-tint: hsl(var(--brand-tint));
+  --color-secondary: hsl(var(--secondary));
+  --color-surface: hsl(var(--surface));
+  --color-surface-muted: hsl(var(--surface-muted));
+  --color-surface-deep: hsl(var(--surface-deep));
+  --color-accent-gold: hsl(var(--accent-gold));
+  --radius-token: var(--radius);
+  --font-display: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono-data: var(--font-mono-data), ui-monospace, monospace;
+  --color-ink: hsl(var(--text));
+  --color-ink-muted: hsl(var(--text-muted));
+  --color-attn: hsl(var(--attn));
+  --color-attn-critical: hsl(var(--attn-critical));
+  --color-attn-bg: hsl(var(--attn-bg));
+  --color-suggest: hsl(var(--suggest));
+  --color-hypothesis: hsl(var(--hypothesis));
+  --color-synthesis: hsl(var(--synthesis));
+  --color-success: hsl(var(--success));
+  --color-agent-engenharia: hsl(var(--agent-engenharia));
+  --color-agent-vendas: hsl(var(--agent-vendas));
+  --color-agent-mercado: hsl(var(--agent-mercado));
+  --color-agent-arquitetura: hsl(var(--agent-arquitetura));
+  --color-agent-legal: hsl(var(--agent-legal));
+  --color-agent-cs: hsl(var(--agent-cs));
+  --color-agent-cfo: hsl(var(--agent-cfo));
+  --color-agent-futurista: hsl(var(--agent-futurista));
+  --color-agent-presidente: hsl(var(--agent-presidente));
+}
+
+/* Base tipográfica: corpo legível (≥15px, line-height 1.6) e títulos serifados.
+   Headings herdam Fraunces via classe utilitária `font-display` no JSX. */
+body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: hsl(var(--text));
+  background-color: hsl(var(--surface));
+}
+
+/* Fundo ambiente: papel milimetrado — grade fina de desenho técnico, quase
+   imperceptível (4% de opacidade). Referência à Engenharia/planta baixa da
+   incorporadora, sem virar decoração chamativa. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: hsl(var(--surface));
+  background-image:
+    linear-gradient(hsl(var(--text) / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--text) / 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Materialidade corporativa: superfície plana, borda nítida, cantos quase
+   retos, sombra rasa única (profundidade mínima). Aplicar a todo container
+   de primeiro nível.
+   Marcas de registro (crosshair de canto, estilo desenho técnico/prancha de
+   engenharia) em 2 cantos opostos — via background-image (não pseudo-
+   elemento) para não colidir com `.gold-hairline`, que usa ::before/::after
+   quando as classes são combinadas no mesmo elemento. */
+.card-premium {
+  background-color: hsl(var(--surface));
+  background-image:
+    linear-gradient(hsl(var(--brand) / 0.4), hsl(var(--brand) / 0.4)),
+    linear-gradient(hsl(var(--brand) / 0.4), hsl(var(--brand) / 0.4)),
+    linear-gradient(hsl(var(--brand) / 0.4), hsl(var(--brand) / 0.4)),
+    linear-gradient(hsl(var(--brand) / 0.4), hsl(var(--brand) / 0.4));
+  background-repeat: no-repeat;
+  background-size:
+    9px 1.5px,
+    1.5px 9px,
+    9px 1.5px,
+    1.5px 9px;
+  background-position:
+    top -1px left -1px,
+    top -1px left -1px,
+    bottom -1px right -1px,
+    bottom -1px right -1px;
+  border: 1px solid hsl(var(--text) / 0.1);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px hsl(var(--text) / 0.05);
+}
+
+/* Filete de marca — divisor de 1px em tom de aço, do centro para fora, com
+   ticks perpendiculares nas pontas (terminador de linha de cota). */
+.gold-hairline {
+  position: relative;
+}
+.gold-hairline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 8%;
+  right: 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--accent-gold) / 0.7), transparent);
+}
+.gold-hairline::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 7px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(hsl(var(--accent-gold) / 0.5), hsl(var(--accent-gold) / 0.5)),
+    linear-gradient(hsl(var(--accent-gold) / 0.5), hsl(var(--accent-gold) / 0.5));
+  background-repeat: no-repeat;
+  background-size:
+    1px 7px,
+    1px 7px;
+  background-position:
+    8% top,
+    92% top;
+}
+
+/* Eyebrow — rótulo em versalete espaçado para kickers/seções/assinaturas. */
+.brand-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: hsl(var(--accent-gold));
+}
+
+/* Índice de prancha — rótulo mono no estilo "01/" de desenho técnico,
+   prefixando títulos de seção. Uso pontual, nunca em todo título. Cor é
+   decidida no local de uso (classe Tailwind) — varia entre chrome escuro e
+   card claro. */
+.blueprint-index {
+  font-family: var(--font-mono-data), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+/* Chrome escuro (header/login hero): navy sólido + a mesma grade fina, em
+   branco a 3,5% — a prancha de engenharia também no chrome. */
+.surface-deep-gradient {
+  background-color: hsl(var(--surface-deep));
+  background-image:
+    linear-gradient(hsl(0 0% 100% / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(0 0% 100% / 0.035) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Equalizador de fala (Sala de Board): 3 barras pulsando enquanto a persona
+   "fala" — event-driven, nunca em repouso. */
+@keyframes eq-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.eq-bar {
+  transform-origin: bottom;
+  animation: eq-bar 900ms ease-in-out infinite;
+}
+
+/* Vinheta de alerta (⚠️ crítico): a sala inteira responde por 2s — percepção
+   periférica antes da leitura. Some sozinha, nunca persiste. */
+@keyframes alert-vignette {
+  0% { opacity: 0; }
+  15% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.alert-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  box-shadow: inset 0 0 140px 36px hsl(var(--attn) / 0.4);
+  animation: alert-vignette 2000ms ease-out forwards;
+}
+
+/* Decaimento visual do destaque (NFR3/A6 ~8s): o realce some, o card fica. */
+@keyframes board-decay {
+  from {
+    background-color: hsl(var(--surface-muted));
+    box-shadow: 0 0 0 1px hsl(var(--suggest) / 0.35);
+  }
+  to {
+    background-color: hsl(var(--surface));
+    box-shadow: none;
+  }
+}
+.board-decay {
+  animation: board-decay 8000ms linear forwards;
+}
+
+/* Pulso do ⚠️ — 2 ciclos, nunca infinito (frontend-spec §6.4) */
+@keyframes board-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--attn) / 0.4); }
+  50% { box-shadow: 0 0 0 6px hsl(var(--attn) / 0); }
+}
+.board-pulse {
+  animation: board-pulse 700ms ease-out 2;
+}
+
+/* Entrada de card (slide+fade 220ms) */
+@keyframes board-entry {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.board-entry {
+  animation: board-entry 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Reduced motion: zero animação, sem perda de informação (§6.4/§9) */
+@media (prefers-reduced-motion: reduce) {
+  .board-decay,
+  .board-pulse,
+  .board-entry,
+  .eq-bar,
+  .alert-vignette {
+    animation: none;
+  }
+  .alert-vignette {
+    display: none;
+  }
+}
