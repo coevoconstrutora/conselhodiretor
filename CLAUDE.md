@@ -98,6 +98,13 @@ síntese do Presidente; cifrados + auditados atomicamente; editáveis).
 - ✅ NotebookLM por conselheiro: política ensinada via UI citada pelo CFO na
   reunião seguinte (RAG ponta a ponta comprovado).
 - ✅ Layout corporativo navy + linguagem de prancha de engenharia.
+- ✅ **LLM plugável de verdade**: novo `packages/llm-gemini` (Google Gemini) +
+  factory única `apps/web/lib/llm.ts` — seleção por env (`LLM_PROVIDER` ou
+  auto: GEMINI_API_KEY > ANTHROPIC_API_KEY > fake). Default do Gemini:
+  `gemini-flash-latest` com **fallback automático de modelo** em 503/404
+  (lição: gemini-2.5 foi aposentado pelo Google e virou 404) e
+  `thinkingBudget: 0` nas respostas curtas do board (Gemini 3 "pensa" por
+  default e estouraria maxOutputTokens baixos).
 - Registro completo: `docs/HISTORICO.md`.
 
 ## Pendências

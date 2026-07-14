@@ -33,7 +33,8 @@
     "@conselho/telemetry": "workspace:*",
     "@conselho/meetings": "workspace:*",
     "@conselho/meeting-report": "workspace:*",
-    "@conselho/audit": "workspace:*"
+    "@conselho/audit": "workspace:*",
+    "@conselho/llm-gemini": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

@@ -8,11 +8,11 @@ import {
   listAgentReports,
 } from '@conselho/meeting-report';
 import { COUNSELOR_AGENT_IDS, type AgentId, ALL_AGENT_IDS } from '@conselho/providers';
-import { AnthropicLlmProvider } from '@conselho/llm-anthropic';
 import { getCurrentUser } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getNoteInputs } from './board-runtime';
+import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
 
 /**
@@ -25,8 +25,8 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
   const user = await getCurrentUser();
   if (!user) return { ok: false, code: 'unauthenticated' };
   if (!meetingId) return { ok: false, code: 'invalid-input' };
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { ok: false, code: 'internal', detail: 'ANTHROPIC_API_KEY ausente no servidor.' };
+  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
   }
   try {
     const inputs = await getNoteInputs(meetingId);
@@ -34,15 +34,10 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
 
     const db = await getDb();
     const key = getEncryptionKey();
-    const llm = new AnthropicLlmProvider({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      agentId: 'presidente',
-      longForm: true,
-      // Relatório completo (4 seções em markdown) escapado dentro de um campo
-      // JSON de string: 1500 tokens cortava a resposta no meio, gerando JSON
-      // inválido (aspas/chaves nunca fechadas). 4000 dá folga real.
-      maxTokens: 4000,
-    });
+    // Factory única (lib/llm.ts): Gemini > Anthropic, trocável por env.
+    // longForm + teto alto: relatório completo em markdown escapado num campo
+    // JSON de string — 1500 tokens cortava a resposta no meio (JSON inválido).
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 4000 });
 
     // 1 relatório por conselheiro, em série (evita rajada de 8 chamadas simultâneas)
     const reports: Array<{ agentId: AgentId; content: string }> = [];
@@ -50,7 +45,7 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
       const content = await generateCounselorReport(llm, agentId, inputs.finals, inputs.contributions);
       await saveAgentReport(db, meetingId, agentId, content, key, {
         action: 'generate',
-        modelVersion: 'claude-haiku-4-5',
+        modelVersion: modelLabel,
       });
       reports.push({ agentId, content });
     }
@@ -59,7 +54,7 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     const synthesis = await generatePresidentSynthesis(llm, reports);
     await saveAgentReport(db, meetingId, 'presidente', synthesis, key, {
       action: 'generate',
-      modelVersion: 'claude-haiku-4-5',
+      modelVersion: modelLabel,
     });
 
     revalidatePath(`/meetings/${meetingId}`);

@@ -7,10 +7,9 @@ import {
   type FullBoardConfig,
 } from '@conselho/board';
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
-import { AnthropicLlmProvider } from '@conselho/llm-anthropic';
 import { NamespacedKnowledgeStore } from '@conselho/kb';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
-import { FakeLlmProvider, BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
+import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
 import { TelemetryRegistry, type GateDecisionKind, type UiEventKind, type CaseReviewOutcome } from '@conselho/telemetry';
 import {
   saveSynthesis,
@@ -24,6 +23,7 @@ import {
 import type { SqlExecutor } from '@conselho/db';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
+import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 
 /**
@@ -175,17 +175,8 @@ function makeLlm(onUsage?: (u: { inputTokens: number; outputTokens: number }) =>
   llm: ILlmProvider;
   label: string;
 } {
-  if (process.env.ANTHROPIC_API_KEY) {
-    return {
-      llm: new AnthropicLlmProvider({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        agentId: 'presidente', // fallback — o Reasoner define o agente por contribuição
-        onUsage, // telemetria de custo (E10/NFR7)
-      }),
-      label: 'claude-haiku-4-5 (real)',
-    };
-  }
-  return { llm: new FakeLlmProvider('legal', 'atencao'), label: 'fake (sem ANTHROPIC_API_KEY)' };
+  // Factory única (lib/llm.ts): Gemini > Anthropic > fake, trocável por env.
+  return createLlm(onUsage ? { onUsage } : {});
 }
 
 /**
