@@ -5,6 +5,7 @@ import {
   createUserAction,
   updateUserRoleAction,
   deleteUserAction,
+  sendCredentialsAction,
   type CreateUserState,
   type UserActionState,
   type UserSummary,
@@ -66,6 +67,10 @@ export function CreateUserForm({ knownDomains }: { knownDomains: string[] }) {
           </select>
         </label>
       </div>
+      <label className="flex items-center gap-2 text-xs text-ink">
+        <input type="checkbox" name="sendEmail" defaultChecked className="rounded border-ink/25" />
+        Enviar URL de acesso, usuário e senha por e-mail
+      </label>
       <div className="flex items-center justify-between gap-3">
         {state?.error ? (
           <p role="alert" className="text-xs font-medium text-attn-critical">
@@ -118,6 +123,53 @@ function RoleForm({ user, disabled }: { user: UserSummary; disabled: boolean }) 
   );
 }
 
+function SendCredentialsForm({ userId }: { userId: string }) {
+  const [confirming, setConfirming] = useState(false);
+  const [state, formAction, pending] = useActionState<UserActionState, FormData>(
+    sendCredentialsAction,
+    null,
+  );
+
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="rounded-[var(--radius)] border border-ink/15 px-2.5 py-1.5 text-xs text-ink transition-colors hover:bg-surface-muted"
+      >
+        ✉ Enviar credenciais
+      </button>
+    );
+  }
+  return (
+    <form action={formAction} className="flex items-center gap-2">
+      <input type="hidden" name="userId" value={userId} />
+      {state?.ok ? (
+        <span className="text-xs text-success">✓ {state.ok}</span>
+      ) : (
+        <>
+          <span className="text-xs text-ink-muted">Gera uma senha nova e envia por e-mail.</span>
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-[var(--radius)] bg-brand px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          >
+            {pending ? 'Enviando…' : 'Confirmar'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="text-xs text-ink-muted underline"
+          >
+            cancelar
+          </button>
+        </>
+      )}
+      {state?.error ? <span className="text-xs text-attn-critical">⚠ {state.error}</span> : null}
+    </form>
+  );
+}
+
 export function UsersTable({ users, currentUserId }: { users: UserSummary[]; currentUserId: string }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -136,6 +188,7 @@ export function UsersTable({ users, currentUserId }: { users: UserSummary[]; cur
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <SendCredentialsForm userId={u.id} />
               <RoleForm user={u} disabled={isSelf} />
               {isSelf ? null : confirmDeleteId === u.id ? (
                 <form action={deleteUserAction} className="flex items-center gap-2">

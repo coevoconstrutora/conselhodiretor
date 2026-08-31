@@ -6,6 +6,12 @@ import { hashPassword } from '@conselho/auth';
 import type { AppUserRole } from '@conselho/db';
 import { getCurrentUser, isAdmin } from './auth';
 import { getDb } from './db';
+import { sendCredentialsEmail } from './email';
+import { siteOrigin } from './site-origin';
+
+function generatePassword(): string {
+  return randomBytes(9).toString('base64url'); // 12 chars, sem ambiguidade de URL
+}
 
 /**
  * Gestão de usuários — só admin, e sempre escopada à EMPRESA ATIVA do admin
@@ -70,14 +76,32 @@ export async function createUserAction(
   const existing = await db.query<{ id: string }>('SELECT id FROM app_user WHERE email = $1', [email]);
   if (existing.rows.length > 0) return { error: 'Já existe um usuário com esse e-mail.' };
 
-  const generatedPassword = randomBytes(9).toString('base64url'); // 12 chars, sem ambiguidade de URL
+  const generatedPassword = generatePassword();
   await db.query(
     'INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, $4, $5)',
     [email, displayName, hashPassword(generatedPassword), role, admin.companyId],
   );
 
+  const sendEmail = formData.get('sendEmail') === 'on';
+  let emailSent = false;
+  if (sendEmail) {
+    try {
+      await sendCredentialsEmail(email, {
+        accessUrl: `${await siteOrigin()}/login`,
+        email,
+        password: generatedPassword,
+      });
+      emailSent = true;
+    } catch (err) {
+      console.error('[usuarios] envio de credenciais falhou:', err);
+    }
+  }
+
   revalidatePath('/users');
-  return { ok: `Usuário ${email} criado.`, generatedPassword };
+  return {
+    ok: `Usuário ${email} criado.${emailSent ? ' Credenciais enviadas por e-mail.' : ''}`,
+    generatedPassword,
+  };
 }
 
 export type UserActionState = { error?: string; ok?: string } | null;
@@ -146,4 +170,48 @@ export async function deleteUserAction(formData: FormData): Promise<void> {
 
   await db.query('DELETE FROM app_user WHERE id = $1 AND company_id = $2', [userId, admin.companyId]);
   revalidatePath('/users');
+}
+
+/**
+ * Gera uma senha NOVA para um usuário DA MESMA EMPRESA e envia por e-mail
+ * (URL de acesso + usuário + senha). Não existe "reenviar a mesma senha" —
+ * a senha nunca fica em claro no banco, então reenviar é sempre resetar.
+ */
+export async function sendCredentialsAction(
+  _prev: UserActionState,
+  formData: FormData,
+): Promise<UserActionState> {
+  const admin = await getCurrentUser();
+  if (!admin) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!isAdmin(admin)) return { error: 'Só administradores podem enviar credenciais.' };
+
+  const userId = String(formData.get('userId') ?? '');
+  if (!userId) return { error: 'Usuário inválido.' };
+
+  const db = await getDb();
+  const target = await db.query<{ email: string }>(
+    'SELECT email FROM app_user WHERE id = $1 AND company_id = $2',
+    [userId, admin.companyId],
+  );
+  const email = target.rows[0]?.email;
+  if (!email) return { error: 'Usuário não encontrado.' };
+
+  const newPassword = generatePassword();
+  await db.query('UPDATE app_user SET password_hash = $2, updated_at = now() WHERE id = $1', [
+    userId,
+    hashPassword(newPassword),
+  ]);
+
+  try {
+    await sendCredentialsEmail(email, {
+      accessUrl: `${await siteOrigin()}/login`,
+      email,
+      password: newPassword,
+    });
+  } catch (err) {
+    console.error('[usuarios] envio de credenciais falhou:', err);
+    return { error: 'Senha redefinida, mas o e-mail falhou ao enviar — tente de novo.' };
+  }
+
+  return { ok: `Credenciais enviadas para ${email}.` };
 }

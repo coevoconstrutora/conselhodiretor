@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
   verifyPassword,
@@ -14,6 +14,7 @@ import {
 import { getDb } from './db';
 import { SESSION_COOKIE } from './auth';
 import { sendPasswordResetEmail } from './email';
+import { siteOrigin } from './site-origin';
 
 export interface LoginState {
   error?: string;
@@ -56,13 +57,6 @@ export async function logoutAction(): Promise<void> {
     jar.delete(SESSION_COOKIE);
   }
   redirect('/login');
-}
-
-async function siteOrigin(): Promise<string> {
-  const h = await headers();
-  const host = h.get('host') ?? 'localhost:3000';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  return `${proto}://${host}`;
 }
 
 export interface ForgotPasswordState {
