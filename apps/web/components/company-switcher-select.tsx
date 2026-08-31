@@ -16,7 +16,11 @@ export function CompanySwitcherSelect({
 
   return (
     <form ref={formRef} action={switchCompanyAction}>
+      {/* key força remount ao trocar — <select defaultValue> só aplica no mount
+          inicial; sem isso, o valor exibido ficava "preso" na empresa anterior
+          mesmo depois do servidor confirmar a troca. */}
       <select
+        key={currentCompanyId}
         name="companyId"
         defaultValue={currentCompanyId}
         onChange={() => formRef.current?.requestSubmit()}
