@@ -7,6 +7,7 @@ import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { saveCompanyProfile, addCompanySource, deleteCompanySource } from './company-profile';
 import { fetchUrlText } from './kb-sources';
+import { lookupCnpj, CnpjLookupError, type CnpjData } from './cnpj-lookup';
 
 export type CompanyProfileActionState = { error?: string; ok?: string } | null;
 
@@ -21,6 +22,7 @@ export async function saveCompanyProfileAction(
 
   const profile: CompanyProfile = {
     name: String(formData.get('name') ?? '').trim() || undefined,
+    cnpj: String(formData.get('cnpj') ?? '').trim() || undefined,
     size: String(formData.get('size') ?? '').trim() || undefined,
     segment: String(formData.get('segment') ?? '').trim() || undefined,
     region: String(formData.get('region') ?? '').trim() || undefined,
@@ -114,6 +116,25 @@ export async function addCompanyFileSourceAction(
   } catch (err) {
     console.error('[empresa] upload falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada no upload.' };
+  }
+}
+
+export type LookupCnpjResult = { ok: true; data: CnpjData } | { ok: false; error: string };
+
+/**
+ * Consulta o CNPJ na Receita (via BrasilAPI) — só devolve os dados para o
+ * cliente pré-preencher o formulário; NADA é salvo até o usuário revisar e
+ * clicar em "Salvar perfil da empresa".
+ */
+export async function lookupCnpjAction(cnpj: string): Promise<LookupCnpjResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { ok: false, error: 'Convidados não podem consultar CNPJ.' };
+  try {
+    const data = await lookupCnpj(cnpj);
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof CnpjLookupError ? err.message : 'Falha inesperada ao consultar o CNPJ.' };
   }
 }
 

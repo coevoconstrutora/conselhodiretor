@@ -29,17 +29,26 @@ export interface CompanySourceSummary {
   readonly createdAt: Date;
 }
 
+/**
+ * `name` vem SEMPRE de `company.name` (a identidade do tenant — mesma que
+ * aparece no seletor/admin de empresas), nunca do blob cifrado — assim
+ * renomear aqui e em /admin/companies é sempre a MESMA fonte de verdade.
+ */
 export async function loadCompanyProfile(db: SqlExecutor, companyId: string, key: Buffer): Promise<CompanyProfile> {
+  const companyRow = await db.query<{ name: string }>('SELECT name FROM company WHERE id = $1', [companyId]);
+  const name = companyRow.rows[0]?.name;
+
   const res = await db.query<{ content_enc: string }>(
     'SELECT content_enc FROM company_profile WHERE company_id = $1',
     [companyId],
   );
   const row = res.rows[0];
-  if (!row) return {};
+  if (!row) return { name };
   try {
-    return JSON.parse(decryptField(row.content_enc, key)) as CompanyProfile;
+    const stored = JSON.parse(decryptField(row.content_enc, key)) as CompanyProfile;
+    return { ...stored, name };
   } catch {
-    return {}; // chave trocada/dado corrompido — degrada para "sem perfil" em vez de derrubar a página
+    return { name }; // chave trocada/dado corrompido — degrada para "sem perfil" em vez de derrubar a página
   }
 }
 
@@ -85,6 +94,10 @@ export async function saveCompanyProfile(
     db,
     { triggeredBy: 'company-profile-edit', kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
+      // renomeia o tenant (mesma fonte usada no seletor/admin de empresas)
+      if (profile.name?.trim()) {
+        await tx.query('UPDATE company SET name = $2 WHERE id = $1', [companyId, profile.name.trim()]);
+      }
       await tx.query(
         `INSERT INTO company_profile (company_id, content_enc) VALUES ($1, $2)
          ON CONFLICT (company_id) DO UPDATE SET content_enc = EXCLUDED.content_enc, updated_at = now()`,

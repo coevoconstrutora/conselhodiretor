@@ -9,6 +9,7 @@
  */
 export interface CompanyProfile {
   readonly name?: string;
+  readonly cnpj?: string;
   readonly size?: string;
   readonly segment?: string;
   readonly region?: string;
@@ -32,6 +33,7 @@ export function companyProfileBlock(companyId: string): string {
   const current = getCompanyProfile(companyId);
   const parts: string[] = [];
   if (current.name) parts.push(`Empresa: ${current.name}`);
+  if (current.cnpj) parts.push(`CNPJ: ${current.cnpj}`);
   if (current.size) parts.push(`Porte: ${current.size}`);
   if (current.segment) parts.push(`Segmento: ${current.segment}`);
   if (current.region) parts.push(`Região de atuação: ${current.region}`);
