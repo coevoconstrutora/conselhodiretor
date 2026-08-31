@@ -34,7 +34,8 @@
     "@conselho/meetings": "workspace:*",
     "@conselho/meeting-report": "workspace:*",
     "@conselho/audit": "workspace:*",
-    "@conselho/llm-gemini": "workspace:*"
+    "@conselho/llm-gemini": "workspace:*",
+    "@conselho/llm-openai": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",

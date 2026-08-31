@@ -8,7 +8,7 @@ import {
   listAgentReports,
 } from '@conselho/meeting-report';
 import { COUNSELOR_AGENT_IDS, type AgentId, ALL_AGENT_IDS } from '@conselho/providers';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getNoteInputs } from './board-runtime';
@@ -24,9 +24,10 @@ import { toActionResult, type ActionResult } from './action-result';
 export async function generateReportsAction(meetingId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem gerar relatórios.' };
   if (!meetingId) return { ok: false, code: 'invalid-input' };
-  if (!process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-    return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
   }
   try {
     const inputs = await getNoteInputs(meetingId);
@@ -69,6 +70,7 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
 export async function saveAgentReportAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem editar relatórios.');
   const meetingId = String(formData.get('meetingId') ?? '');
   const agentId = String(formData.get('agentId') ?? '') as AgentId;
   const content = String(formData.get('content') ?? '').trim();

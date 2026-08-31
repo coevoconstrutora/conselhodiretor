@@ -1,0 +1,32 @@
+# fly.toml — Conselho (board de 9 agentes de IA)
+#
+# WS na mesma porta do HTTP (BOARD_WS_MODE=attached, definido no Dockerfile) —
+# auto_stop_machines=false para não derrubar reuniões ao vivo por inatividade
+# de curto prazo entre falas.
+
+app = "conselho-diretor"
+primary_region = "gru"
+
+[build]
+
+[env]
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "15s"
+    method = "GET"
+    timeout = "5s"
+    path = "/login"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

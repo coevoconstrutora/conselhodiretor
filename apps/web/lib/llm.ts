@@ -1,6 +1,7 @@
 import 'server-only';
 import { AnthropicLlmProvider } from '@conselho/llm-anthropic';
 import { GeminiLlmProvider } from '@conselho/llm-gemini';
+import { OpenAiLlmProvider } from '@conselho/llm-openai';
 import { FakeLlmProvider, type ILlmProvider } from '@conselho/providers';
 
 /**
@@ -8,10 +9,11 @@ import { FakeLlmProvider, type ILlmProvider } from '@conselho/providers';
  * provider por aqui — trocar de fornecedor é trocar env, nunca código.
  *
  * Seleção:
- * - `LLM_PROVIDER=gemini|anthropic|fake` força um provedor;
- * - sem LLM_PROVIDER: GEMINI_API_KEY > ANTHROPIC_API_KEY > fake (dev).
+ * - `LLM_PROVIDER=openai|gemini|anthropic|fake` força um provedor;
+ * - sem LLM_PROVIDER: OPENAI_API_KEY > GEMINI_API_KEY > ANTHROPIC_API_KEY > fake (dev).
  * Modelo do Gemini: `GEMINI_MODEL` (default gemini-flash-latest, com
- * fallback automático de modelo em 503/404 dentro do adapter).
+ * fallback automático de modelo em 503/404 dentro do adapter). Modelo da
+ * OpenAI: `OPENAI_MODEL` (default gpt-4o-mini).
  */
 
 export interface LlmOptions {
@@ -22,6 +24,24 @@ export interface LlmOptions {
 
 export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: string } {
   const forced = (process.env.LLM_PROVIDER ?? '').toLowerCase();
+
+  const wantOpenAi = forced === 'openai' || (!forced && !!process.env.OPENAI_API_KEY);
+  if (wantOpenAi) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error('LLM_PROVIDER=openai exige OPENAI_API_KEY no ambiente.');
+    const model = process.env.OPENAI_MODEL || undefined;
+    return {
+      llm: new OpenAiLlmProvider({
+        apiKey,
+        agentId: 'presidente', // fallback — o Reasoner define o agente por contribuição
+        ...(model ? { model } : {}),
+        ...(opts.longForm ? { longForm: true } : {}),
+        ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
+        ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+      }),
+      label: `${model ?? 'gpt-4o-mini'} (OpenAI)`,
+    };
+  }
 
   const wantGemini = forced === 'gemini' || (!forced && !!process.env.GEMINI_API_KEY);
   if (wantGemini) {

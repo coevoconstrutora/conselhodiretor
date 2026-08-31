@@ -25,6 +25,7 @@ import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
+import { loadAndApplyCompanyProfile } from './company-profile';
 
 /**
  * Runtime do board no processo do Next (demo do walking skeleton — E3).
@@ -99,6 +100,7 @@ async function init(): Promise<BoardRuntime> {
   // rebuild roda ao vivo quando o dono edita em /counselors/[id].
   const kb = new NamespacedKnowledgeStore();
   await loadAndApplyProfileOverrides(db);
+  await loadAndApplyCompanyProfile(db, getEncryptionKey());
   await rebuildAllKnowledge(kb, db, getEncryptionKey(), COUNSELOR_AGENT_IDS);
   return { gateway, kb, telemetry: new TelemetryRegistry(), active: new Map(), lastFinalAt: new Map() };
 }
@@ -439,7 +441,9 @@ export async function getPipelineStatus(meetingId: string): Promise<PipelineStat
     audioSinkRegistered: runtime.gateway.hasAudioSink(meetingId),
     boardClients: runtime.gateway.clientCount(meetingId),
     deepgramConfigured: Boolean(process.env.DEEPGRAM_API_KEY),
-    anthropicConfigured: Boolean(process.env.ANTHROPIC_API_KEY),
+    anthropicConfigured: Boolean(
+      process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY,
+    ),
     persistedFinals,
   };
 }

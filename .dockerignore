@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+.next
+**/.next
+.pgdata
+**/.pgdata*
+.git
+.env
+.env.local
+**/.env.local
+*.log
+.pnpm-store
+docs
+.claude
+.playwright-mcp
+coverage
