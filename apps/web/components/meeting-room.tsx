@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { SessionSnapshot } from '@conselho/session';
 import { useBoardStream } from '@/lib/use-board-stream';
 import { useUiTelemetry } from '@/lib/use-ui-telemetry';
+import { useBoardVoice } from '@/lib/use-board-voice';
 import { useBoardStore } from '@/lib/board-store';
 import { TranscriptPanel, type TranscriptSource } from './transcript-panel';
 import { SuggestionFeed } from './suggestion-feed';
@@ -24,18 +25,26 @@ export function MeetingRoom({
   wsBaseUrl,
   startForm,
   synthesisForm,
+  endMeetingButton,
+  closed,
 }: {
   meetingId: string;
   token: string;
   wsBaseUrl: string;
   startForm: React.ReactNode;
   synthesisForm: React.ReactNode;
+  endMeetingButton?: React.ReactNode;
+  closed?: boolean;
 }) {
   useBoardStream(meetingId, { baseUrl: wsBaseUrl, token });
   useUiTelemetry(meetingId); // E10 — ruído/aceite (R3/§9)
+  const [voiceMuted, setVoiceMuted] = useState(false);
   const transcript = useBoardStore((s) => s.transcript);
   const focusMode = useBoardStore((s) => s.focusMode);
   const toggleFocusMode = useBoardStore((s) => s.toggleFocusMode);
+  // Modo Foco silencia a voz por padrão (menos ruído quando só ⚠️ importa) —
+  // o botão 🔊/🔇 continua valendo por cima disso.
+  useBoardVoice(meetingId, voiceMuted || focusMode);
 
   // Modo Foco com tecla F (FR16) — 1 tecla, sem modificador
   useEffect(() => {
@@ -88,6 +97,22 @@ export function MeetingRoom({
           </span>
         </h2>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={!(voiceMuted || focusMode)}
+            disabled={focusMode}
+            onClick={() => setVoiceMuted((m) => !m)}
+            title={
+              focusMode
+                ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
+                : voiceMuted
+                  ? 'Ativar voz dos conselheiros'
+                  : 'Silenciar voz dos conselheiros'
+            }
+            className="rounded-[var(--radius)] border border-white/25 px-2.5 py-1 text-xs text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+          >
+            {voiceMuted || focusMode ? '🔇 voz' : '🔊 voz'}
+          </button>
           <PipelineStatusBadge />
           <span
             title="⚠️ atenção · 💡 sugestão · 🔍 hipótese · 📋 síntese"
@@ -125,7 +150,20 @@ export function MeetingRoom({
         >
           🔇 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
         </button>
-        <div className="flex items-start gap-2">{synthesisForm}{startForm}<LiveMicButton meetingId={meetingId} token={token} wsBaseUrl={wsBaseUrl} /></div>
+        <div className="flex items-start gap-2">
+          {closed ? (
+            <span className="rounded-[var(--radius)] border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-white/60">
+              🔒 Reunião encerrada
+            </span>
+          ) : (
+            <>
+              {synthesisForm}
+              {startForm}
+              <LiveMicButton meetingId={meetingId} token={token} wsBaseUrl={wsBaseUrl} />
+            </>
+          )}
+          {endMeetingButton}
+        </div>
       </div>
     </section>
   );

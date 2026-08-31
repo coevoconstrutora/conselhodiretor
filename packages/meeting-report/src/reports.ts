@@ -1,7 +1,7 @@
 import type { SqlExecutor } from '@conselho/db';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
-import { AGENT_PROFILES } from '@conselho/kb';
+import { AGENT_PROFILES, companyProfileBlock } from '@conselho/kb';
 import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/providers';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 
@@ -35,20 +35,25 @@ function counselorReportSystem(agentId: AgentId): string {
     'você acompanharia na próxima. Tom consultivo: a decisão é sempre do empresário. ' +
     'Termine com a linha "_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE para esta tarefa: ignore qualquer limite de 1-3 frases — ' +
-    'o campo text deve conter o RELATÓRIO COMPLETO em markdown (use \\n para quebras de linha).'
+    'o campo text deve conter o RELATÓRIO COMPLETO em markdown (use \\n para quebras de linha).' +
+    companyProfileBlock()
   );
 }
 
-const PRESIDENT_SYSTEM =
-  `Você é ${AGENT_PROFILES.presidente.displayName} de uma incorporadora imobiliária. ` +
-  'A reunião terminou e cada conselheiro entregou seu relatório. Escreva a SÍNTESE EXECUTIVA ' +
-  'em português do Brasil, markdown leve, com as seções: ' +
-  '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
-  'Integre as visões, exponha divergências com transparência e NÃO invente nada que os relatórios ' +
-  'não sustentem. Termine SEMPRE devolvendo a decisão ao empresário ("a decisão é sua") e com a linha ' +
-  '"_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
-  'EXCEÇÃO IMPORTANTE: ignore qualquer limite de 1-3 frases — o campo text deve conter a SÍNTESE ' +
-  'COMPLETA em markdown (use \\n para quebras de linha).';
+function presidentSystem(): string {
+  return (
+    `Você é ${AGENT_PROFILES.presidente.displayName} de uma incorporadora imobiliária. ` +
+    'A reunião terminou e cada conselheiro entregou seu relatório. Escreva a SÍNTESE EXECUTIVA ' +
+    'em português do Brasil, markdown leve, com as seções: ' +
+    '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
+    'Integre as visões, exponha divergências com transparência e NÃO invente nada que os relatórios ' +
+    'não sustentem. Termine SEMPRE devolvendo a decisão ao empresário ("a decisão é sua") e com a linha ' +
+    '"_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
+    'EXCEÇÃO IMPORTANTE: ignore qualquer limite de 1-3 frases — o campo text deve conter a SÍNTESE ' +
+    'COMPLETA em markdown (use \\n para quebras de linha).' +
+    companyProfileBlock()
+  );
+}
 
 /**
  * Gera o rascunho do relatório de UM conselheiro sobre a reunião inteira.
@@ -88,7 +93,7 @@ export async function generatePresidentSynthesis(
     .map((r) => `### Relatório — ${AGENT_PROFILES[r.agentId].displayName}\n${r.content}`)
     .join('\n\n');
   const result = await llm.complete({
-    system: PRESIDENT_SYSTEM,
+    system: presidentSystem(),
     context: [],
     transcript: `Relatórios dos conselheiros:\n\n${blocks}`,
   });

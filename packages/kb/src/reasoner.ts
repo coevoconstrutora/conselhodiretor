@@ -4,6 +4,7 @@ import type {
   AgentContribution,
   AgentId,
 } from '@conselho/providers';
+import { companyProfileBlock } from './company-profile';
 
 /**
  * Agent Reasoner.
@@ -90,7 +91,8 @@ export function buildAgentSystem(profile: AgentProfile): string {
     `não invente números nem fatos; (3) responda em português do Brasil, em 1-3 frases, em tom de sugestão ` +
     `("vale verificar", "considere") ou de pergunta instigante — nunca de comando: a decisão é sempre do empresário; ` +
     `(4) NÃO repita contribuições já feitas pelo conselho (mesmo com outras palavras) — analise a PROGRESSÃO ` +
-    `da reunião e só contribua com o que é NOVO e útil agora.`
+    `da reunião e só contribua com o que é NOVO e útil agora.` +
+    companyProfileBlock()
   );
 }
 

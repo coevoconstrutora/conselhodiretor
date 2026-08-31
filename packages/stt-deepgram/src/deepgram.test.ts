@@ -92,6 +92,44 @@ describe('DeepgramSttProvider (Story 2.1)', () => {
     });
   });
 
+  describe('Diarização simples — "Locutor N" só em virada de falante (não é biometria)', () => {
+    function resultsWithSpeaker(socket: FakeSocket, transcript: string, isFinal: boolean, speaker: number) {
+      socket.emit('message', {
+        data: JSON.stringify({
+          type: 'Results',
+          is_final: isFinal,
+          channel: { alternatives: [{ transcript, words: [{ speaker }] }] },
+        }),
+      });
+    }
+
+    it('prefixa "Locutor N:" no primeiro final e de novo só quando o falante muda', async () => {
+      const socket = new FakeSocket();
+      const session = makeProvider(socket).openStream({ lang: 'pt-BR' });
+
+      resultsWithSpeaker(socket, 'Vamos fechar o contrato.', true, 0);
+      resultsWithSpeaker(socket, 'Concordo com os termos.', true, 0); // mesmo falante — sem novo rótulo
+      resultsWithSpeaker(socket, 'Só falta o jurídico revisar.', true, 1); // troca — novo rótulo
+
+      const [a, b, c] = await collect(session, 3);
+      expect(a!.text).toBe('Locutor 1: Vamos fechar o contrato.');
+      expect(b!.text).toBe('Concordo com os termos.');
+      expect(c!.text).toBe('Locutor 2: Só falta o jurídico revisar.');
+      await session.close();
+    });
+
+    it('interim (não-final) nunca leva o rótulo — só finais', async () => {
+      const socket = new FakeSocket();
+      const session = makeProvider(socket).openStream({ lang: 'pt-BR' });
+
+      resultsWithSpeaker(socket, 'Vamos fechar', false, 0);
+
+      const [only] = await collect(session, 1);
+      expect(only!.text).toBe('Vamos fechar');
+      await session.close();
+    });
+  });
+
   describe('AC4 — timestamps para latência (NFR5)', () => {
     it('segmento carrega startMs/endMs do vendor + receivedAtMs do cliente', async () => {
       const socket = new FakeSocket();
@@ -114,6 +152,7 @@ describe('DeepgramSttProvider (Story 2.1)', () => {
       expect(parsed.searchParams.get('interim_results')).toBe('true');
       expect(parsed.searchParams.getAll('keywords')).toEqual(['semaglutida', 'TSH']);
       expect(parsed.searchParams.get('model')).toBe('nova-2'); // default
+      expect(parsed.searchParams.get('diarize')).toBe('true'); // "Locutor N" por turno
     });
 
     it('no Nova-3 usa keyterm (não keywords — que o Deepgram ignora nesse modelo) — POC 2.5', () => {

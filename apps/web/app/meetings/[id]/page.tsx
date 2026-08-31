@@ -4,7 +4,7 @@ import { redirect, notFound } from 'next/navigation';
 import { getMeeting } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
 import { AGENT_PROFILES } from '@conselho/kb';
-import { getCurrentUser, SESSION_COOKIE } from '@/lib/auth';
+import { getCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-actions';
@@ -13,6 +13,7 @@ import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
 import { getBoardRuntime, getTelemetryReport, BOARD_WS_PORT } from '@/lib/board-runtime';
 import { MeetingRoom } from '@/components/meeting-room';
+import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
@@ -29,6 +30,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   if (!meeting) notFound();
 
   const authorized = meeting.recordingConfirmed;
+  const closed = meeting.status === 'closed';
 
   await getBoardRuntime();
   const sessionToken = (await cookies()).get(SESSION_COOKIE)?.value ?? '';
@@ -119,6 +121,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               meetingId={id}
               token={sessionToken}
               wsBaseUrl={wsBaseUrl}
+              closed={closed}
+              endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
               startForm={
                 <form action={startDemoBoardAction}>
                   <input type="hidden" name="meetingId" value={id} />

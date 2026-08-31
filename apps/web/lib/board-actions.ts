@@ -1,6 +1,9 @@
 'use server';
 
-import { getCurrentUser } from './auth';
+import { revalidatePath } from 'next/cache';
+import { closeMeeting } from '@conselho/meetings';
+import { getCurrentUser, canWrite } from './auth';
+import { getDb } from './db';
 import { startDemoBoard, requestSynthesis, startLiveBoard, stopLiveBoard } from './board-runtime';
 import { toActionResult, type ActionResult } from './action-result';
 
@@ -8,6 +11,7 @@ import { toActionResult, type ActionResult } from './action-result';
 export async function startDemoBoardAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem iniciar reuniões.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   await startDemoBoard(meetingId);
@@ -17,6 +21,7 @@ export async function startDemoBoardAction(formData: FormData): Promise<void> {
 export async function requestSynthesisAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem pedir síntese.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   await requestSynthesis(meetingId);
@@ -30,6 +35,7 @@ export async function requestSynthesisAction(formData: FormData): Promise<void> 
 export async function startLiveBoardAction(meetingId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem iniciar reuniões.' };
   if (!meetingId) return { ok: false, code: 'invalid-input' };
   try {
     await startLiveBoard(meetingId);
@@ -49,6 +55,29 @@ export async function stopLiveBoardAction(meetingId: string): Promise<ActionResu
     return { ok: true };
   } catch (err) {
     console.error('[board] stopLiveBoard falhou:', err);
+    return toActionResult(err);
+  }
+}
+
+/**
+ * Server action: "Encerrar reunião" — para STT/board (ao vivo OU simulada,
+ * `stopLiveBoard` cobre as duas) e marca a reunião como fechada. A partir
+ * daqui não dá mais para iniciar nada novo; transcrição e relatórios seguem
+ * disponíveis. Nunca lança — botão de risco, precisa de feedback lido.
+ */
+export async function endMeetingAction(meetingId: string): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem encerrar reuniões.' };
+  if (!meetingId) return { ok: false, code: 'invalid-input' };
+  try {
+    await stopLiveBoard(meetingId);
+    const db = await getDb();
+    await closeMeeting(db, meetingId);
+    revalidatePath(`/meetings/${meetingId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error('[board] endMeeting falhou:', err);
     return toActionResult(err);
   }
 }

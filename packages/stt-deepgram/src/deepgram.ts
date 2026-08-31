@@ -101,6 +101,9 @@ export function buildListenUrl(config: DeepgramConfig, opts: SttOpenOptions): st
   url.searchParams.set('language', opts.lang); // PT-BR (NFR11)
   url.searchParams.set('interim_results', 'true'); // parciais + finais (AC2)
   url.searchParams.set('smart_format', 'true');
+  // Diarização simples (rótulo "Locutor N" por virada de falante NA MESMA
+  // sessão — não é biometria/identidade entre reuniões, só separa turnos).
+  url.searchParams.set('diarize', 'true');
   // Boost do vocabulário clínico (T4). O Nova-3 SUBSTITUIU `keywords` por
   // `keyterm` (contextual, model-driven, multilíngue, até ~100 termos): setar
   // `keywords` no nova-3 é silenciosamente IGNORADO pelo Deepgram. Escolhemos o
@@ -119,13 +122,17 @@ interface DeepgramResultsMessage {
   is_final?: boolean;
   start?: number; // segundos
   duration?: number; // segundos
-  channel?: { alternatives?: Array<{ transcript?: string }> };
+  channel?: {
+    alternatives?: Array<{ transcript?: string; words?: Array<{ speaker?: number }> }>;
+  };
 }
 
 class DeepgramSession implements SttSession {
   private readonly queue: Array<TranscriptSegment | Error | null> = [];
   private wake: (() => void) | null = null;
   private closed = false;
+  /** Diarização simples: só prefixa "Locutor N:" quando o falante MUDA entre finais. */
+  private lastFinalSpeaker: number | null = null;
 
   constructor(
     private readonly socket: WebSocketLike,
@@ -197,12 +204,23 @@ class DeepgramSession implements SttSession {
       return;
     }
     if (msg.type !== 'Results') return; // Metadata/UtteranceEnd etc. são ignorados
-    const text = msg.channel?.alternatives?.[0]?.transcript ?? '';
+    const alternative = msg.channel?.alternatives?.[0];
+    let text = alternative?.transcript ?? '';
     if (text === '') return; // resultados vazios não viram segmento
+    const isFinal = msg.is_final === true;
+    // Diarização simples: só rotula finais (interim fica limpo, sem "piscar"
+    // o rótulo a cada parcial) e só quando o falante muda de um final p/ outro.
+    if (isFinal) {
+      const speaker = alternative?.words?.[0]?.speaker;
+      if (speaker !== undefined && speaker !== this.lastFinalSpeaker) {
+        this.lastFinalSpeaker = speaker;
+        text = `Locutor ${speaker + 1}: ${text}`;
+      }
+    }
     const startMs = msg.start !== undefined ? Math.round(msg.start * 1000) : undefined;
     const segment: TranscriptSegment = {
       text,
-      isFinal: msg.is_final === true,
+      isFinal,
       startMs,
       endMs:
         msg.start !== undefined && msg.duration !== undefined

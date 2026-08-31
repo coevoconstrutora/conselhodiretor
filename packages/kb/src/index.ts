@@ -15,3 +15,9 @@ export {
   type ReasonInput,
   type PriorContribution,
 } from './reasoner';
+export {
+  applyCompanyProfile,
+  getCompanyProfile,
+  companyProfileBlock,
+  type CompanyProfile,
+} from './company-profile';
