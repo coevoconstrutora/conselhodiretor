@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { saveTranscriptReview } from '@conselho/meeting-report';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 
@@ -15,6 +15,7 @@ import { getEncryptionKey } from './crypto-key';
 export async function saveTranscriptReviewAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem editar a transcrição.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   const content = String(formData.get('content') ?? '').trim();

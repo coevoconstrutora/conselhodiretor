@@ -1,9 +1,12 @@
 /** Tipos das linhas das entidades base. */
 
+export type AppUserRole = 'admin' | 'gestor' | 'convidado';
+
 export interface AppUserRow {
   id: string;
   email: string;
   display_name: string;
+  role: AppUserRole;
   created_at: Date;
   updated_at: Date;
 }

@@ -46,6 +46,8 @@ describe('Migrations — schema base', () => {
       '0003_transcript',
       '0004_board_outputs',
       '0005_counselor_knowledge',
+      '0006_users_roles',
+      '0007_company_profile',
     ]);
   });
 

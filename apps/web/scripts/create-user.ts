@@ -10,6 +10,9 @@
  *   --senha   obrigatório — mínimo 8 caracteres
  *   --desativar-demo  opcional — troca a senha do usuário demo por uma aleatória
  *                     (o login demo@conselho.test deixa de funcionar)
+ *   --role    opcional — admin | gestor | convidado (default: admin — este CLI
+ *             é o bootstrap do dono; usuários adicionais normalmente entram
+ *             pela tela de gestão de usuários, não por aqui)
  *
  * Banco: usa DATABASE_URL se definido (produção/Postgres), senão o PGlite local
  * de desenvolvimento (apps/web/.pgdata) — o MESMO banco que o `pnpm dev` usa.
@@ -62,10 +65,14 @@ async function main(): Promise<void> {
   const nome = argValue('--nome')?.trim();
   const senha = argValue('--senha');
   const desativarDemo = process.argv.includes('--desativar-demo');
+  const role = argValue('--role') ?? 'admin';
 
   if (!email || !email.includes('@')) fail('Informe um e-mail válido em --email.');
   if (!nome) fail('Informe o nome em --nome.');
   if (!senha || senha.length < 8) fail('Informe uma senha com pelo menos 8 caracteres em --senha.');
+  if (!['admin', 'gestor', 'convidado'].includes(role)) {
+    fail('--role deve ser admin, gestor ou convidado.');
+  }
 
   const { db, label, close } = await openDb();
   try {
@@ -78,16 +85,16 @@ async function main(): Promise<void> {
     ]);
     if (existing.rows.length > 0) {
       await db.query(
-        'UPDATE app_user SET display_name = $2, password_hash = $3, updated_at = now() WHERE email = $1',
-        [email, nome, passwordHash],
+        'UPDATE app_user SET display_name = $2, password_hash = $3, role = $4, updated_at = now() WHERE email = $1',
+        [email, nome, passwordHash, role],
       );
-      console.log(`✅ Usuário ${email} já existia — nome e senha ATUALIZADOS.`);
+      console.log(`✅ Usuário ${email} já existia — nome, senha e papel (${role}) ATUALIZADOS.`);
     } else {
       await db.query(
-        'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3)',
-        [email, nome, passwordHash],
+        'INSERT INTO app_user (email, display_name, password_hash, role) VALUES ($1, $2, $3, $4)',
+        [email, nome, passwordHash, role],
       );
-      console.log(`✅ Usuário ${email} criado.`);
+      console.log(`✅ Usuário ${email} criado (papel: ${role}).`);
     }
 
     if (desativarDemo) {

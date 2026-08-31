@@ -176,4 +176,46 @@ CREATE TABLE IF NOT EXISTS agent_profile (
 );
 `,
   },
+  {
+    name: '0006_users_roles',
+    sql: `
+-- Papéis de acesso: admin (gestão de usuários + acesso total), gestor (uso
+-- diário do conselho, sem gestão de usuários) e convidado (só leitura —
+-- acompanha reuniões/relatórios sem poder criar/rodar/gerar nada).
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'gestor';
+ALTER TABLE app_user DROP CONSTRAINT IF EXISTS app_user_role_check;
+ALTER TABLE app_user ADD CONSTRAINT app_user_role_check CHECK (role IN ('admin', 'gestor', 'convidado'));
+
+-- Promove quem já existe no banco (o dono que rodou create-user antes desta
+-- migration) a admin — sem isso ninguém teria acesso à tela de usuários.
+UPDATE app_user SET role = 'admin' WHERE role = 'gestor';
+
+-- Recuperação de senha por e-mail (Resend). Mesmo padrão de 'session':
+-- só o SHA-256 do token fica no banco; o token em claro só existe no link
+-- enviado por e-mail e nunca é persistido.
+CREATE TABLE IF NOT EXISTS password_reset_token (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  token_hash  text NOT NULL UNIQUE,
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_token_user_id ON password_reset_token(user_id);
+`,
+  },
+  {
+    name: '0007_company_profile',
+    sql: `
+-- Perfil da empresa: contexto ÚNICO e compartilhado (nome, porte, segmento,
+-- região, notas livres) que entra no prompt de TODOS os 9 conselheiros — ao
+-- contrário do kb_source, que é por agente. Linha única (id fixo em 1).
+-- Conteúdo sensível (estratégia/porte do negócio) ⇒ cifrado em repouso.
+CREATE TABLE IF NOT EXISTS company_profile (
+  id          smallint PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  content_enc text NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+`,
+  },
 ];

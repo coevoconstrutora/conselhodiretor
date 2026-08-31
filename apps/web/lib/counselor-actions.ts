@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { COUNSELOR_AGENT_IDS, ALL_AGENT_IDS, type AgentId } from '@conselho/providers';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getBoardRuntime } from './board-runtime';
@@ -42,6 +42,7 @@ export async function updateCounselorProfileAction(
 ): Promise<CounselorActionState> {
   const user = await getCurrentUser();
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
     const agentId = parseAgentId(formData.get('agentId'));
     const displayName = String(formData.get('displayName') ?? '').trim();
@@ -67,6 +68,7 @@ export async function addTextSourceAction(
 ): Promise<CounselorActionState> {
   const user = await getCurrentUser();
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
     const agentId = parseAgentId(formData.get('agentId'));
     if (agentId === 'presidente')
@@ -93,6 +95,7 @@ export async function addUrlSourceAction(
 ): Promise<CounselorActionState> {
   const user = await getCurrentUser();
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
     const agentId = parseAgentId(formData.get('agentId'));
     if (agentId === 'presidente')
@@ -121,6 +124,7 @@ export async function addFileSourceAction(
 ): Promise<CounselorActionState> {
   const user = await getCurrentUser();
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
     const agentId = parseAgentId(formData.get('agentId'));
     if (agentId === 'presidente')
@@ -156,6 +160,7 @@ export async function addFileSourceAction(
 export async function deleteSourceAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem remover fontes.');
   const agentId = parseAgentId(formData.get('agentId'));
   const sourceId = String(formData.get('sourceId') ?? '');
   if (!sourceId) throw new Error('Fonte inválida.');

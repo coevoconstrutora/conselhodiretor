@@ -23,7 +23,7 @@ async function seedDemoUser(db: SqlExecutor): Promise<void> {
   const res = await db.query<{ count: number }>('SELECT count(*)::int AS count FROM app_user');
   if (Number(res.rows[0]?.count ?? 0) > 0) return;
   await db.query(
-    'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3)',
+    "INSERT INTO app_user (email, display_name, password_hash, role) VALUES ($1, $2, $3, 'admin')",
     [DEMO_EMAIL, 'Empresário Demo', hashPassword(DEMO_PASSWORD)],
   );
 }

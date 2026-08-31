@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { AGENT_PROFILES } from '@conselho/kb';
 import { ALL_AGENT_IDS } from '@conselho/providers';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, canWrite, isAdmin } from '@/lib/auth';
 import { logoutAction } from '@/lib/auth-actions';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
@@ -40,14 +40,30 @@ export default async function DashboardPage() {
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
           <p className="text-sm text-ink-muted">Seu conselho de 9 especialistas em cada reunião</p>
         </div>
-        <form action={logoutAction}>
-          <button
-            type="submit"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/company"
             className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
           >
-            Sair
-          </button>
-        </form>
+            Empresa
+          </Link>
+          {isAdmin(user) ? (
+            <Link
+              href="/users"
+              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+            >
+              Usuários
+            </Link>
+          ) : null}
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+            >
+              Sair
+            </button>
+          </form>
+        </div>
       </header>
 
       <section className="mt-10 flex items-end justify-between gap-4">
@@ -61,12 +77,14 @@ export default async function DashboardPage() {
               : 'Nenhuma reunião ainda.'}
           </p>
         </div>
-        <Link
-          href="/meetings/new"
-          className="shrink-0 rounded-[var(--radius)] bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-        >
-          + Nova reunião
-        </Link>
+        {canWrite(user) ? (
+          <Link
+            href="/meetings/new"
+            className="shrink-0 rounded-[var(--radius)] bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            + Nova reunião
+          </Link>
+        ) : null}
       </section>
 
       {meetings.length === 0 ? (

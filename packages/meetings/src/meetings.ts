@@ -50,19 +50,20 @@ export async function createMeeting(
   return res.rows[0]!.id;
 }
 
-/** Lista as reuniões do usuário, mais recente primeiro (título decifrado no servidor). */
+/**
+ * Lista as reuniões da EMPRESA (compartilhadas entre todos os usuários — o
+ * conselho é colaborativo, não uma agenda individual), mais recente primeiro.
+ * `userId` fica no parâmetro por compatibilidade de assinatura, mas não filtra
+ * mais — só `createMeeting` usa o user_id, como proveniência de quem criou.
+ */
 export async function listMeetings(
   db: SqlExecutor,
-  userId: string,
+  _userId: string,
   encryptionKey: Buffer,
 ): Promise<MeetingSummary[]> {
   const res = await db.query<
     Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at'>
-  >(
-    `SELECT id, title_enc, status, recording_confirmed, created_at
-     FROM meeting WHERE user_id = $1 ORDER BY created_at DESC, id DESC`,
-    [userId],
-  );
+  >(`SELECT id, title_enc, status, recording_confirmed, created_at FROM meeting ORDER BY created_at DESC, id DESC`);
   return res.rows.map((r) => ({
     id: r.id,
     title: safeDecrypt(r.title_enc, encryptionKey),
@@ -72,20 +73,18 @@ export async function listMeetings(
   }));
 }
 
-/** Carrega uma reunião (null se não existe ou não pertence ao usuário). */
+/** Carrega uma reunião da empresa (null se não existe) — compartilhada entre usuários. */
 export async function getMeeting(
   db: SqlExecutor,
   meetingId: string,
-  userId: string,
+  _userId: string,
   encryptionKey: Buffer,
 ): Promise<MeetingSummary | null> {
   const res = await db.query<
     Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at'>
-  >(
-    `SELECT id, title_enc, status, recording_confirmed, created_at
-     FROM meeting WHERE id = $1 AND user_id = $2`,
-    [meetingId, userId],
-  );
+  >(`SELECT id, title_enc, status, recording_confirmed, created_at FROM meeting WHERE id = $1`, [
+    meetingId,
+  ]);
   const row = res.rows[0];
   if (!row) return null;
   return {
@@ -118,6 +117,20 @@ export async function revokeRecording(db: SqlExecutor, meetingId: string): Promi
     `UPDATE meeting SET recording_confirmed = false, updated_at = now()
      WHERE id = $1
      RETURNING id`,
+    [meetingId],
+  );
+  assertAffected(res, meetingId);
+}
+
+/**
+ * Encerra a reunião (marca status='closed') — combinado com `stopLiveBoard`
+ * (board-runtime): para STT/board e trava novos "▶ Reunião simulada" ou
+ * captura ao vivo. Transcrição e relatórios continuam disponíveis depois.
+ * Idempotente: reencerrar só atualiza o carimbo.
+ */
+export async function closeMeeting(db: SqlExecutor, meetingId: string): Promise<void> {
+  const res = await db.query<{ id: string }>(
+    `UPDATE meeting SET status = 'closed', updated_at = now() WHERE id = $1 RETURNING id`,
     [meetingId],
   );
   assertAffected(res, meetingId);

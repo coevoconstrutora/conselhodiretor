@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createMeeting, confirmRecording, revokeRecording } from '@conselho/meetings';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 
@@ -11,6 +11,7 @@ import { getEncryptionKey } from './crypto-key';
 export async function startMeetingAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  if (!canWrite(user)) throw new Error('Convidados não podem criar reuniões.');
   const title = String(formData.get('title') ?? '').trim();
   if (!title) throw new Error('Informe o título da reunião.');
   const db = await getDb();
@@ -22,6 +23,7 @@ export async function startMeetingAction(formData: FormData): Promise<void> {
 export async function confirmRecordingAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  if (!canWrite(user)) throw new Error('Convidados não podem confirmar gravação.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   const db = await getDb();
@@ -33,6 +35,7 @@ export async function confirmRecordingAction(formData: FormData): Promise<void> 
 export async function revokeRecordingAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
+  if (!canWrite(user)) throw new Error('Convidados não podem revogar gravação.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   const db = await getDb();

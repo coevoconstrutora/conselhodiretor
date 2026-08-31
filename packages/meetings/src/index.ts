@@ -4,6 +4,7 @@ export {
   getMeeting,
   confirmRecording,
   revokeRecording,
+  closeMeeting,
   isRecordingConfirmed,
   assertRecordingConfirmed,
   RecordingRequiredError,

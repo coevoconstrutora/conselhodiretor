@@ -3,6 +3,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { runMigrations, type SqlExecutor , pgliteExecutor } from '@conselho/db';
 import { hashPassword, verifyPassword } from './password';
 import { createSession, validateSession, deleteSession } from './session';
+import {
+  createPasswordResetToken,
+  validatePasswordResetToken,
+  consumePasswordResetToken,
+} from './password-reset';
 
 
 describe('Password hashing (scrypt)', () => {
@@ -70,5 +75,53 @@ describe('Sessions (DB-backed)', () => {
     const { token } = await createSession(exec, userId);
     await deleteSession(exec, token);
     expect(await validateSession(exec, token)).toBeNull();
+  });
+});
+
+describe('Password reset tokens (DB-backed)', () => {
+  let db: PGlite;
+  let exec: SqlExecutor;
+  let userId: string;
+
+  beforeAll(async () => {
+    db = new PGlite();
+    exec = pgliteExecutor(db);
+    await runMigrations(exec);
+    const res = await exec.query<{ id: string }>(
+      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
+      ['reset@conselho.test', 'Usuário Teste', hashPassword('pw')],
+    );
+    userId = res.rows[0]!.id;
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  it('cria e valida um token de recuperação', async () => {
+    const { token } = await createPasswordResetToken(exec, userId);
+    const info = await validatePasswordResetToken(exec, token);
+    expect(info?.userId).toBe(userId);
+  });
+
+  it('o token persistido é apenas o hash (não o token em claro)', async () => {
+    const { token } = await createPasswordResetToken(exec, userId);
+    const rows = await exec.query<{ token_hash: string }>('SELECT token_hash FROM password_reset_token');
+    expect(rows.rows.some((r) => r.token_hash === token)).toBe(false);
+  });
+
+  it('rejeita token inexistente', async () => {
+    expect(await validatePasswordResetToken(exec, 'token-inexistente')).toBeNull();
+  });
+
+  it('invalida token expirado', async () => {
+    const { token } = await createPasswordResetToken(exec, userId, -1000);
+    expect(await validatePasswordResetToken(exec, token)).toBeNull();
+  });
+
+  it('consumePasswordResetToken impede reuso do mesmo link', async () => {
+    const { token } = await createPasswordResetToken(exec, userId);
+    await consumePasswordResetToken(exec, token);
+    expect(await validatePasswordResetToken(exec, token)).toBeNull();
   });
 });
