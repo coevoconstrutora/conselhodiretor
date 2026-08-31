@@ -111,3 +111,32 @@ export async function createCompanyAction(
   revalidatePath('/admin/companies');
   return { ok: `Empresa "${name}" criada — use o seletor no topo para trocar para ela.` };
 }
+
+export type RenameCompanyState = { error?: string; ok?: string } | null;
+
+/** Renomeia uma empresa qualquer (mesma fonte de verdade usada em /company). */
+export async function renameCompanyAction(
+  _prev: RenameCompanyState,
+  formData: FormData,
+): Promise<RenameCompanyState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!user.isSuperAdmin) return { error: 'Só super-admin renomeia empresas.' };
+
+  const companyId = String(formData.get('companyId') ?? '');
+  const name = String(formData.get('name') ?? '').trim();
+  if (!companyId) return { error: 'Empresa inválida.' };
+  if (name.length < 2) return { error: 'Informe um nome válido.' };
+
+  const db = await getDb();
+  const res = await db.query<{ id: string }>(
+    'UPDATE company SET name = $2 WHERE id = $1 RETURNING id',
+    [companyId, name],
+  );
+  if (res.rows.length === 0) return { error: 'Empresa não encontrada.' };
+
+  revalidatePath('/admin/companies');
+  revalidatePath('/');
+  revalidatePath('/company');
+  return { ok: `Renomeada para "${name}".` };
+}

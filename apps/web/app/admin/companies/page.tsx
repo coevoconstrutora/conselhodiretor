@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { listCompanies } from '@/lib/company-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
+import { RenameCompanyForm } from '@/components/rename-company-form';
 
 /** Gestão de empresas — só super-admin. Clona a estrutura dos 9 conselheiros
  * da Coevo (nome/escopo) para toda empresa nova; conhecimento nunca é copiado. */
@@ -47,6 +48,7 @@ export default async function CompaniesAdminPage() {
                   {c.slug} · criada em {c.createdAt.toLocaleDateString('pt-BR')}
                 </p>
               </div>
+              <RenameCompanyForm companyId={c.id} name={c.name} />
             </li>
           ))}
         </ul>
