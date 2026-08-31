@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { startLiveBoardAction, stopLiveBoardAction } from '@/lib/board-actions';
 import { ACTION_ERROR_MESSAGES } from '@/lib/action-result';
 import { checkMicrophone, createAudioSource, pickRecorderMime, type AudioSource } from '@/lib/microphone';
+import { captureTabAudio } from '@/lib/tab-audio';
 import { useBoardStore } from '@/lib/board-store';
 import { isTranscriptSilent } from '@/lib/pipeline-watchdog';
 import { resolveWsBase } from '@/lib/ws-url';
@@ -48,6 +49,7 @@ export function LiveMicButton({
   const [state, setState] = useState<LiveState>('idle');
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [audioSource, setAudioSource] = useState<'mic' | 'tab'>('mic');
   const cleanupRef = useRef<(() => void) | null>(null);
 
   // Watchdog (A3): "ao vivo" mas NENHUM transcript (nem parcial) em 10s —
@@ -93,19 +95,38 @@ export function LiveMicButton({
     let serverArmed = false;
     const stopMic = () => micStream?.getTracks().forEach((t) => t.stop());
     try {
-      // 1) microfone PRIMEIRO (Story 2.2): feedback imediato ao médico e nenhum
-      // pipeline órfão no servidor se a permissão for negada.
-      const mic = await checkMicrophone(navigator.mediaDevices);
-      if (mic.status !== 'ok' || !mic.stream) {
-        setError(
-          mic.status === 'denied'
-            ? 'Permissão de microfone negada — libere no cadeado da barra de endereço e tente de novo.'
-            : 'Nenhum microfone disponível.',
-        );
-        setState('error');
-        return;
+      // 1) fonte de áudio PRIMEIRO (Story 2.2): feedback imediato e nenhum
+      // pipeline órfão no servidor se a permissão for negada. Duas origens:
+      // microfone físico (padrão) ou áudio de uma aba/janela (ex.: Google
+      // Meet) — útil quando a sala tem ruído de ambiente que atrapalha o mic.
+      if (audioSource === 'tab') {
+        const tab = await captureTabAudio(navigator.mediaDevices);
+        if (tab.status !== 'ok' || !tab.stream) {
+          setError(
+            tab.status === 'denied'
+              ? 'Compartilhamento de aba cancelado — tente de novo e marque "Compartilhar áudio da aba".'
+              : tab.status === 'no-audio-track'
+                ? 'Nenhum áudio veio da aba/janela escolhida — marque "Compartilhar áudio da aba" no seletor do navegador.'
+                : 'Captura de áudio de aba não suportada neste navegador — use Chrome ou Edge no computador.',
+          );
+          setState('error');
+          return;
+        }
+        micStream = tab.stream;
+      } else {
+        const mic = await checkMicrophone(navigator.mediaDevices);
+        if (mic.status !== 'ok' || !mic.stream) {
+          setError(
+            mic.status === 'denied'
+              ? 'Permissão de microfone negada — libere no cadeado da barra de endereço e tente de novo.'
+              : 'Nenhum microfone disponível.',
+          );
+          setState('error');
+          return;
+        }
+        micStream = mic.stream;
       }
-      micStream = mic.stream;
+      const stream: MediaStream = micStream;
 
       // 2) formato de gravação compatível com o STT (Safari/iOS não tem WebM/Opus
       // e o mp4/AAC transcreve silenciosamente NADA — melhor avisar antes).
@@ -131,7 +152,7 @@ export function LiveMicButton({
       serverArmed = true;
 
       // 4) captura → WS /audio (só áudio binário; eventos do board vão no /board)
-      const source: AudioSource = createAudioSource(mic.stream, undefined, undefined, mime.mimeType);
+      const source: AudioSource = createAudioSource(stream, undefined, undefined, mime.mimeType);
       const ws = new WebSocket(
         `${resolveWsBase(wsBaseUrl)}/audio?meetingId=${encodeURIComponent(meetingId)}&token=${encodeURIComponent(token)}`,
       );
@@ -167,6 +188,18 @@ export function LiveMicButton({
         closedByUs = true;
         teardown('O canal de áudio foi encerrado pelo servidor — retome a reunião ao vivo.');
       };
+      if (audioSource === 'tab') {
+        // usuário pode parar o compartilhamento pela barra nativa do navegador
+        // ("Parar de compartilhar") em vez do botão da UI — sem isto, ficava
+        // "ao vivo" sem nenhum áudio chegando e sem aviso.
+        for (const track of stream.getAudioTracks()) {
+          track.onended = () => {
+            if (closedByUs) return;
+            closedByUs = true;
+            teardown('O compartilhamento de áudio da aba foi interrompido — retome a reunião ao vivo.');
+          };
+        }
+      }
 
       cleanupRef.current = () => {
         closedByUs = true;
@@ -186,7 +219,7 @@ export function LiveMicButton({
       setError(err instanceof Error ? err.message : 'Falha ao iniciar a reunião ao vivo.');
       setState('error');
     }
-  }, [meetingId, token, wsBaseUrl]);
+  }, [meetingId, token, wsBaseUrl, audioSource]);
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -199,14 +232,48 @@ export function LiveMicButton({
           ⏹ Encerrar (ao vivo)
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={() => void start()}
-          disabled={state === 'starting'}
-          className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
-        >
-          {state === 'starting' ? '… preparando' : '🎙️ Reunião ao vivo'}
-        </button>
+        <>
+          {state === 'idle' || state === 'error' ? (
+            <div className="flex items-center gap-1 text-[10px] text-white/70">
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="audioSource"
+                  checked={audioSource === 'mic'}
+                  onChange={() => setAudioSource('mic')}
+                />
+                Microfone
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="audioSource"
+                  checked={audioSource === 'tab'}
+                  onChange={() => setAudioSource('tab')}
+                />
+                Áudio da aba (Meet)
+              </label>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void start()}
+            disabled={state === 'starting'}
+            className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+          >
+            {state === 'starting'
+              ? '… preparando'
+              : audioSource === 'tab'
+                ? '🖥️ Reunião ao vivo (aba)'
+                : '🎙️ Reunião ao vivo'}
+          </button>
+          {audioSource === 'tab' && (state === 'idle' || state === 'error') ? (
+            <p className="max-w-[220px] text-right text-[10px] text-white/60">
+              No seletor do navegador, escolha a aba do Google Meet e marque
+              "Compartilhar áudio da aba".
+            </p>
+          ) : null}
+        </>
       )}
       {error ? <p className="max-w-[220px] text-right text-[10px] text-red-300">{error}</p> : null}
       {warning && !error ? (
