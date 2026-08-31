@@ -1,9 +1,9 @@
 'use client';
 
 import { useRef } from 'react';
-import Link from 'next/link';
 import { switchCompanyAction } from '@/lib/company-actions';
 
+/** Só aparece pra quem tem mais de uma empresa ativa (super-admin, vendo todas). */
 export function CompanySwitcherSelect({
   companies,
   currentCompanyId,
@@ -12,9 +12,10 @@ export function CompanySwitcherSelect({
   currentCompanyId: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  if (companies.length < 2) return null;
 
   return (
-    <form ref={formRef} action={switchCompanyAction} className="flex items-center gap-1.5">
+    <form ref={formRef} action={switchCompanyAction}>
       <select
         name="companyId"
         defaultValue={currentCompanyId}
@@ -27,13 +28,6 @@ export function CompanySwitcherSelect({
           </option>
         ))}
       </select>
-      <Link
-        href="/admin/companies"
-        title="Gerenciar empresas"
-        className="rounded-[var(--radius)] border border-ink/15 px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-      >
-        ⚙
-      </Link>
     </form>
   );
 }

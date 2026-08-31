@@ -44,6 +44,14 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           {user.isSuperAdmin ? <CompanySwitcher currentCompanyId={user.companyId} /> : null}
+          {user.isSuperAdmin ? (
+            <Link
+              href="/admin/companies"
+              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+            >
+              Empresas
+            </Link>
+          ) : null}
           <Link
             href="/company"
             className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
