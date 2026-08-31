@@ -36,7 +36,7 @@ export function CreateUserForm({ knownDomains }: { knownDomains: string[] }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block">
           <span className="text-xs font-semibold text-ink">Nome</span>
-          <input name="displayName" required className={inputCls} />
+          <input name="displayName" placeholder="só se o e-mail ainda não existir" className={inputCls} />
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-ink">E-mail</span>

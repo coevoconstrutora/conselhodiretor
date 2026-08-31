@@ -30,17 +30,28 @@ export async function listCompanies(): Promise<CompanySummary[]> {
   return res.rows.map((r) => ({ id: r.id, slug: r.slug, name: r.name, createdAt: new Date(r.created_at) }));
 }
 
-/** Super-admin escolhe qual empresa está visualizando agora (persiste na sessão). */
+/**
+ * Troca a empresa "ativa" na sessão. Super-admin pode escolher QUALQUER
+ * empresa; usuário comum só pode escolher uma das que ele É MEMBRO
+ * (company_member) — nunca uma arbitrária.
+ */
 export async function switchCompanyAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
-  if (!user.isSuperAdmin) throw new Error('Só super-admin troca de empresa.');
   const companyId = String(formData.get('companyId') ?? '');
   if (!companyId) throw new Error('Empresa inválida.');
 
+  const db = await getDb();
+  if (!user.isSuperAdmin) {
+    const membership = await db.query<{ id: string }>(
+      'SELECT id FROM company_member WHERE user_id = $1 AND company_id = $2',
+      [user.id, companyId],
+    );
+    if (membership.rows.length === 0) throw new Error('Você não pertence a essa empresa.');
+  }
+
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) redirect('/login');
-  const db = await getDb();
   // volta pra "home" quando escolhe a própria empresa — active_company_id NULL
   await setActiveCompany(db, token, companyId === user.homeCompanyId ? null : companyId);
   revalidatePath('/');

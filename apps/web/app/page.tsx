@@ -44,7 +44,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-ink-muted">Seu conselho de 9 especialistas em cada reunião</p>
         </div>
         <div className="flex items-center gap-2">
-          {user.isSuperAdmin ? <CompanySwitcher currentCompanyId={user.companyId} /> : null}
+          <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
           {user.isSuperAdmin ? (
             <Link
               href="/admin/companies"

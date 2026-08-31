@@ -9,6 +9,15 @@ export interface CompanyRow {
   created_at: Date;
 }
 
+/** Vínculo de uma identidade (app_user) com UMA empresa — papel próprio por empresa. */
+export interface CompanyMemberRow {
+  id: string;
+  user_id: string;
+  company_id: string;
+  role: AppUserRole;
+  created_at: Date;
+}
+
 export interface AppUserRow {
   id: string;
   email: string;

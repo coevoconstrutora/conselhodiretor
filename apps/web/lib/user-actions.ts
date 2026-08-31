@@ -9,16 +9,17 @@ import { getDb } from './db';
 import { sendCredentialsEmail } from './email';
 import { siteOrigin } from './site-origin';
 
+/**
+ * Gestão de usuários — só admin, e sempre escopada à EMPRESA ATIVA do admin.
+ * Multi-empresa por identidade: um e-mail (app_user) pode ser MEMBRO
+ * (company_member) de várias empresas, com papel independente em cada uma —
+ * "criar usuário" com um e-mail já existente vira "adicionar membership",
+ * nunca uma segunda conta duplicada.
+ */
+
 function generatePassword(): string {
   return randomBytes(9).toString('base64url'); // 12 chars, sem ambiguidade de URL
 }
-
-/**
- * Gestão de usuários — só admin, e sempre escopada à EMPRESA ATIVA do admin
- * (multi-tenant: usuários de uma empresa nunca aparecem/mexem em outra).
- * Papéis: admin (gestão de usuários + acesso total), gestor (uso diário, sem
- * gestão de usuários), convidado (leitura).
- */
 
 export interface UserSummary {
   id: string;
@@ -39,7 +40,11 @@ export async function listUsers(): Promise<UserSummary[]> {
     role: AppUserRole;
     created_at: Date;
   }>(
-    'SELECT id, email, display_name, role, created_at FROM app_user WHERE company_id = $1 ORDER BY created_at ASC',
+    `SELECT u.id, u.email, u.display_name, cm.role, cm.created_at
+     FROM company_member cm
+     JOIN app_user u ON u.id = cm.user_id
+     WHERE cm.company_id = $1
+     ORDER BY cm.created_at ASC`,
     [admin.companyId],
   );
   return res.rows.map((r) => ({
@@ -55,7 +60,13 @@ const ROLES = new Set<AppUserRole>(['admin', 'gestor', 'convidado']);
 
 export type CreateUserState = { error?: string; ok?: string; generatedPassword?: string } | null;
 
-/** Cria um usuário (na empresa ATIVA do admin) com senha aleatória — exibida só esta vez. */
+/**
+ * Adiciona um usuário à empresa ATIVA do admin. Se o e-mail já existe como
+ * identidade (app_user) — mesmo que só em OUTRA empresa — não cria conta
+ * nova: só cria o vínculo (company_member) com o papel escolhido aqui,
+ * mantendo a senha que a pessoa já tem. Se o e-mail é novo, cria a
+ * identidade com senha aleatória (exibida/enviada só esta vez).
+ */
 export async function createUserAction(
   _prev: CreateUserState,
   formData: FormData,
@@ -69,20 +80,42 @@ export async function createUserAction(
   const role = String(formData.get('role') ?? 'gestor') as AppUserRole;
 
   if (!email || !email.includes('@')) return { error: 'Informe um e-mail válido.' };
-  if (displayName.length < 2) return { error: 'Informe o nome.' };
   if (!ROLES.has(role)) return { error: 'Papel inválido.' };
 
   const db = await getDb();
   const existing = await db.query<{ id: string }>('SELECT id FROM app_user WHERE email = $1', [email]);
-  if (existing.rows.length > 0) return { error: 'Já existe um usuário com esse e-mail.' };
+  const sendEmail = formData.get('sendEmail') === 'on';
+
+  if (existing.rows.length > 0) {
+    const userId = existing.rows[0]!.id;
+    const already = await db.query<{ id: string }>(
+      'SELECT id FROM company_member WHERE user_id = $1 AND company_id = $2',
+      [userId, admin.companyId],
+    );
+    if (already.rows.length > 0) return { error: 'Esse e-mail já tem acesso a esta empresa.' };
+
+    await db.query('INSERT INTO company_member (user_id, company_id, role) VALUES ($1, $2, $3)', [
+      userId,
+      admin.companyId,
+      role,
+    ]);
+    revalidatePath('/users');
+    return { ok: `${email} já tinha conta no Conselho — acesso a esta empresa adicionado (senha atual mantida).` };
+  }
+
+  if (displayName.length < 2) return { error: 'Informe o nome.' };
 
   const generatedPassword = generatePassword();
-  await db.query(
-    'INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, $4, $5)',
+  const created = await db.query<{ id: string }>(
+    'INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
     [email, displayName, hashPassword(generatedPassword), role, admin.companyId],
   );
+  await db.query('INSERT INTO company_member (user_id, company_id, role) VALUES ($1, $2, $3)', [
+    created.rows[0]!.id,
+    admin.companyId,
+    role,
+  ]);
 
-  const sendEmail = formData.get('sendEmail') === 'on';
   let emailSent = false;
   if (sendEmail) {
     try {
@@ -106,7 +139,7 @@ export async function createUserAction(
 
 export type UserActionState = { error?: string; ok?: string } | null;
 
-/** Muda o papel de um usuário DA MESMA EMPRESA — admin não pode se rebaixar. */
+/** Muda o papel de um usuário NESTA EMPRESA (company_member) — admin não pode se rebaixar. */
 export async function updateUserRoleAction(
   _prev: UserActionState,
   formData: FormData,
@@ -125,7 +158,7 @@ export async function updateUserRoleAction(
   const db = await getDb();
   if (role !== 'admin') {
     const admins = await db.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM app_user WHERE role = 'admin' AND company_id = $2 AND id != $1",
+      "SELECT count(*)::int AS count FROM company_member WHERE role = 'admin' AND company_id = $2 AND user_id != $1",
       [userId, admin.companyId],
     );
     if (Number(admins.rows[0]?.count ?? 0) === 0) {
@@ -133,16 +166,20 @@ export async function updateUserRoleAction(
     }
   }
 
-  await db.query('UPDATE app_user SET role = $2, updated_at = now() WHERE id = $1 AND company_id = $3', [
-    userId,
-    role,
-    admin.companyId,
-  ]);
+  const res = await db.query<{ id: string }>(
+    'UPDATE company_member SET role = $3 WHERE user_id = $1 AND company_id = $2 RETURNING id',
+    [userId, admin.companyId, role],
+  );
+  if (res.rows.length === 0) return { error: 'Usuário não encontrado nesta empresa.' };
   revalidatePath('/users');
   return { ok: 'Papel atualizado.' };
 }
 
-/** Remove um usuário DA MESMA EMPRESA — nunca a si mesmo, nunca o último admin. */
+/**
+ * Remove o ACESSO de um usuário A ESTA EMPRESA (company_member) — nunca a
+ * si mesmo, nunca o último admin. A identidade (app_user) NÃO é apagada:
+ * a pessoa pode ter acesso a outras empresas.
+ */
 export async function deleteUserAction(formData: FormData): Promise<void> {
   const admin = await getCurrentUser();
   if (!admin) throw new Error('Não autenticado.');
@@ -154,13 +191,13 @@ export async function deleteUserAction(formData: FormData): Promise<void> {
 
   const db = await getDb();
   const target = await db.query<{ role: AppUserRole }>(
-    'SELECT role FROM app_user WHERE id = $1 AND company_id = $2',
+    'SELECT role FROM company_member WHERE user_id = $1 AND company_id = $2',
     [userId, admin.companyId],
   );
-  if (target.rows.length === 0) throw new Error('Usuário não encontrado.');
+  if (target.rows.length === 0) throw new Error('Usuário não encontrado nesta empresa.');
   if (target.rows[0]?.role === 'admin') {
     const admins = await db.query<{ count: number }>(
-      "SELECT count(*)::int AS count FROM app_user WHERE role = 'admin' AND company_id = $2 AND id != $1",
+      "SELECT count(*)::int AS count FROM company_member WHERE role = 'admin' AND company_id = $2 AND user_id != $1",
       [userId, admin.companyId],
     );
     if (Number(admins.rows[0]?.count ?? 0) === 0) {
@@ -168,14 +205,18 @@ export async function deleteUserAction(formData: FormData): Promise<void> {
     }
   }
 
-  await db.query('DELETE FROM app_user WHERE id = $1 AND company_id = $2', [userId, admin.companyId]);
+  await db.query('DELETE FROM company_member WHERE user_id = $1 AND company_id = $2', [
+    userId,
+    admin.companyId,
+  ]);
   revalidatePath('/users');
 }
 
 /**
- * Gera uma senha NOVA para um usuário DA MESMA EMPRESA e envia por e-mail
- * (URL de acesso + usuário + senha). Não existe "reenviar a mesma senha" —
- * a senha nunca fica em claro no banco, então reenviar é sempre resetar.
+ * Gera uma senha NOVA para a IDENTIDADE (app_user) e envia por e-mail — a
+ * senha é da PESSOA, não da empresa: se ela tem acesso a mais de uma
+ * empresa, a senha nova vale para todas. Não existe "reenviar a mesma
+ * senha" — ela nunca fica em claro no banco, então reenviar é sempre resetar.
  */
 export async function sendCredentialsAction(
   _prev: UserActionState,
@@ -189,10 +230,13 @@ export async function sendCredentialsAction(
   if (!userId) return { error: 'Usuário inválido.' };
 
   const db = await getDb();
-  const target = await db.query<{ email: string }>(
-    'SELECT email FROM app_user WHERE id = $1 AND company_id = $2',
+  const membership = await db.query<{ id: string }>(
+    'SELECT id FROM company_member WHERE user_id = $1 AND company_id = $2',
     [userId, admin.companyId],
   );
+  if (membership.rows.length === 0) return { error: 'Usuário não encontrado nesta empresa.' };
+
+  const target = await db.query<{ email: string }>('SELECT email FROM app_user WHERE id = $1', [userId]);
   const email = target.rows[0]?.email;
   if (!email) return { error: 'Usuário não encontrado.' };
 

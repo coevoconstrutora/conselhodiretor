@@ -307,4 +307,31 @@ CREATE INDEX IF NOT EXISTS idx_company_source_company ON company_source(company_
 ALTER TABLE session ADD COLUMN IF NOT EXISTS active_company_id uuid REFERENCES company(id);
 `,
   },
+  {
+    name: '0011_company_membership',
+    sql: `
+-- Vínculo usuário↔empresas: UMA identidade (email/senha únicos por pessoa)
+-- pode pertencer a VÁRIAS empresas, com um papel PRÓPRIO em cada uma — antes
+-- só dava pra ter 1 conta por empresa (e-mail repetido virava "já existe").
+CREATE TABLE IF NOT EXISTS company_member (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  company_id  uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  role        text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, company_id)
+);
+ALTER TABLE company_member DROP CONSTRAINT IF EXISTS company_member_role_check;
+ALTER TABLE company_member ADD CONSTRAINT company_member_role_check CHECK (role IN ('admin', 'gestor', 'convidado'));
+CREATE INDEX IF NOT EXISTS idx_company_member_user ON company_member(user_id);
+CREATE INDEX IF NOT EXISTS idx_company_member_company ON company_member(company_id);
+
+-- Backfill: todo app_user existente vira 1 membership na company_id/role atuais
+-- (app_user.company_id/role continuam existindo como "empresa/papel padrão"
+-- de login, mas quem manda no acesso a CADA empresa agora é company_member).
+INSERT INTO company_member (user_id, company_id, role)
+SELECT id, company_id, role FROM app_user
+ON CONFLICT (user_id, company_id) DO NOTHING;
+`,
+  },
 ];

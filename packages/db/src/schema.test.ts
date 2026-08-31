@@ -54,6 +54,7 @@ describe('Migrations — schema base', () => {
       '0008_company_sources',
       '0009_meeting_summary',
       '0010_multi_company',
+      '0011_company_membership',
     ]);
   });
 
