@@ -15,7 +15,7 @@ function fakeFetch(body: object, status = 200) {
 }
 
 const okResponse = {
-  model: 'gpt-4o-mini-2024-07-18',
+  model: 'gpt-5-mini-2025-08-07',
   choices: [
     {
       message: {
@@ -48,19 +48,38 @@ describe('OpenAiLlmProvider (Chat Completions — adapter NFR8)', () => {
       severity: 'critical',
       relevanceScore: 0.92,
       kbSources: ['legal-1'],
-      modelVersion: 'gpt-4o-mini-2024-07-18',
+      modelVersion: 'gpt-5-mini-2025-08-07',
     });
     expect(contribution.text).toContain('multa');
 
     const [url, init] = doFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.openai.com/v1/chat/completions');
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe('gpt-4o-mini');
+    expect(body.model).toBe('gpt-5-mini');
+    expect(body.max_completion_tokens).toBe(300);
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.reasoning_effort).toBe('minimal'); // gpt-5.x: sem isto o raciocínio come o teto de tokens curto
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.messages[0].content).toContain('Legal');
     expect(body.messages[1].content).toContain('construtora');
     expect(body.messages[1].content).toContain('legal-1'); // KB no contexto
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer sk-test');
+  });
+
+  it('modelo fora da família gpt-5/o1/o3 não recebe reasoning_effort', async () => {
+    const doFetch = fakeFetch(okResponse);
+    const provider = new OpenAiLlmProvider({
+      apiKey: 'sk-test',
+      agentId: 'legal',
+      model: 'gpt-4o-mini',
+      fetchImpl: doFetch,
+    });
+    await provider.complete({ system: 's', context: [], transcript: 't' });
+    const [, init] = doFetch.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.model).toBe('gpt-4o-mini');
+    expect(body.reasoning_effort).toBeUndefined();
+    expect(body.max_completion_tokens).toBe(300);
   });
 
   it('B1 — priors entram no prompt e allowSkip instrui o {"skip":true}', async () => {

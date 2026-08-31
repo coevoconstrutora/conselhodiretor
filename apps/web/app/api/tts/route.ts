@@ -9,7 +9,8 @@ import { AGENT_VOICE } from '@/lib/tts-voices';
  * que a chave da OpenAI vire um proxy de TTS aberto para quem tiver o link.
  */
 const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
-const MAX_CHARS = 4000; // teto da própria API da OpenAI para tts-1
+const TTS_MODEL = 'gpt-4o-mini-tts'; // versão mais nova, mais barata que tts-1
+const MAX_CHARS = 4000; // teto da própria API da OpenAI para entrada de fala
 
 export async function POST(request: Request): Promise<NextResponse | Response> {
   const user = await getCurrentUser();
@@ -40,7 +41,7 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
       authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'tts-1',
+      model: TTS_MODEL,
       voice,
       input: text.slice(0, MAX_CHARS),
       response_format: 'mp3',

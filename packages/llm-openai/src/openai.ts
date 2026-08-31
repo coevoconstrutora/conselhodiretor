@@ -16,9 +16,12 @@ import type {
  * (a instrução textual de formato continua indo no `system`, pois a API exige
  * a palavra "JSON" no prompt quando esse modo é usado).
  *
- * Default: **gpt-4o-mini** — custo/latência equivalentes ao Haiku para as
+ * Default: **gpt-5-mini** — custo/latência equivalentes ao Haiku para as
  * contribuições curtas do board; o modelo pode subir por persona trocando
- * só `OPENAI_MODEL`.
+ * só `OPENAI_MODEL`. Modelos gpt-5.x exigem `max_completion_tokens` (a API
+ * rejeita `max_tokens` neles) e "pensam" por default como o Gemini 3 — sem
+ * `reasoning_effort: 'minimal'` o raciocínio interno consome o teto de
+ * tokens de saídas curtas e a resposta some (mesma lição do Gemini, CLAUDE.md).
  */
 
 export interface OpenAiLlmConfig {
@@ -77,7 +80,12 @@ async function fetchWithTimeout(
 }
 
 const DEFAULT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
+
+/** gpt-5.x "pensa" por default — reasoning mínimo pra não estourar tokens curtos. */
+function isReasoningModel(model: string): boolean {
+  return model.startsWith('gpt-5') || model.startsWith('o1') || model.startsWith('o3');
+}
 
 export function openAiConfigFromEnv(
   agentId: AgentId,
@@ -188,6 +196,7 @@ export class OpenAiLlmProvider implements ILlmProvider {
     jsonMode = true,
   ): Promise<OpenAiResponse> {
     const doFetch = this.config.fetchImpl ?? fetch;
+    const model = this.config.model ?? DEFAULT_MODEL;
     const response = await fetchWithTimeout(
       doFetch,
       this.config.endpoint ?? DEFAULT_ENDPOINT,
@@ -198,8 +207,9 @@ export class OpenAiLlmProvider implements ILlmProvider {
           authorization: `Bearer ${this.config.apiKey}`,
         },
         body: JSON.stringify({
-          model: this.config.model ?? DEFAULT_MODEL,
-          max_tokens: maxTokens,
+          model,
+          max_completion_tokens: maxTokens,
+          ...(isReasoningModel(model) ? { reasoning_effort: 'minimal' } : {}),
           ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
           messages: [
             { role: 'system', content: system },
