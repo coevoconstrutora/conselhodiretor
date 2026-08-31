@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
 import { countKbSourcesByAgent, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import { formatMeetingDuration } from '@/lib/format';
 import { CompanySwitcher } from '@/components/company-switcher';
 
 const AGENT_EMOJI: Record<string, string> = {
@@ -107,23 +108,34 @@ export default async function DashboardPage() {
         </section>
       ) : (
         <ul className="mt-8 space-y-3">
-          {meetings.map((m) => (
-            <li key={m.id}>
-              <Link
-                href={`/meetings/${m.id}`}
-                className="card-premium flex items-center justify-between p-5 transition-shadow hover:shadow-md"
-              >
-                <div>
-                  <p className="font-medium text-ink">{m.title}</p>
-                  <p className="text-xs text-ink-muted">
-                    {m.createdAt.toLocaleString('pt-BR')} ·{' '}
-                    {m.recordingConfirmed ? '🟢 gravação confirmada' : '🔒 gravação pendente'}
-                  </p>
-                </div>
-                <span className="text-sm text-ink-muted">abrir →</span>
-              </Link>
-            </li>
-          ))}
+          {meetings.map((m) => {
+            const closed = m.status === 'closed';
+            const duration = formatMeetingDuration(m.confirmedAt ?? m.createdAt, m.closedAt);
+            return (
+              <li key={m.id}>
+                <Link
+                  href={`/meetings/${m.id}`}
+                  className="card-premium flex items-center justify-between p-5 transition-shadow hover:shadow-md"
+                >
+                  <div>
+                    <p className="font-medium text-ink">{m.title}</p>
+                    <p className="text-xs text-ink-muted">
+                      {m.createdAt.toLocaleString('pt-BR')} ·{' '}
+                      {closed
+                        ? '🔒 encerrada'
+                        : m.recordingConfirmed
+                          ? '🟢 gravação confirmada'
+                          : '🔒 gravação pendente'}
+                      {closed && m.closedAt ? ` às ${m.closedAt.toLocaleTimeString('pt-BR')}` : ''}
+                      {duration ? ` · ⏱ ${duration}` : ''}
+                      {m.participantCount ? ` · 👥 ${m.participantCount}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-sm text-ink-muted">abrir →</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
 

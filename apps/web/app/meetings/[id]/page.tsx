@@ -12,21 +12,12 @@ import { startDemoBoardAction, requestSynthesisAction } from '@/lib/board-action
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
 import { getCompanyKnowledgeStore, getTelemetryReport, BOARD_WS_PORT } from '@/lib/board-runtime';
+import { formatMeetingDuration } from '@/lib/format';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
-
-/** "1h 12min" entre o início (confirmação da gravação) e o encerramento. */
-function formatMeetingDuration(start: Date, end: Date | null): string | null {
-  if (!end) return null;
-  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}min`;
-  return `${hours}h ${minutes}min`;
-}
 
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
