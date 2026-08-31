@@ -46,13 +46,14 @@ describe('Resiliência da sessão (Story 2.6)', () => {
   let db: PGlite;
   let exec: SqlExecutor;
   let meetingId: string;
+  let companyId: string;
 
   beforeAll(async () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
     const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
-    const companyId = company.rows[0]!.id;
+    companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
       'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
       ['nutro@conselho.test', 'Dr. Aurélio', 'x', companyId],
@@ -72,7 +73,7 @@ describe('Resiliência da sessão (Story 2.6)', () => {
         [{ text: 'antes da queda.', isFinal: true }, new Error('stt caiu')],
         [{ text: 'depois da volta.', isFinal: true }],
       ]);
-      const session = await startMeetingSession(exec, meetingId, stt, {
+      const session = await startMeetingSession(exec, meetingId, companyId, stt, {
         delay: noDelay,
       });
       const statuses: string[] = [];
@@ -98,7 +99,7 @@ describe('Resiliência da sessão (Story 2.6)', () => {
         [new Error('e2')],
         [new Error('e3')],
       ]);
-      const session = await startMeetingSession(exec, meetingId, stt, {
+      const session = await startMeetingSession(exec, meetingId, companyId, stt, {
         delay: noDelay,
         maxRetries: 2,
       });
@@ -116,7 +117,7 @@ describe('Resiliência da sessão (Story 2.6)', () => {
         [new Error('c')],
         [new Error('d')],
       ]);
-      const session = await startMeetingSession(exec, meetingId, stt, {
+      const session = await startMeetingSession(exec, meetingId, companyId, stt, {
         delay: async (ms) => {
           delays.push(ms);
         },
@@ -130,7 +131,7 @@ describe('Resiliência da sessão (Story 2.6)', () => {
   describe('AC3 — vocabulário clínico aplicado ao abrir o stream', () => {
     it('vocabularyBoost chega ao provider em TODAS as aberturas (inclusive retry)', async () => {
       const stt = new ScriptedSttProvider([[new Error('cai')], []]);
-      const session = await startMeetingSession(exec, meetingId, stt, {
+      const session = await startMeetingSession(exec, meetingId, companyId, stt, {
         delay: noDelay,
         vocabularyBoost: ['semaglutida', 'TSH'],
       });

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { meetingBelongsToCompany } from '@conselho/meetings';
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { getPipelineStatus } from '@/lib/board-runtime';
@@ -19,12 +20,8 @@ export async function GET(
 
   const { id: meetingId } = await params;
   const db = await getDb();
-  // a reunião precisa pertencer ao usuário autenticado
-  const owned = await db.query<{ id: string }>(
-    'SELECT id FROM consultation WHERE id = $1 AND user_id = $2',
-    [meetingId, user.id],
-  );
-  if (owned.rows.length === 0) {
+  // a reunião precisa pertencer à empresa do usuário autenticado
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 

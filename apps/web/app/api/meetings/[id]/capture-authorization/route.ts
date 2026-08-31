@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isRecordingConfirmed, meetingBelongsToCompany } from '@conselho/meetings';
+import { isRecordingConfirmed } from '@conselho/meetings';
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 
@@ -26,10 +26,7 @@ export async function GET(
 
   const { id: meetingId } = await params;
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
-    return NextResponse.json({ authorized: false, reason: 'recording_required' }, { status: 403 });
-  }
-  const authorized = await isRecordingConfirmed(db, meetingId);
+  const authorized = await isRecordingConfirmed(db, meetingId, user.companyId);
 
   if (!authorized) {
     return NextResponse.json(

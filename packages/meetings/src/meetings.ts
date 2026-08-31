@@ -171,25 +171,32 @@ export async function meetingBelongsToCompany(
 
 /**
  * GATE DE SERVIDOR — fonte de verdade da autorização de captura.
- * Ausência de reunião ou confirmação revogada ⇒ false. Nunca confia no cliente.
+ * Escopado à EMPRESA chamadora: reunião de outra empresa (ou inexistente)
+ * ou confirmação revogada ⇒ false. Nunca confia no cliente.
  */
-export async function isRecordingConfirmed(db: SqlExecutor, meetingId: string): Promise<boolean> {
+export async function isRecordingConfirmed(
+  db: SqlExecutor,
+  meetingId: string,
+  companyId: string,
+): Promise<boolean> {
   const res = await db.query<{ recording_confirmed: boolean }>(
-    'SELECT recording_confirmed FROM meeting WHERE id = $1',
-    [meetingId],
+    'SELECT recording_confirmed FROM meeting WHERE id = $1 AND company_id = $2',
+    [meetingId, companyId],
   );
   return res.rows[0]?.recording_confirmed === true;
 }
 
 /**
  * Versão imperativa do gate para os pontos de entrada de captura: lança
- * {@link RecordingRequiredError} se a gravação não estiver confirmada.
+ * {@link RecordingRequiredError} se a gravação não estiver confirmada
+ * (ou a reunião não pertencer à empresa chamadora).
  */
 export async function assertRecordingConfirmed(
   db: SqlExecutor,
   meetingId: string,
+  companyId: string,
 ): Promise<void> {
-  if (!(await isRecordingConfirmed(db, meetingId))) {
+  if (!(await isRecordingConfirmed(db, meetingId, companyId))) {
     throw new RecordingRequiredError(meetingId);
   }
 }

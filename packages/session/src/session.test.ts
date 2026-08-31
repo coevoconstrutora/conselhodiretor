@@ -97,7 +97,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
     it('sem consentimento, a sessão NÃO inicia (RecordingRequiredError)', async () => {
       const blockedId = await createMeeting(exec, userId, companyId, 'Sem consent', randomBytes(32));
       await expect(
-        startMeetingSession(exec, blockedId, new FakeSttProvider()),
+        startMeetingSession(exec, blockedId, companyId, new FakeSttProvider()),
       ).rejects.toBeInstanceOf(RecordingRequiredError);
     });
 
@@ -105,6 +105,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
       const session = await startMeetingSession(
         exec,
         authorizedMeetingId,
+        companyId,
         new FakeSttProvider(),
       );
       await flush();
@@ -119,7 +120,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
   describe('AC1/AC2 — acúmulo: parciais substituem a ponta, finais imutáveis sem duplicação', () => {
     it('parcial atualiza a ponta; final acrescenta e limpa o parcial', async () => {
       const stt = new PushSttProvider();
-      const session = await startMeetingSession(exec, authorizedMeetingId, stt);
+      const session = await startMeetingSession(exec, authorizedMeetingId, companyId, stt);
 
       stt.push({ text: 'Pac', isFinal: false });
       await flush();
@@ -148,7 +149,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
   describe('AC3 — assinatura de eventos', () => {
     it('notifica segmentos e permite unsubscribe sem vazamento', async () => {
       const stt = new PushSttProvider();
-      const session = await startMeetingSession(exec, authorizedMeetingId, stt);
+      const session = await startMeetingSession(exec, authorizedMeetingId, companyId, stt);
       const events: SessionEvent[] = [];
       const unsubscribe = session.subscribe((e) => events.push(e));
 
@@ -167,7 +168,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
   describe('AC6 — erro do STT degrada sem derrubar', () => {
     it('falha do stream muda status para degraded e preserva o acumulado', async () => {
       const stt = new PushSttProvider();
-      const session = await startMeetingSession(exec, authorizedMeetingId, stt);
+      const session = await startMeetingSession(exec, authorizedMeetingId, companyId, stt);
       const statuses: string[] = [];
       session.subscribe((e) => {
         if (e.type === 'status') statuses.push(e.status);
@@ -188,7 +189,7 @@ describe('Meeting Session Service (Story 2.3)', () => {
   describe('AC5 — encerramento limpo', () => {
     it('stop fecha o stream, preserva o acumulado e marca ended', async () => {
       const stt = new PushSttProvider();
-      const session = await startMeetingSession(exec, authorizedMeetingId, stt);
+      const session = await startMeetingSession(exec, authorizedMeetingId, companyId, stt);
       stt.push({ text: 'consolidado.', isFinal: true });
       await flush();
 

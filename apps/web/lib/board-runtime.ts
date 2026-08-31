@@ -357,7 +357,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     await previous.flushTranscript().catch(() => {});
   }
 
-  const session = await startMeetingSession(db, meetingId, new ScriptedDemoStt(), {
+  const session = await startMeetingSession(db, meetingId, companyId, new ScriptedDemoStt(), {
     vocabularyBoost: BUSINESS_VOCABULARY,
   });
   const hooks = telemetryHooks(runtime, meetingId);
@@ -565,7 +565,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     // O client só conecta o WS /audio depois que esta action retorna, então
     // registrar o sink após a sessão não perde áudio e elimina o sink órfão.
     const stt = new DeepgramSttProvider({ apiKey: process.env.DEEPGRAM_API_KEY });
-    session = await startMeetingSession(db, meetingId, stt, {
+    session = await startMeetingSession(db, meetingId, companyId, stt, {
       audio: audio.iterable,
       vocabularyBoost: BUSINESS_VOCABULARY,
     });

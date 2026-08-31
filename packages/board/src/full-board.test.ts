@@ -113,13 +113,14 @@ describe('FullBoardOrchestrator — conselho completo', () => {
   let db: PGlite;
   let exec: SqlExecutor;
   let meetingId: string;
+  let companyId: string;
 
   beforeAll(async () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
     const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
-    const companyId = company.rows[0]!.id;
+    companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
       'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
       ['ceo@conselho.test', 'Empresário Demo', 'x', companyId],
@@ -145,7 +146,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     } = {},
   ) {
     const stt = new PushSttProvider();
-    const session = await startMeetingSession(exec, meetingId, stt);
+    const session = await startMeetingSession(exec, meetingId, companyId, stt);
     const llm = new EchoLlm();
     if (opts.textScript) {
       const completer = new FakeTextCompleter(opts.textScript);

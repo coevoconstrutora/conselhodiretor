@@ -180,10 +180,11 @@ export interface StartSessionOptions extends SessionRetryOptions {
 export async function startMeetingSession(
   db: SqlExecutor,
   meetingId: string,
+  companyId: string,
   stt: ISttProvider,
   opts: StartSessionOptions = {},
 ): Promise<MeetingSession> {
-  await assertRecordingConfirmed(db, meetingId);
+  await assertRecordingConfirmed(db, meetingId, companyId);
   const open = () =>
     stt.openStream({ lang: 'pt-BR', audio: opts.audio, vocabularyBoost: opts.vocabularyBoost });
   return new MeetingSession(meetingId, open(), open, opts);
