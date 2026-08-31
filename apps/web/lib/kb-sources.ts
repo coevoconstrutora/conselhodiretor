@@ -198,7 +198,7 @@ export async function saveAgentProfile(
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope, updated_at = now()`,
         [companyId, agentId, displayName.trim().slice(0, 80), scope.trim().slice(0, 600)],
       );
-      return agentId;
+      return null; // agent_profile não tem id próprio (PK é company_id+agent_id, ambos não-uuid)
     },
   );
   applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope }]);
