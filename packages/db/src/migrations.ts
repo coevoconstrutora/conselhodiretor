@@ -218,4 +218,30 @@ CREATE TABLE IF NOT EXISTS company_profile (
 );
 `,
   },
+  {
+    name: '0008_company_sources',
+    sql: `
+-- Documentos do perfil da empresa (texto/link/arquivo) — mesmo padrão do
+-- kb_source, mas SEM agent_id: entra no bloco de contexto de TODOS os 9
+-- conselheiros (companyProfileBlock), não é indexado por RAG por agente.
+CREATE TABLE IF NOT EXISTS company_source (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  kind        text NOT NULL,          -- 'text' | 'url' | 'file'
+  title       text NOT NULL,
+  ref         text,                   -- URL ou nome do arquivo original
+  content_enc text NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_company_source_created ON company_source(created_at);
+`,
+  },
+  {
+    name: '0009_meeting_summary',
+    sql: `
+-- Resumo pós-reunião: duração (closed_at - confirmed_at) e nº de presentes
+-- (informado na confirmação de gravação) — exibidos quando a reunião encerra.
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS closed_at timestamptz;
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS participant_count int;
+`,
+  },
 ];

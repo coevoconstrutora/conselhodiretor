@@ -18,6 +18,9 @@ export interface MeetingSummary {
   status: string;
   recordingConfirmed: boolean;
   createdAt: Date;
+  confirmedAt: Date | null;
+  closedAt: Date | null;
+  participantCount: number | null;
 }
 
 /** Lançado quando uma captura é tentada sem a confirmação de gravação. */
@@ -56,21 +59,37 @@ export async function createMeeting(
  * `userId` fica no parâmetro por compatibilidade de assinatura, mas não filtra
  * mais — só `createMeeting` usa o user_id, como proveniência de quem criou.
  */
+const SUMMARY_COLUMNS =
+  'id, title_enc, status, recording_confirmed, created_at, confirmed_at, closed_at, participant_count';
+
+function toSummary(
+  row: Pick<
+    MeetingRow,
+    'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at' | 'confirmed_at' | 'closed_at' | 'participant_count'
+  >,
+  encryptionKey: Buffer,
+): MeetingSummary {
+  return {
+    id: row.id,
+    title: safeDecrypt(row.title_enc, encryptionKey),
+    status: row.status,
+    recordingConfirmed: row.recording_confirmed,
+    createdAt: new Date(row.created_at),
+    confirmedAt: row.confirmed_at ? new Date(row.confirmed_at) : null,
+    closedAt: row.closed_at ? new Date(row.closed_at) : null,
+    participantCount: row.participant_count,
+  };
+}
+
 export async function listMeetings(
   db: SqlExecutor,
   _userId: string,
   encryptionKey: Buffer,
 ): Promise<MeetingSummary[]> {
   const res = await db.query<
-    Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at'>
-  >(`SELECT id, title_enc, status, recording_confirmed, created_at FROM meeting ORDER BY created_at DESC, id DESC`);
-  return res.rows.map((r) => ({
-    id: r.id,
-    title: safeDecrypt(r.title_enc, encryptionKey),
-    status: r.status,
-    recordingConfirmed: r.recording_confirmed,
-    createdAt: new Date(r.created_at),
-  }));
+    Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at' | 'confirmed_at' | 'closed_at' | 'participant_count'>
+  >(`SELECT ${SUMMARY_COLUMNS} FROM meeting ORDER BY created_at DESC, id DESC`);
+  return res.rows.map((r) => toSummary(r, encryptionKey));
 }
 
 /** Carrega uma reunião da empresa (null se não existe) — compartilhada entre usuários. */
@@ -81,32 +100,29 @@ export async function getMeeting(
   encryptionKey: Buffer,
 ): Promise<MeetingSummary | null> {
   const res = await db.query<
-    Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at'>
-  >(`SELECT id, title_enc, status, recording_confirmed, created_at FROM meeting WHERE id = $1`, [
-    meetingId,
-  ]);
+    Pick<MeetingRow, 'id' | 'title_enc' | 'status' | 'recording_confirmed' | 'created_at' | 'confirmed_at' | 'closed_at' | 'participant_count'>
+  >(`SELECT ${SUMMARY_COLUMNS} FROM meeting WHERE id = $1`, [meetingId]);
   const row = res.rows[0];
-  if (!row) return null;
-  return {
-    id: row.id,
-    title: safeDecrypt(row.title_enc, encryptionKey),
-    status: row.status,
-    recordingConfirmed: row.recording_confirmed,
-    createdAt: new Date(row.created_at),
-  };
+  return row ? toSummary(row, encryptionKey) : null;
 }
 
 /**
- * Confirma a gravação (participantes cientes e de acordo). Idempotente:
- * reconfirmar apenas atualiza o carimbo. Falha se a reunião não existe.
+ * Confirma a gravação (participantes cientes e de acordo) + nº de presentes
+ * (exibido no resumo pós-reunião). Idempotente: reconfirmar só atualiza o
+ * carimbo. Falha se a reunião não existe.
  */
-export async function confirmRecording(db: SqlExecutor, meetingId: string): Promise<void> {
+export async function confirmRecording(
+  db: SqlExecutor,
+  meetingId: string,
+  participantCount?: number,
+): Promise<void> {
   const res = await db.query<{ id: string }>(
     `UPDATE meeting
-       SET recording_confirmed = true, confirmed_at = now(), updated_at = now()
+       SET recording_confirmed = true, confirmed_at = now(), updated_at = now(),
+           participant_count = COALESCE($2, participant_count)
      WHERE id = $1
      RETURNING id`,
-    [meetingId],
+    [meetingId, participantCount ?? null],
   );
   assertAffected(res, meetingId);
 }
@@ -130,7 +146,7 @@ export async function revokeRecording(db: SqlExecutor, meetingId: string): Promi
  */
 export async function closeMeeting(db: SqlExecutor, meetingId: string): Promise<void> {
   const res = await db.query<{ id: string }>(
-    `UPDATE meeting SET status = 'closed', updated_at = now() WHERE id = $1 RETURNING id`,
+    `UPDATE meeting SET status = 'closed', closed_at = now(), updated_at = now() WHERE id = $1 RETURNING id`,
     [meetingId],
   );
   assertAffected(res, meetingId);

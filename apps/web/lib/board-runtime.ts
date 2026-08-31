@@ -19,6 +19,8 @@ import {
   listSyntheses,
   auditTranscriptPersistStart,
   loadTranscriptReview,
+  listRecentPresidentSyntheses,
+  buildPriorMeetingsBlock,
 } from '@conselho/meeting-report';
 import type { SqlExecutor } from '@conselho/db';
 import { getDb } from './db';
@@ -290,6 +292,22 @@ function telemetryHooks(runtime: BoardRuntime, meetingId: string) {
 }
 
 /** Inicia a demo do BOARD COMPLETO (E6) — gate de gravação incluso. */
+/**
+ * Memória entre reuniões: síntese do Presidente das últimas reuniões
+ * ENCERRADAS, pronta para `priorMeetingsContext` do orchestrator. Nunca
+ * lança — sem histórico (ou erro ao buscar), a reunião só começa "em branco"
+ * como hoje, não trava o início.
+ */
+async function loadPriorMeetingsContext(db: SqlExecutor, meetingId: string): Promise<string | undefined> {
+  try {
+    const syntheses = await listRecentPresidentSyntheses(db, getEncryptionKey(), meetingId);
+    return buildPriorMeetingsBlock(syntheses) || undefined;
+  } catch (error) {
+    console.error('[board] carregar histórico de reuniões anteriores falhou:', error);
+    return undefined;
+  }
+}
+
 export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: string }> {
   const db = await getDb();
   const runtime = await getBoardRuntime();
@@ -308,6 +326,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   const hooks = telemetryHooks(runtime, meetingId);
   runtime.telemetry.sessionStarted(meetingId);
   const { llm, label } = makeLlm(hooks.onUsage);
+  const priorMeetingsContext = await loadPriorMeetingsContext(db, meetingId);
   const orchestrator = new FullBoardOrchestrator(db, session, llm, runtime.kb, {
     pauseMs: 2500,
     tickMs: 1000,
@@ -319,6 +338,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     onContributionLatency: hooks.onContributionLatency,
     onCaseStateUpdate: hooks.onCaseStateUpdate, // B5
     onCaseReview: hooks.onCaseReview,
+    priorMeetingsContext,
   });
   runtime.gateway.bind(meetingId, orchestrator);
   // transcrição ao vivo p/ o painel (texto via WS — áudio nunca passa aqui, §7).
@@ -514,6 +534,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const hooks = telemetryHooks(runtime, meetingId);
     runtime.telemetry.sessionStarted(meetingId);
     const { llm } = makeLlm(hooks.onUsage);
+    const priorMeetingsContext = await loadPriorMeetingsContext(db, meetingId);
     orchestrator = new FullBoardOrchestrator(db, session, llm, runtime.kb, {
       pauseMs: 2500,
       tickMs: 1000,
@@ -526,6 +547,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       ...boardTuningFromEnv(), // B4: caseReviewMs + threshold do dedup por env (calibração do piloto)
       onCaseStateUpdate: hooks.onCaseStateUpdate,
       onCaseReview: hooks.onCaseReview,
+      priorMeetingsContext,
     });
     runtime.gateway.bind(meetingId, orchestrator);
     const wired = wireSessionBroadcast(runtime, meetingId, session, db, { persistTranscript: true });

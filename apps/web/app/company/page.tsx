@@ -3,8 +3,14 @@ import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
-import { loadCompanyProfile } from '@/lib/company-profile';
+import { loadCompanyProfile, listCompanySources } from '@/lib/company-profile';
 import { CompanyProfileForm } from '@/components/company-profile-form';
+import {
+  CompanySourcesList,
+  AddCompanyTextForm,
+  AddCompanyUrlForm,
+  AddCompanyFileForm,
+} from '@/components/company-sources';
 
 /**
  * Perfil da empresa: área CENTRAL de contexto (nome, porte, segmento, região,
@@ -16,10 +22,12 @@ export default async function CompanyPage() {
   if (!user) redirect('/login');
 
   const db = await getDb();
-  const profile = await loadCompanyProfile(db, getEncryptionKey());
+  const key = getEncryptionKey();
+  const profile = await loadCompanyProfile(db, key);
+  const sources = await listCompanySources(db, key);
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl p-8">
+    <main className="mx-auto min-h-screen max-w-3xl p-8">
       <header className="flex items-center justify-between border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
@@ -39,6 +47,34 @@ export default async function CompanyPage() {
 
       <section className="mt-8">
         <CompanyProfileForm profile={profile} />
+      </section>
+
+      {/* Documentos: mesmo padrão do "NotebookLM por conselheiro", mas
+          compartilhado por TODOS os 9 (não é por especialidade). */}
+      <section className="card-premium mt-6 p-6">
+        <h2 className="font-display text-base font-semibold text-ink">
+          Documentos <span className="text-sm font-normal text-ink-muted">· {sources.length}</span>
+        </h2>
+        <p className="mt-1 text-xs text-ink-muted">
+          Cifrado em repouso e auditado. Entra no contexto de TODOS os conselheiros — por isso o
+          texto injetado tem um teto de tamanho (documentos muito longos são cortados).
+        </p>
+        <CompanySourcesList sources={sources} />
+      </section>
+
+      <section className="card-premium mt-6 p-6">
+        <h2 className="font-display text-base font-semibold text-ink">Adicionar documento</h2>
+        <div className="mt-4 grid gap-6 md:grid-cols-3">
+          <div className="rounded-[var(--radius)] border border-ink/10 p-4">
+            <AddCompanyTextForm />
+          </div>
+          <div className="rounded-[var(--radius)] border border-ink/10 p-4">
+            <AddCompanyUrlForm />
+          </div>
+          <div className="rounded-[var(--radius)] border border-ink/10 p-4">
+            <AddCompanyFileForm />
+          </div>
+        </div>
       </section>
     </main>
   );

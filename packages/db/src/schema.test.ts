@@ -48,6 +48,8 @@ describe('Migrations — schema base', () => {
       '0005_counselor_knowledge',
       '0006_users_roles',
       '0007_company_profile',
+      '0008_company_sources',
+      '0009_meeting_summary',
     ]);
   });
 

@@ -18,6 +18,16 @@ import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
 
+/** "1h 12min" entre o início (confirmação da gravação) e o encerramento. */
+function formatMeetingDuration(start: Date, end: Date | null): string | null {
+  if (!end) return null;
+  const totalMinutes = Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes}min`;
+  return `${hours}h ${minutes}min`;
+}
+
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
 export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {
@@ -31,6 +41,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   const authorized = meeting.recordingConfirmed;
   const closed = meeting.status === 'closed';
+  const meetingDurationLabel = formatMeetingDuration(
+    meeting.confirmedAt ?? meeting.createdAt,
+    meeting.closedAt,
+  );
 
   await getBoardRuntime();
   const sessionToken = (await cookies()).get(SESSION_COOKIE)?.value ?? '';
@@ -105,8 +119,19 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               Sem a confirmação, nenhum áudio é capturado, transmitido ou persistido. Confirme que
               os participantes da reunião estão cientes e de acordo com a gravação.
             </p>
-            <form action={confirmRecordingAction} className="mt-4">
+            <form action={confirmRecordingAction} className="mt-4 space-y-3">
               <input type="hidden" name="meetingId" value={id} />
+              <label className="block space-y-1.5 text-left">
+                <span className="text-sm font-medium text-ink">Quantas pessoas estão presentes?</span>
+                <input
+                  name="participantCount"
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder="ex.: 5"
+                  className="w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                />
+              </label>
               <button
                 type="submit"
                 className="w-full rounded-[var(--radius)] bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
@@ -117,6 +142,22 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
           </section>
         ) : (
           <div className="mt-4">
+            {closed ? (
+              <section
+                aria-label="Resumo da reunião"
+                className="card-premium mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 p-5"
+              >
+                <span className="text-sm font-semibold text-ink">🔒 Reunião encerrada</span>
+                {meetingDurationLabel ? (
+                  <span className="text-sm text-ink-muted">⏱ Duração: {meetingDurationLabel}</span>
+                ) : null}
+                {meeting.participantCount ? (
+                  <span className="text-sm text-ink-muted">
+                    👥 {meeting.participantCount} participante{meeting.participantCount === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </section>
+            ) : null}
             <MeetingRoom
               meetingId={id}
               token={sessionToken}

@@ -20,6 +20,8 @@ export interface MeetingRow {
   /** Gate de gravação: default NEGA — sem confirmação, o STT não abre. */
   recording_confirmed: boolean;
   confirmed_at: Date | null;
+  closed_at: Date | null;
+  participant_count: number | null;
   created_at: Date;
   updated_at: Date;
 }

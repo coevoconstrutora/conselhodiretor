@@ -6,10 +6,28 @@ import { applyCompanyProfile, type CompanyProfile } from '@conselho/kb';
 
 /**
  * Perfil da empresa — área central de contexto compartilhado por TODOS os 9
- * conselheiros (ver packages/kb/company-profile.ts). Linha única (id=1),
- * conteúdo cifrado em repouso (JSON com nome/porte/segmento/região/notas —
- * dados de negócio sensíveis, mesmo padrão do kb_source).
+ * conselheiros (ver packages/kb/company-profile.ts). Campos estruturados em
+ * linha única (id=1) + documentos anexados (company_source, mesmo padrão do
+ * kb_source: texto/link/arquivo). Tudo cifrado em repouso.
+ *
+ * `sourcesText` entra em TODO prompt de TODO agente (não é RAG retido por
+ * query como o kb_source por conselheiro) — por isso o teto de tamanho:
+ * documento inteiro em todo prompt custa caro em tokens x9 conselheiros.
  */
+
+const MAX_SOURCE_CHARS = 200_000; // por fonte — igual ao kb_source
+const MAX_SOURCES_TEXT_CHARS = 6_000; // total injetado no prompt (teto de custo)
+
+export type CompanySourceKind = 'text' | 'url' | 'file';
+
+export interface CompanySourceSummary {
+  readonly id: string;
+  readonly kind: CompanySourceKind;
+  readonly title: string;
+  readonly ref: string | null;
+  readonly chars: number;
+  readonly createdAt: Date;
+}
 
 export async function loadCompanyProfile(db: SqlExecutor, key: Buffer): Promise<CompanyProfile> {
   const res = await db.query<{ content_enc: string }>(
@@ -24,9 +42,34 @@ export async function loadCompanyProfile(db: SqlExecutor, key: Buffer): Promise<
   }
 }
 
-/** Carrega do banco e APLICA em memória (boot + logo após salvar). */
+/** Documentos anexados (texto/link/arquivo), concatenados e cortados no teto. */
+async function loadSourcesText(db: SqlExecutor, key: Buffer): Promise<string> {
+  const res = await db.query<{ title: string; content_enc: string }>(
+    'SELECT title, content_enc FROM company_source ORDER BY created_at ASC',
+  );
+  let combined = '';
+  for (const row of res.rows) {
+    let text: string;
+    try {
+      text = decryptField(row.content_enc, key);
+    } catch {
+      continue; // linha corrompida/chave rotacionada — pula, não derruba o bloco
+    }
+    combined += `\n\n### ${row.title}\n${text}`;
+  }
+  const trimmed = combined.trim();
+  return trimmed.length > MAX_SOURCES_TEXT_CHARS
+    ? `${trimmed.slice(0, MAX_SOURCES_TEXT_CHARS)}\n[...documento(s) truncado(s) — teto de ${MAX_SOURCES_TEXT_CHARS} caracteres]`
+    : trimmed;
+}
+
+/** Carrega do banco (perfil + documentos) e APLICA em memória (boot + logo após salvar). */
 export async function loadAndApplyCompanyProfile(db: SqlExecutor, key: Buffer): Promise<void> {
-  applyCompanyProfile(await loadCompanyProfile(db, key));
+  const [profile, sourcesText] = await Promise.all([
+    loadCompanyProfile(db, key),
+    loadSourcesText(db, key),
+  ]);
+  applyCompanyProfile({ ...profile, sourcesText: sourcesText || undefined });
 }
 
 export async function saveCompanyProfile(
@@ -47,5 +90,72 @@ export async function saveCompanyProfile(
       return null;
     },
   );
-  applyCompanyProfile(profile); // vale imediatamente — sem restart (mesmo padrão do agent_profile)
+  await loadAndApplyCompanyProfile(db, key); // vale imediatamente — sem restart
+}
+
+// ── Documentos (texto/link/arquivo) ─────────────────────────────────────────
+
+export async function listCompanySources(
+  db: SqlExecutor,
+  key: Buffer,
+): Promise<CompanySourceSummary[]> {
+  const res = await db.query<{
+    id: string;
+    kind: string;
+    title: string;
+    ref: string | null;
+    content_enc: string;
+    created_at: Date | string;
+  }>('SELECT id, kind, title, ref, content_enc, created_at FROM company_source ORDER BY created_at DESC');
+  return res.rows.map((r) => {
+    let chars = 0;
+    try {
+      chars = decryptField(r.content_enc, key).length;
+    } catch {
+      chars = 0;
+    }
+    return {
+      id: r.id,
+      kind: r.kind as CompanySourceKind,
+      title: r.title,
+      ref: r.ref,
+      chars,
+      createdAt: new Date(r.created_at),
+    };
+  });
+}
+
+export async function addCompanySource(
+  db: SqlExecutor,
+  key: Buffer,
+  input: { kind: CompanySourceKind; title: string; ref?: string | null; content: string },
+): Promise<void> {
+  const content = input.content.trim().slice(0, MAX_SOURCE_CHARS);
+  if (content.length < 20) throw new Error('Conteúdo curto demais para virar contexto.');
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'company-source-add', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      const res = await tx.query<{ id: string }>(
+        'INSERT INTO company_source (kind, title, ref, content_enc) VALUES ($1, $2, $3, $4) RETURNING id',
+        [input.kind, input.title.trim().slice(0, 160) || 'Sem título', input.ref ?? null, encryptField(content, key)],
+      );
+      return res.rows[0]!.id;
+    },
+  );
+  await loadAndApplyCompanyProfile(db, key);
+}
+
+export async function deleteCompanySource(db: SqlExecutor, key: Buffer, sourceId: string): Promise<void> {
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'company-source-delete', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      const res = await tx.query<{ id: string }>('DELETE FROM company_source WHERE id = $1 RETURNING id', [
+        sourceId,
+      ]);
+      return res.rows[0]?.id ?? null;
+    },
+  );
+  await loadAndApplyCompanyProfile(db, key);
 }

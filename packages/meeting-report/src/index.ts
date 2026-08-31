@@ -16,5 +16,7 @@ export {
   saveAgentReport,
   loadAgentReport,
   listAgentReports,
+  listRecentPresidentSyntheses,
+  buildPriorMeetingsBlock,
   type AgentReport,
 } from './reports';

@@ -124,7 +124,7 @@ export function MeetingRoom({
       </div>
 
       {/* faixa hero — os médicos acompanham a reunião, grandes e presentes */}
-      <CounselorStrip />
+      <CounselorStrip closed={closed} />
 
       {/* a "mesa" da reunião: transcrição (documento iluminado) + feed */}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">

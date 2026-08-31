@@ -77,6 +77,12 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * telemetria "autonomia" do piloto.
    */
   readonly semanticDedupThreshold?: number;
+  /**
+   * Memória entre reuniões: síntese do Presidente das últimas reuniões
+   * ENCERRADAS (board-runtime monta isso antes de instanciar o orchestrator).
+   * Prefixa o CaseState em toda chamada — sem isso, cada reunião é uma ilha.
+   */
+  readonly priorMeetingsContext?: string;
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -107,6 +113,8 @@ export class FullBoardOrchestrator {
   private readonly semanticDedupThreshold: number;
   /** B3 — memória estruturada do caso (desliga sozinha sem completeText). */
   private readonly caseState: CaseStateTracker;
+  /** Memória entre reuniões (síntese das últimas reuniões encerradas). */
+  private readonly priorMeetingsContext: string | undefined;
   /** Tipos por tópico p/ detecção de divergência (FR7). */
   private readonly topicTypes = new Map<string, Map<AgentId, string>>();
   private unsubscribe: (() => void) | null = null;
@@ -139,6 +147,7 @@ export class FullBoardOrchestrator {
       everyNFinals: config.caseStateEveryNFinals,
       onUpdate: config.onCaseStateUpdate,
     });
+    this.priorMeetingsContext = config.priorMeetingsContext;
     this.now = config.now ?? Date.now;
     this.config = {
       tickMs: config.tickMs ?? 1000,
@@ -187,6 +196,13 @@ export class FullBoardOrchestrator {
 
   flush(): Promise<void> {
     return this.pending;
+  }
+
+  /** CaseState da reunião ATUAL prefixado pela memória de reuniões ANTERIORES. */
+  private renderCaseState(): string {
+    const current = this.caseState.renderForPrompt();
+    if (!this.priorMeetingsContext) return current;
+    return current ? `${this.priorMeetingsContext}\n\n${current}` : this.priorMeetingsContext;
   }
 
   /** Síntese SOB DEMANDA (FR18) — além da automática. */
@@ -263,7 +279,7 @@ export class FullBoardOrchestrator {
         .slice(-20)
         .map((h) => `- [${AGENT_PROFILES[h.agentId].displayName}] ${h.text}`)
         .join('\n');
-      const caseBlock = this.caseState.renderForPrompt();
+      const caseBlock = this.renderCaseState();
       const res = await this.llm.completeText!({
         system: CASE_REVIEW_SYSTEM,
         prompt:
@@ -338,7 +354,7 @@ export class FullBoardOrchestrator {
         query: candidate.segmentText,
         transcript: this.recentFinals.join(' '),
         previousContributions: this.history.slice(-20), // cap de tokens (B1)
-        caseState: this.caseState.renderForPrompt() || undefined, // B3
+        caseState: this.renderCaseState() || undefined, // B3
       });
       if (contribution.skip) {
         // o modelo declarou não ter nada novo — sem audit, sem emit (B1)
@@ -395,7 +411,7 @@ export class FullBoardOrchestrator {
     if (this.round.length === 0) return;
     const entries = [...this.round];
     try {
-      const caseBlock = this.caseState.renderForPrompt(); // render 1× (era 2× na template)
+      const caseBlock = this.renderCaseState(); // render 1× (era 2× na template)
       const summary = entries
         .map((e) => `- ${AGENT_PROFILES[e.contribution.agentId].displayName}: ${e.contribution.text}`)
         .join('\n');

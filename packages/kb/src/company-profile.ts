@@ -11,6 +11,8 @@ export interface CompanyProfile {
   readonly segment?: string;
   readonly region?: string;
   readonly notes?: string;
+  /** Texto extraído dos documentos anexados (company_source), já concatenado/truncado. */
+  readonly sourcesText?: string;
 }
 
 let current: CompanyProfile = {};
@@ -31,6 +33,9 @@ export function companyProfileBlock(): string {
   if (current.segment) parts.push(`Segmento: ${current.segment}`);
   if (current.region) parts.push(`Região de atuação: ${current.region}`);
   if (current.notes) parts.push(`Contexto adicional: ${current.notes}`);
-  if (parts.length === 0) return '';
-  return `\n\nCONTEXTO DA EMPRESA (use como referência em toda contribuição):\n${parts.join('\n')}`;
+  const header = parts.length > 0 ? `\n\nCONTEXTO DA EMPRESA (use como referência em toda contribuição):\n${parts.join('\n')}` : '';
+  const docs = current.sourcesText
+    ? `\n\nDOCUMENTOS DA EMPRESA (anexados pelo dono):\n${current.sourcesText}`
+    : '';
+  return header + docs;
 }

@@ -26,8 +26,10 @@ export async function confirmRecordingAction(formData: FormData): Promise<void> 
   if (!canWrite(user)) throw new Error('Convidados não podem confirmar gravação.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
+  const rawCount = String(formData.get('participantCount') ?? '').trim();
+  const participantCount = rawCount ? Math.max(1, Math.min(100, Number(rawCount) || 0)) : undefined;
   const db = await getDb();
-  await confirmRecording(db, meetingId);
+  await confirmRecording(db, meetingId, participantCount);
   revalidatePath(`/meetings/${meetingId}`);
 }
 

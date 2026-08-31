@@ -46,7 +46,7 @@ function latestBy(
   return null;
 }
 
-export function CounselorStrip() {
+export function CounselorStrip({ closed = false }: { closed?: boolean }) {
   const contributions = useBoardStore((s) => s.contributions);
   const silenced = useBoardStore((s) => s.silenced);
   const toggleSilence = useBoardStore((s) => s.toggleSilence);
@@ -57,6 +57,7 @@ export function CounselorStrip() {
     const latest = latestBy(contributions, counselor.id);
     const isSilenced = silenced.has(counselor.id);
     const signaling =
+      !closed &&
       !!latest &&
       contributions.some(
         (c) =>
@@ -64,7 +65,7 @@ export function CounselorStrip() {
           c.contribution.severity === 'critical' &&
           now - c.at < SIGNAL_WINDOW_MS,
       );
-    const speaking = !signaling && !!latest && now - latest.at < SPEAK_WINDOW_MS;
+    const speaking = !closed && !signaling && !!latest && now - latest.at < SPEAK_WINDOW_MS;
     return { counselor, latest, isSilenced, signaling, speaking };
   });
 
@@ -129,7 +130,9 @@ export function CounselorStrip() {
                     ? 'sinalizando'
                     : speaking
                       ? 'falando'
-                      : 'ouvindo'
+                      : closed
+                        ? 'encerrado'
+                        : 'ouvindo'
               }
               className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-[var(--radius)] border border-white/10 bg-white/5 px-1 py-3 ring-2 transition-all motion-reduce:transition-none ${
                 signaling
@@ -137,7 +140,7 @@ export function CounselorStrip() {
                   : speaking
                     ? 'ring-emerald-300/70 shadow-[0_0_18px_hsl(168_60%_55%/0.4)]'
                     : 'ring-transparent'
-              } ${isSilenced ? 'opacity-50' : ''} ${inSpotlight ? 'bg-white/10' : ''}`}
+              } ${isSilenced || closed ? 'opacity-50' : ''} ${inSpotlight ? 'bg-white/10' : ''}`}
             >
               <span className={`text-2xl ${isSilenced ? 'grayscale' : ''}`} aria-hidden="true">
                 {counselor.emoji}
@@ -154,6 +157,8 @@ export function CounselorStrip() {
                     <span className="text-attn">▲ sinalizando</span>
                   ) : speaking ? (
                     <span className="text-emerald-300">● falando</span>
+                  ) : closed ? (
+                    <span className="text-white/40">encerrado</span>
                   ) : (
                     <span className="text-emerald-200/80">● ouvindo</span>
                   )}
