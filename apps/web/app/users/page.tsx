@@ -11,6 +11,7 @@ export default async function UsersPage() {
   if (!isAdmin(user)) redirect('/');
 
   const users = await listUsers();
+  const knownDomains = [...new Set(users.map((u) => u.email.split('@')[1]).filter((d): d is string => !!d))];
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">
@@ -28,7 +29,7 @@ export default async function UsersPage() {
       </header>
 
       <section className="mt-8">
-        <CreateUserForm />
+        <CreateUserForm knownDomains={knownDomains} />
       </section>
 
       <section className="mt-8">

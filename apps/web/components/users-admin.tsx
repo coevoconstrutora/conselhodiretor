@@ -21,11 +21,13 @@ const ROLE_LABEL: Record<string, string> = {
   convidado: 'Convidado (leitura)',
 };
 
-export function CreateUserForm() {
+export function CreateUserForm({ knownDomains }: { knownDomains: string[] }) {
   const [state, formAction, pending] = useActionState<CreateUserState, FormData>(
     createUserAction,
     null,
   );
+  const [email, setEmail] = useState('');
+  const localPart = email.split('@')[0] ?? '';
 
   return (
     <form action={formAction} className="card-premium space-y-3 p-5">
@@ -37,7 +39,23 @@ export function CreateUserForm() {
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-ink">E-mail</span>
-          <input name="email" type="email" required className={inputCls} />
+          <input
+            name="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            list="known-email-domains"
+            className={inputCls}
+          />
+          {/* datalist recalculado a cada tecla: sugere "usuario@dominio-conhecido"
+              pros domínios já usados por outros usuários desta empresa. */}
+          <datalist id="known-email-domains">
+            {localPart &&
+              knownDomains.map((domain) => (
+                <option key={domain} value={`${localPart}@${domain}`} />
+              ))}
+          </datalist>
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-ink">Papel</span>
