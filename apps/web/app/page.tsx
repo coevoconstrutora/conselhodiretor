@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { AGENT_PROFILES } from '@conselho/kb';
+import { getAgentProfiles } from '@conselho/kb';
 import { ALL_AGENT_IDS } from '@conselho/providers';
 import { getCurrentUser, canWrite, isAdmin } from '@/lib/auth';
 import { logoutAction } from '@/lib/auth-actions';
@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
 import { countKbSourcesByAgent, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import { CompanySwitcher } from '@/components/company-switcher';
 
 const AGENT_EMOJI: Record<string, string> = {
   engenharia: '🏗️',
@@ -29,9 +30,10 @@ export default async function DashboardPage() {
   }
 
   const db = await getDb();
-  const meetings = await listMeetings(db, user.id, getEncryptionKey());
-  await loadAndApplyProfileOverrides(db); // nomes personalizados no grid
-  const sourceCounts = await countKbSourcesByAgent(db);
+  const meetings = await listMeetings(db, user.companyId, getEncryptionKey());
+  await loadAndApplyProfileOverrides(db, user.companyId); // nomes personalizados no grid
+  const sourceCounts = await countKbSourcesByAgent(db, user.companyId);
+  const profiles = getAgentProfiles(user.companyId);
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">
@@ -41,6 +43,7 @@ export default async function DashboardPage() {
           <p className="text-sm text-ink-muted">Seu conselho de 9 especialistas em cada reunião</p>
         </div>
         <div className="flex items-center gap-2">
+          {user.isSuperAdmin ? <CompanySwitcher currentCompanyId={user.companyId} /> : null}
           <Link
             href="/company"
             className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
@@ -127,7 +130,7 @@ export default async function DashboardPage() {
         </div>
         <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {ALL_AGENT_IDS.map((agentId) => {
-            const profile = AGENT_PROFILES[agentId];
+            const profile = profiles[agentId];
             const count = sourceCounts.get(agentId) ?? 0;
             const isPresident = agentId === 'presidente';
             return (

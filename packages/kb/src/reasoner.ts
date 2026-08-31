@@ -22,8 +22,13 @@ export interface AgentProfile {
   readonly scope: string;
 }
 
-/** Os 9 agentes do Conselho — registry único; ajustar aqui renomeia em todo o sistema. */
-export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
+/**
+ * Template dos 9 agentes do Conselho — ponto de partida de TODA empresa nova
+ * (clonado, nunca compartilhado por referência). Editar aqui muda o DEFAULT
+ * para empresas futuras; não afeta empresas já criadas (elas têm sua própria
+ * cópia em `agent_profile`, carregada via `applyAgentProfileOverrides`).
+ */
+export const DEFAULT_AGENT_PROFILES: Record<AgentId, AgentProfile> = {
   engenharia: {
     agentId: 'engenharia',
     displayName: 'Engenharia e Lean Construction',
@@ -80,8 +85,34 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
   },
 };
 
+function cloneDefaultProfiles(): Record<AgentId, AgentProfile> {
+  const clone = {} as Record<AgentId, AgentProfile>;
+  for (const key of Object.keys(DEFAULT_AGENT_PROFILES) as AgentId[]) {
+    clone[key] = { ...DEFAULT_AGENT_PROFILES[key] };
+  }
+  return clone;
+}
+
+/**
+ * Perfis por EMPRESA (multi-tenant): cada `companyId` tem sua própria cópia
+ * em memória, isolada das demais — editar o CFO da Velkor NUNCA afeta a
+ * Coevo, mesmo com as duas ativas no mesmo processo. Populada sob demanda
+ * (primeiro acesso clona o template); `applyAgentProfileOverrides` é quem
+ * carrega a personalização persistida (`agent_profile`) por cima.
+ */
+const profilesByCompany = new Map<string, Record<AgentId, AgentProfile>>();
+
+export function getAgentProfiles(companyId: string): Record<AgentId, AgentProfile> {
+  let profiles = profilesByCompany.get(companyId);
+  if (!profiles) {
+    profiles = cloneDefaultProfiles();
+    profilesByCompany.set(companyId, profiles);
+  }
+  return profiles;
+}
+
 /** System prompt restrito por agente — anti-extrapolação, tom de sugestão. */
-export function buildAgentSystem(profile: AgentProfile): string {
+export function buildAgentSystem(profile: AgentProfile, companyId: string): string {
   return (
     `Você é ${profile.displayName}, membro do conselho consultivo de IA de uma incorporadora imobiliária, ` +
     `assistindo a uma reunião de negócios ao vivo. ` +
@@ -92,22 +123,24 @@ export function buildAgentSystem(profile: AgentProfile): string {
     `("vale verificar", "considere") ou de pergunta instigante — nunca de comando: a decisão é sempre do empresário; ` +
     `(4) NÃO repita contribuições já feitas pelo conselho (mesmo com outras palavras) — analise a PROGRESSÃO ` +
     `da reunião e só contribua com o que é NOVO e útil agora.` +
-    companyProfileBlock()
+    companyProfileBlock(companyId)
   );
 }
 
 /**
  * Sobrepõe nome/escopo de perfis com a personalização do DONO (persistida em
- * `agent_profile`). Muta o registry compartilhado de propósito: todos os
- * consumidores (reasoner, síntese, case review, relatórios) leem do MESMO
- * objeto AGENT_PROFILES — a mudança vale imediatamente, sem restart.
- * `agentId` nunca é sobreposto (é a identidade/namespace do agente).
+ * `agent_profile`, agora por empresa). Muta o registry DAQUELA empresa —
+ * todos os consumidores (reasoner, síntese, case review, relatórios) que
+ * chamam `getAgentProfiles(companyId)` leem o MESMO objeto — vale
+ * imediatamente, sem restart. `agentId` nunca é sobreposto.
  */
 export function applyAgentProfileOverrides(
+  companyId: string,
   overrides: ReadonlyArray<{ agentId: AgentId; displayName?: string; scope?: string }>,
 ): void {
+  const profiles = getAgentProfiles(companyId);
   for (const o of overrides) {
-    const profile = AGENT_PROFILES[o.agentId] as { displayName: string; scope: string } | undefined;
+    const profile = profiles[o.agentId] as { displayName: string; scope: string } | undefined;
     if (!profile) continue;
     if (o.displayName?.trim()) profile.displayName = o.displayName.trim();
     if (o.scope?.trim()) profile.scope = o.scope.trim();
@@ -136,19 +169,21 @@ export interface ReasonInput {
 
 export class AgentReasoner {
   constructor(
+    private readonly companyId: string,
     private readonly retriever: IKnowledgeRetriever,
     private readonly llm: ILlmProvider,
   ) {}
 
   async reason(input: ReasonInput): Promise<AgentContribution> {
-    const profile = AGENT_PROFILES[input.agentId];
+    const profiles = getAgentProfiles(this.companyId);
+    const profile = profiles[input.agentId];
     // FR21: recuperação SÓ no namespace da persona
     const context = await this.retriever.retrieve(input.agentId, input.query, input.k ?? 3);
     const priors = (input.previousContributions ?? []).map(
-      (c) => `[${AGENT_PROFILES[c.agentId].displayName}] ${c.text}`,
+      (c) => `[${profiles[c.agentId].displayName}] ${c.text}`,
     );
     const contribution = await this.llm.complete({
-      system: buildAgentSystem(profile),
+      system: buildAgentSystem(profile, this.companyId),
       context,
       // B3: o estado do caso dá ao modelo a PROGRESSÃO da consulta inteira,
       // não só a janela curta de transcript

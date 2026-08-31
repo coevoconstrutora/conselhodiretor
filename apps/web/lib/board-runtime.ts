@@ -45,7 +45,8 @@ import { loadAndApplyCompanyProfile } from './company-profile';
 
 interface BoardRuntime {
   gateway: BoardGateway;
-  kb: NamespacedKnowledgeStore;
+  /** Um índice RAG POR EMPRESA — nunca compartilhado (isolamento multi-tenant). */
+  kbByCompany: Map<string, NamespacedKnowledgeStore>;
   telemetry: TelemetryRegistry;
   active: Map<
     string,
@@ -97,14 +98,13 @@ async function init(): Promise<BoardRuntime> {
   } else {
     gateway = new BoardGateway(db, { port: BOARD_WS_PORT });
   }
-  // Conhecimento por conselheiro: SEED do repositório + fontes do DONO no
-  // banco (kb_source) + perfis personalizados (agent_profile). O mesmo
-  // rebuild roda ao vivo quando o dono edita em /counselors/[id].
-  const kb = new NamespacedKnowledgeStore();
-  await loadAndApplyProfileOverrides(db);
-  await loadAndApplyCompanyProfile(db, getEncryptionKey());
-  await rebuildAllKnowledge(kb, db, getEncryptionKey(), COUNSELOR_AGENT_IDS);
-  return { gateway, kb, telemetry: new TelemetryRegistry(), active: new Map(), lastFinalAt: new Map() };
+  return {
+    gateway,
+    kbByCompany: new Map(),
+    telemetry: new TelemetryRegistry(),
+    active: new Map(),
+    lastFinalAt: new Map(),
+  };
 }
 
 export function getBoardRuntime(): Promise<BoardRuntime> {
@@ -118,6 +118,27 @@ export function getBoardRuntime(): Promise<BoardRuntime> {
     });
   }
   return globalForBoard.__conselhoBoard;
+}
+
+/**
+ * Índice RAG (+ perfis + perfil da empresa) DE UMA EMPRESA — construído sob
+ * demanda no 1º acesso (não no boot: empresas são criadas em runtime) e
+ * cacheado no processo. Conhecimento por conselheiro: SEED do repositório +
+ * fontes do dono no banco (kb_source) + perfis personalizados (agent_profile).
+ * O mesmo rebuild roda ao vivo quando o dono edita em /counselors/[id].
+ */
+export async function getCompanyKnowledgeStore(companyId: string): Promise<NamespacedKnowledgeStore> {
+  const runtime = await getBoardRuntime();
+  const existing = runtime.kbByCompany.get(companyId);
+  if (existing) return existing;
+
+  const db = await getDb();
+  const kb = new NamespacedKnowledgeStore();
+  await loadAndApplyProfileOverrides(db, companyId);
+  await loadAndApplyCompanyProfile(db, companyId, getEncryptionKey());
+  await rebuildAllKnowledge(kb, db, companyId, getEncryptionKey(), COUNSELOR_AGENT_IDS);
+  runtime.kbByCompany.set(companyId, kb);
+  return kb;
 }
 
 /** Roteiro da reunião simulada (PT-BR) — dispara vários conselheiros (CFO,
@@ -298,9 +319,13 @@ function telemetryHooks(runtime: BoardRuntime, meetingId: string) {
  * lança — sem histórico (ou erro ao buscar), a reunião só começa "em branco"
  * como hoje, não trava o início.
  */
-async function loadPriorMeetingsContext(db: SqlExecutor, meetingId: string): Promise<string | undefined> {
+async function loadPriorMeetingsContext(
+  db: SqlExecutor,
+  companyId: string,
+  meetingId: string,
+): Promise<string | undefined> {
   try {
-    const syntheses = await listRecentPresidentSyntheses(db, getEncryptionKey(), meetingId);
+    const syntheses = await listRecentPresidentSyntheses(db, getEncryptionKey(), companyId, meetingId);
     return buildPriorMeetingsBlock(syntheses) || undefined;
   } catch (error) {
     console.error('[board] carregar histórico de reuniões anteriores falhou:', error);
@@ -308,9 +333,21 @@ async function loadPriorMeetingsContext(db: SqlExecutor, meetingId: string): Pro
   }
 }
 
+/** Empresa DONA da reunião — nunca confiar em companyId vindo só do cliente. */
+async function getMeetingCompanyId(db: SqlExecutor, meetingId: string): Promise<string> {
+  const res = await db.query<{ company_id: string }>('SELECT company_id FROM meeting WHERE id = $1', [
+    meetingId,
+  ]);
+  const companyId = res.rows[0]?.company_id;
+  if (!companyId) throw new Error(`Reunião ${meetingId} não encontrada.`);
+  return companyId;
+}
+
 export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: string }> {
   const db = await getDb();
   const runtime = await getBoardRuntime();
+  const companyId = await getMeetingCompanyId(db, meetingId);
+  const kb = await getCompanyKnowledgeStore(companyId);
 
   // reinício idempotente: encerra a demo anterior da mesma reunião
   const previous = runtime.active.get(meetingId);
@@ -326,8 +363,8 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   const hooks = telemetryHooks(runtime, meetingId);
   runtime.telemetry.sessionStarted(meetingId);
   const { llm, label } = makeLlm(hooks.onUsage);
-  const priorMeetingsContext = await loadPriorMeetingsContext(db, meetingId);
-  const orchestrator = new FullBoardOrchestrator(db, session, llm, runtime.kb, {
+  const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+  const orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
     pauseMs: 2500,
     tickMs: 1000,
     synthesisQuietMs: 10_000,
@@ -509,6 +546,8 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
   }
   const db = await getDb();
   const runtime = await getBoardRuntime();
+  const companyId = await getMeetingCompanyId(db, meetingId);
+  const kb = await getCompanyKnowledgeStore(companyId);
 
   const previous = runtime.active.get(meetingId);
   if (previous) {
@@ -534,8 +573,8 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const hooks = telemetryHooks(runtime, meetingId);
     runtime.telemetry.sessionStarted(meetingId);
     const { llm } = makeLlm(hooks.onUsage);
-    const priorMeetingsContext = await loadPriorMeetingsContext(db, meetingId);
-    orchestrator = new FullBoardOrchestrator(db, session, llm, runtime.kb, {
+    const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+    orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
       pauseMs: 2500,
       tickMs: 1000,
       synthesisQuietMs: 20_000,

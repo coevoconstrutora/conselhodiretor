@@ -24,14 +24,17 @@ describe('Audit Service — proveniência e trilha (NFR10)', () => {
   let db: PGlite;
   let exec: SqlExecutor;
   let userId: string;
+  let companyId: string;
 
   beforeAll(async () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
-      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      ['ceo@conselho.test', 'Empresário', 'x'],
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['ceo@conselho.test', 'Empresário', 'x', companyId],
     );
     userId = res.rows[0]!.id;
   });
@@ -43,8 +46,8 @@ describe('Audit Service — proveniência e trilha (NFR10)', () => {
   /** Escrita sensível representativa (fixture). */
   async function clinicalWrite(tx: SqlExecutor): Promise<string> {
     const res = await tx.query<{ id: string }>(
-      'INSERT INTO meeting (user_id, title_enc) VALUES ($1, $2) RETURNING id',
-      [userId, 'ciphertext-fixture'],
+      'INSERT INTO meeting (user_id, company_id, title_enc) VALUES ($1, $2, $3) RETURNING id',
+      [userId, companyId, 'ciphertext-fixture'],
     );
     return res.rows[0]!.id;
   }

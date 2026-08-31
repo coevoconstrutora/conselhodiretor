@@ -1,9 +1,11 @@
 /**
  * Perfil da empresa: contexto ÚNICO e compartilhado entre TODOS os 9
- * conselheiros (nome, porte, segmento, região, notas livres) — ao contrário
- * de `kb_source`/`agent_profile`, que são por agente. Mesmo padrão de mutação
- * em memória de `applyAgentProfileOverrides`: o objeto compartilhado vale
- * imediatamente para reasoner/síntese/relatórios, sem restart.
+ * conselheiros DE UMA EMPRESA (nome, porte, segmento, região, notas) — ao
+ * contrário de `kb_source`/`agent_profile`, que são por agente. Multi-tenant:
+ * um Map por `companyId`, isolado — nunca vaza entre empresas no mesmo
+ * processo. Mesmo padrão de mutação em memória do reasoner: o objeto
+ * daquela empresa vale imediatamente para reasoner/síntese/relatórios, sem
+ * restart.
  */
 export interface CompanyProfile {
   readonly name?: string;
@@ -15,18 +17,19 @@ export interface CompanyProfile {
   readonly sourcesText?: string;
 }
 
-let current: CompanyProfile = {};
+const profilesByCompany = new Map<string, CompanyProfile>();
 
-export function applyCompanyProfile(profile: CompanyProfile): void {
-  current = { ...profile };
+export function applyCompanyProfile(companyId: string, profile: CompanyProfile): void {
+  profilesByCompany.set(companyId, { ...profile });
 }
 
-export function getCompanyProfile(): CompanyProfile {
-  return current;
+export function getCompanyProfile(companyId: string): CompanyProfile {
+  return profilesByCompany.get(companyId) ?? {};
 }
 
 /** Bloco a anexar em QUALQUER system prompt de conselheiro ('' se nada cadastrado). */
-export function companyProfileBlock(): string {
+export function companyProfileBlock(companyId: string): string {
+  const current = getCompanyProfile(companyId);
   const parts: string[] = [];
   if (current.name) parts.push(`Empresa: ${current.name}`);
   if (current.size) parts.push(`Porte: ${current.size}`);

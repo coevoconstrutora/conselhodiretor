@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { KbChunk, LlmCompletionRequest, AgentContribution } from '@conselho/providers';
 import { NamespacedKnowledgeStore } from './store';
 import { ingest, chunkContent, seedSources } from './ingest';
-import { AgentReasoner, buildAgentSystem, AGENT_PROFILES } from './reasoner';
+import { AgentReasoner, buildAgentSystem, DEFAULT_AGENT_PROFILES } from './reasoner';
+
+const TEST_COMPANY = 'test-company';
 
 const SEED = `# Base seed
 
@@ -130,7 +132,7 @@ describe('AgentReasoner + prompts restritos', () => {
   it('fluxo candidato→KB escopada→LLM→contribuição com kbSources (proveniência)', async () => {
     const store = setupStore();
     const llm = new CapturingLlm();
-    const reasoner = new AgentReasoner(store, llm);
+    const reasoner = new AgentReasoner(TEST_COMPANY, store, llm);
 
     const contribution = await reasoner.reason({
       agentId: 'cfo',
@@ -147,8 +149,8 @@ describe('AgentReasoner + prompts restritos', () => {
 
   it('system prompt contém escopo do agente + regras anti-extrapolação', () => {
     for (const agentId of ['cfo', 'legal', 'engenharia', 'futurista'] as const) {
-      const system = buildAgentSystem(AGENT_PROFILES[agentId]);
-      expect(system).toContain(AGENT_PROFILES[agentId].scope);
+      const system = buildAgentSystem(DEFAULT_AGENT_PROFILES[agentId], TEST_COMPANY);
+      expect(system).toContain(DEFAULT_AGENT_PROFILES[agentId].scope);
       expect(system).toContain('NUNCA opine fora do seu escopo');
       expect(system).toContain('não invente números nem fatos');
       expect(system).toContain('tom de sugestão');
@@ -158,7 +160,7 @@ describe('AgentReasoner + prompts restritos', () => {
   it('reasoner usa o system restrito na chamada do LLM', async () => {
     const store = setupStore();
     const llm = new CapturingLlm();
-    await new AgentReasoner(store, llm).reason({
+    await new AgentReasoner(TEST_COMPANY, store, llm).reason({
       agentId: 'legal',
       query: 'registro incorporação memorial',
       transcript: 'Precisamos registrar a incorporação antes do lançamento.',
@@ -168,8 +170,8 @@ describe('AgentReasoner + prompts restritos', () => {
     expect(llm.lastRequest!.system).toContain('NUNCA opine fora do seu escopo');
   });
 
-  it('AGENT_PROFILES cobre os 9 agentes do Conselho', () => {
-    expect(Object.keys(AGENT_PROFILES).sort()).toEqual(
+  it('DEFAULT_AGENT_PROFILES cobre os 9 agentes do Conselho', () => {
+    expect(Object.keys(DEFAULT_AGENT_PROFILES).sort()).toEqual(
       ['arquitetura', 'cfo', 'cs', 'engenharia', 'futurista', 'legal', 'mercado', 'presidente', 'vendas'].sort(),
     );
   });

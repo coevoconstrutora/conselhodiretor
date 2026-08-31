@@ -2,11 +2,21 @@
 
 export type AppUserRole = 'admin' | 'gestor' | 'convidado';
 
+export interface CompanyRow {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: Date;
+}
+
 export interface AppUserRow {
   id: string;
   email: string;
   display_name: string;
   role: AppUserRole;
+  /** Empresa "casa" do usuário — super_admin acessa outras via seletor. */
+  company_id: string;
+  is_super_admin: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -14,6 +24,7 @@ export interface AppUserRow {
 export interface MeetingRow {
   id: string;
   user_id: string;
+  company_id: string;
   /** Título da reunião cifrado em repouso (AES-256-GCM, base64). */
   title_enc: string;
   status: string;

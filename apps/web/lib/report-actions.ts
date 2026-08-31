@@ -7,6 +7,7 @@ import {
   saveAgentReport,
   listAgentReports,
 } from '@conselho/meeting-report';
+import { meetingBelongsToCompany } from '@conselho/meetings';
 import { COUNSELOR_AGENT_IDS, type AgentId, ALL_AGENT_IDS } from '@conselho/providers';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
@@ -30,10 +31,13 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
   }
   try {
+    const db = await getDb();
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
     const inputs = await getNoteInputs(meetingId);
     if (!inputs || inputs.finals.length === 0) return { ok: false, code: 'no-transcript' };
 
-    const db = await getDb();
     const key = getEncryptionKey();
     // Factory única (lib/llm.ts): Gemini > Anthropic, trocável por env.
     // longForm + teto alto: relatório completo em markdown escapado num campo
@@ -43,7 +47,7 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     // 1 relatório por conselheiro, em série (evita rajada de 8 chamadas simultâneas)
     const reports: Array<{ agentId: AgentId; content: string }> = [];
     for (const agentId of COUNSELOR_AGENT_IDS) {
-      const content = await generateCounselorReport(llm, agentId, inputs.finals, inputs.contributions);
+      const content = await generateCounselorReport(llm, user.companyId, agentId, inputs.finals, inputs.contributions);
       await saveAgentReport(db, meetingId, agentId, content, key, {
         action: 'generate',
         modelVersion: modelLabel,
@@ -52,7 +56,7 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     }
 
     // síntese executiva do Presidente a partir dos 8 relatórios
-    const synthesis = await generatePresidentSynthesis(llm, reports);
+    const synthesis = await generatePresidentSynthesis(llm, user.companyId, reports);
     await saveAgentReport(db, meetingId, 'presidente', synthesis, key, {
       action: 'generate',
       modelVersion: modelLabel,
@@ -77,6 +81,9 @@ export async function saveAgentReportAction(formData: FormData): Promise<void> {
   if (!meetingId || !content) throw new Error('Dados incompletos.');
   if (!(ALL_AGENT_IDS as readonly string[]).includes(agentId)) throw new Error('Agente inválido.');
   const db = await getDb();
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    throw new Error('Reunião não encontrada.');
+  }
   await saveAgentReport(db, meetingId, agentId, content, getEncryptionKey(), { action: 'edit' });
   revalidatePath(`/meetings/${meetingId}`);
 }

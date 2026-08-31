@@ -5,6 +5,7 @@ export {
   confirmRecording,
   revokeRecording,
   closeMeeting,
+  meetingBelongsToCompany,
   isRecordingConfirmed,
   assertRecordingConfirmed,
   RecordingRequiredError,

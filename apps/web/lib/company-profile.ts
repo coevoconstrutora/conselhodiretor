@@ -6,9 +6,9 @@ import { applyCompanyProfile, type CompanyProfile } from '@conselho/kb';
 
 /**
  * Perfil da empresa — área central de contexto compartilhado por TODOS os 9
- * conselheiros (ver packages/kb/company-profile.ts). Campos estruturados em
- * linha única (id=1) + documentos anexados (company_source, mesmo padrão do
- * kb_source: texto/link/arquivo). Tudo cifrado em repouso.
+ * conselheiros DE UMA EMPRESA (ver packages/kb/company-profile.ts). Linha
+ * única por empresa (PK=company_id) + documentos anexados (company_source,
+ * mesmo padrão do kb_source: texto/link/arquivo). Tudo cifrado em repouso.
  *
  * `sourcesText` entra em TODO prompt de TODO agente (não é RAG retido por
  * query como o kb_source por conselheiro) — por isso o teto de tamanho:
@@ -29,9 +29,10 @@ export interface CompanySourceSummary {
   readonly createdAt: Date;
 }
 
-export async function loadCompanyProfile(db: SqlExecutor, key: Buffer): Promise<CompanyProfile> {
+export async function loadCompanyProfile(db: SqlExecutor, companyId: string, key: Buffer): Promise<CompanyProfile> {
   const res = await db.query<{ content_enc: string }>(
-    'SELECT content_enc FROM company_profile WHERE id = 1',
+    'SELECT content_enc FROM company_profile WHERE company_id = $1',
+    [companyId],
   );
   const row = res.rows[0];
   if (!row) return {};
@@ -42,10 +43,11 @@ export async function loadCompanyProfile(db: SqlExecutor, key: Buffer): Promise<
   }
 }
 
-/** Documentos anexados (texto/link/arquivo), concatenados e cortados no teto. */
-async function loadSourcesText(db: SqlExecutor, key: Buffer): Promise<string> {
+/** Documentos anexados (texto/link/arquivo) DA EMPRESA, concatenados e cortados no teto. */
+async function loadSourcesText(db: SqlExecutor, companyId: string, key: Buffer): Promise<string> {
   const res = await db.query<{ title: string; content_enc: string }>(
-    'SELECT title, content_enc FROM company_source ORDER BY created_at ASC',
+    'SELECT title, content_enc FROM company_source WHERE company_id = $1 ORDER BY created_at ASC',
+    [companyId],
   );
   let combined = '';
   for (const row of res.rows) {
@@ -63,17 +65,18 @@ async function loadSourcesText(db: SqlExecutor, key: Buffer): Promise<string> {
     : trimmed;
 }
 
-/** Carrega do banco (perfil + documentos) e APLICA em memória (boot + logo após salvar). */
-export async function loadAndApplyCompanyProfile(db: SqlExecutor, key: Buffer): Promise<void> {
+/** Carrega do banco (perfil + documentos) DA EMPRESA e APLICA em memória (1º acesso + após salvar). */
+export async function loadAndApplyCompanyProfile(db: SqlExecutor, companyId: string, key: Buffer): Promise<void> {
   const [profile, sourcesText] = await Promise.all([
-    loadCompanyProfile(db, key),
-    loadSourcesText(db, key),
+    loadCompanyProfile(db, companyId, key),
+    loadSourcesText(db, companyId, key),
   ]);
-  applyCompanyProfile({ ...profile, sourcesText: sourcesText || undefined });
+  applyCompanyProfile(companyId, { ...profile, sourcesText: sourcesText || undefined });
 }
 
 export async function saveCompanyProfile(
   db: SqlExecutor,
+  companyId: string,
   key: Buffer,
   profile: CompanyProfile,
 ): Promise<void> {
@@ -83,20 +86,21 @@ export async function saveCompanyProfile(
     { triggeredBy: 'company-profile-edit', kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO company_profile (id, content_enc) VALUES (1, $1)
-         ON CONFLICT (id) DO UPDATE SET content_enc = EXCLUDED.content_enc, updated_at = now()`,
-        [contentEnc],
+        `INSERT INTO company_profile (company_id, content_enc) VALUES ($1, $2)
+         ON CONFLICT (company_id) DO UPDATE SET content_enc = EXCLUDED.content_enc, updated_at = now()`,
+        [companyId, contentEnc],
       );
       return null;
     },
   );
-  await loadAndApplyCompanyProfile(db, key); // vale imediatamente — sem restart
+  await loadAndApplyCompanyProfile(db, companyId, key); // vale imediatamente — sem restart
 }
 
 // ── Documentos (texto/link/arquivo) ─────────────────────────────────────────
 
 export async function listCompanySources(
   db: SqlExecutor,
+  companyId: string,
   key: Buffer,
 ): Promise<CompanySourceSummary[]> {
   const res = await db.query<{
@@ -106,7 +110,10 @@ export async function listCompanySources(
     ref: string | null;
     content_enc: string;
     created_at: Date | string;
-  }>('SELECT id, kind, title, ref, content_enc, created_at FROM company_source ORDER BY created_at DESC');
+  }>(
+    'SELECT id, kind, title, ref, content_enc, created_at FROM company_source WHERE company_id = $1 ORDER BY created_at DESC',
+    [companyId],
+  );
   return res.rows.map((r) => {
     let chars = 0;
     try {
@@ -127,6 +134,7 @@ export async function listCompanySources(
 
 export async function addCompanySource(
   db: SqlExecutor,
+  companyId: string,
   key: Buffer,
   input: { kind: CompanySourceKind; title: string; ref?: string | null; content: string },
 ): Promise<void> {
@@ -137,25 +145,37 @@ export async function addCompanySource(
     { triggeredBy: 'company-source-add', kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       const res = await tx.query<{ id: string }>(
-        'INSERT INTO company_source (kind, title, ref, content_enc) VALUES ($1, $2, $3, $4) RETURNING id',
-        [input.kind, input.title.trim().slice(0, 160) || 'Sem título', input.ref ?? null, encryptField(content, key)],
+        'INSERT INTO company_source (company_id, kind, title, ref, content_enc) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [
+          companyId,
+          input.kind,
+          input.title.trim().slice(0, 160) || 'Sem título',
+          input.ref ?? null,
+          encryptField(content, key),
+        ],
       );
       return res.rows[0]!.id;
     },
   );
-  await loadAndApplyCompanyProfile(db, key);
+  await loadAndApplyCompanyProfile(db, companyId, key);
 }
 
-export async function deleteCompanySource(db: SqlExecutor, key: Buffer, sourceId: string): Promise<void> {
+export async function deleteCompanySource(
+  db: SqlExecutor,
+  companyId: string,
+  key: Buffer,
+  sourceId: string,
+): Promise<void> {
   await auditedClinicalWrite(
     db,
     { triggeredBy: 'company-source-delete', kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
-      const res = await tx.query<{ id: string }>('DELETE FROM company_source WHERE id = $1 RETURNING id', [
-        sourceId,
-      ]);
+      const res = await tx.query<{ id: string }>(
+        'DELETE FROM company_source WHERE id = $1 AND company_id = $2 RETURNING id',
+        [sourceId, companyId],
+      );
       return res.rows[0]?.id ?? null;
     },
   );
-  await loadAndApplyCompanyProfile(db, key);
+  await loadAndApplyCompanyProfile(db, companyId, key);
 }

@@ -10,6 +10,11 @@ export interface CurrentUser {
   email: string;
   displayName: string;
   role: AppUserRole;
+  /** Empresa ATIVA nesta sessão — home, ou a escolhida via seletor (super-admin). */
+  companyId: string;
+  /** Empresa "casa" do usuário — independe do que o super-admin está visualizando agora. */
+  homeCompanyId: string;
+  isSuperAdmin: boolean;
 }
 
 /** Identidade do usuário autenticado, lida da sessão. Null se não autenticado. */
@@ -21,14 +26,34 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await validateSession(db, token);
   if (!session) return null;
 
-  const res = await db.query<{ id: string; email: string; display_name: string; role: AppUserRole }>(
-    'SELECT id, email, display_name, role FROM app_user WHERE id = $1',
+  const res = await db.query<{
+    id: string;
+    email: string;
+    display_name: string;
+    role: AppUserRole;
+    company_id: string;
+    is_super_admin: boolean;
+  }>(
+    'SELECT id, email, display_name, role, company_id, is_super_admin FROM app_user WHERE id = $1',
     [session.userId],
   );
   const user = res.rows[0];
-  return user
-    ? { id: user.id, email: user.email, displayName: user.display_name, role: user.role }
-    : null;
+  if (!user) return null;
+
+  // Só super-admin pode estar "visualizando" uma empresa diferente da própria
+  // — um active_company_id órfão (ex.: usuário perdeu o super-admin depois de
+  // trocar) nunca vaza para quem não tem o privilégio.
+  const companyId = user.is_super_admin && session.activeCompanyId ? session.activeCompanyId : user.company_id;
+
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name,
+    role: user.role,
+    companyId,
+    homeCompanyId: user.company_id,
+    isSuperAdmin: user.is_super_admin,
+  };
 }
 
 /** Só admin gerencia usuários — guard reutilizado pela página e pelas actions. */

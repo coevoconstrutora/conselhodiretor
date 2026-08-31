@@ -118,13 +118,15 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    const companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
-      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      ['ceo@conselho.test', 'Empresário Demo', 'x'],
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['ceo@conselho.test', 'Empresário Demo', 'x', companyId],
     );
     const userId = res.rows[0]!.id;
-    meetingId = await createMeeting(exec, userId, 'Reunião de diretoria', randomBytes(32));
-    await confirmRecording(exec, meetingId);
+    meetingId = await createMeeting(exec, userId, companyId, 'Reunião de diretoria', randomBytes(32));
+    await confirmRecording(exec, meetingId, companyId);
   });
 
   afterAll(async () => {
@@ -149,7 +151,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       const completer = new FakeTextCompleter(opts.textScript);
       llm.completeText = (req) => completer.completeText(req);
     }
-    const board = new FullBoardOrchestrator(exec, session, llm, makeStore(), {
+    const board = new FullBoardOrchestrator('test-company', exec, session, llm, makeStore(), {
       pauseMs: opts.pauseMs ?? 0, // pausa imediata por default (testes determinísticos)
       tickMs: 100000, // tick manual via flush — sem timer interferindo
       maxPerMinutePerAgent: 2,

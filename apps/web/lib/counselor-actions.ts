@@ -5,7 +5,7 @@ import { COUNSELOR_AGENT_IDS, ALL_AGENT_IDS, type AgentId } from '@conselho/prov
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
-import { getBoardRuntime } from './board-runtime';
+import { getCompanyKnowledgeStore } from './board-runtime';
 import {
   addKbSource,
   deleteKbSource,
@@ -19,6 +19,7 @@ import {
  * `{ error }` para o `useActionState` (fetch de URL e upload têm muitos modos
  * de falha que o usuário precisa LER) — mensagens pt-BR acionáveis.
  * Toda mudança reconstrói o namespace do agente AO VIVO (sem restart).
+ * Multi-tenant: tudo escopado por `user.companyId` — nunca outra empresa.
  */
 
 export type CounselorActionState = { error?: string; ok?: string } | null;
@@ -29,10 +30,10 @@ function parseAgentId(value: unknown): AgentId {
   return id as AgentId;
 }
 
-async function rebuild(agentId: AgentId): Promise<void> {
-  const runtime = await getBoardRuntime();
+async function rebuild(companyId: string, agentId: AgentId): Promise<void> {
+  const kb = await getCompanyKnowledgeStore(companyId);
   const db = await getDb();
-  await rebuildAgentKnowledge(runtime.kb, db, agentId, getEncryptionKey());
+  await rebuildAgentKnowledge(kb, db, companyId, agentId, getEncryptionKey());
 }
 
 /** Edita nome/escopo do conselheiro (vale imediatamente para novos prompts). */
@@ -51,7 +52,7 @@ export async function updateCounselorProfileAction(
     if (scope.length < 20)
       return { error: 'O escopo precisa descrever a especialidade (mínimo 20 caracteres).' };
     const db = await getDb();
-    await saveAgentProfile(db, agentId, displayName, scope);
+    await saveAgentProfile(db, user.companyId, agentId, displayName, scope);
     revalidatePath(`/counselors/${agentId}`);
     revalidatePath('/');
     return { ok: 'Perfil atualizado — já vale para as próximas contribuições.' };
@@ -78,8 +79,8 @@ export async function addTextSourceAction(
     if (!title) return { error: 'Dê um título à fonte (ex.: "Política de contingência 2026").' };
     if (content.length < 20) return { error: 'O texto é curto demais (mínimo 20 caracteres).' };
     const db = await getDb();
-    await addKbSource(db, agentId, { kind: 'text', title, content }, getEncryptionKey());
-    await rebuild(agentId);
+    await addKbSource(db, user.companyId, agentId, { kind: 'text', title, content }, getEncryptionKey());
+    await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
     return { ok: `Texto adicionado ao conhecimento — aplicado ao vivo.` };
   } catch (err) {
@@ -104,8 +105,8 @@ export async function addUrlSourceAction(
     if (!url) return { error: 'Informe a URL.' };
     const { title, text } = await fetchUrlText(url);
     const db = await getDb();
-    await addKbSource(db, agentId, { kind: 'url', title, ref: url, content: text }, getEncryptionKey());
-    await rebuild(agentId);
+    await addKbSource(db, user.companyId, agentId, { kind: 'url', title, ref: url, content: text }, getEncryptionKey());
+    await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
     return { ok: `Link importado ("${title}") — conhecimento aplicado ao vivo.` };
   } catch (err) {
@@ -143,11 +144,12 @@ export async function addFileSourceAction(
     const db = await getDb();
     await addKbSource(
       db,
+      user.companyId,
       agentId,
       { kind: 'file', title: file.name, ref: file.name, content },
       getEncryptionKey(),
     );
-    await rebuild(agentId);
+    await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
     return { ok: `Arquivo "${file.name}" adicionado — conhecimento aplicado ao vivo.` };
   } catch (err) {
@@ -165,8 +167,8 @@ export async function deleteSourceAction(formData: FormData): Promise<void> {
   const sourceId = String(formData.get('sourceId') ?? '');
   if (!sourceId) throw new Error('Fonte inválida.');
   const db = await getDb();
-  await deleteKbSource(db, sourceId, agentId);
-  await rebuild(agentId);
+  await deleteKbSource(db, user.companyId, sourceId, agentId);
+  await rebuild(user.companyId, agentId);
   revalidatePath(`/counselors/${agentId}`);
 }
 

@@ -8,7 +8,8 @@ export {
 } from './ingest';
 export {
   AgentReasoner,
-  AGENT_PROFILES,
+  DEFAULT_AGENT_PROFILES,
+  getAgentProfiles,
   buildAgentSystem,
   applyAgentProfileOverrides,
   type AgentProfile,

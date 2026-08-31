@@ -39,9 +39,11 @@ describe('Sessions (DB-backed)', () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    const companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
-      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      ['medico@conselho.test', 'Dr. Teste', hashPassword('pw')],
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['medico@conselho.test', 'Dr. Teste', hashPassword('pw'), companyId],
     );
     userId = res.rows[0]!.id;
   });
@@ -87,9 +89,11 @@ describe('Password reset tokens (DB-backed)', () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    const companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
-      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      ['reset@conselho.test', 'Usuário Teste', hashPassword('pw')],
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['reset@conselho.test', 'Usuário Teste', hashPassword('pw'), companyId],
     );
     userId = res.rows[0]!.id;
   });

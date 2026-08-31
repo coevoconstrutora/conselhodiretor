@@ -1,5 +1,11 @@
 export { hashPassword, verifyPassword } from './password';
-export { createSession, validateSession, deleteSession, type SessionInfo } from './session';
+export {
+  createSession,
+  validateSession,
+  deleteSession,
+  setActiveCompany,
+  type SessionInfo,
+} from './session';
 export {
   createPasswordResetToken,
   validatePasswordResetToken,

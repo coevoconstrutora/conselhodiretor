@@ -15,7 +15,7 @@ export async function startMeetingAction(formData: FormData): Promise<void> {
   const title = String(formData.get('title') ?? '').trim();
   if (!title) throw new Error('Informe o título da reunião.');
   const db = await getDb();
-  const meetingId = await createMeeting(db, user.id, title, getEncryptionKey());
+  const meetingId = await createMeeting(db, user.id, user.companyId, title, getEncryptionKey());
   redirect(`/meetings/${meetingId}`);
 }
 
@@ -29,7 +29,7 @@ export async function confirmRecordingAction(formData: FormData): Promise<void> 
   const rawCount = String(formData.get('participantCount') ?? '').trim();
   const participantCount = rawCount ? Math.max(1, Math.min(100, Number(rawCount) || 0)) : undefined;
   const db = await getDb();
-  await confirmRecording(db, meetingId, participantCount);
+  await confirmRecording(db, meetingId, user.companyId, participantCount);
   revalidatePath(`/meetings/${meetingId}`);
 }
 
@@ -41,6 +41,6 @@ export async function revokeRecordingAction(formData: FormData): Promise<void> {
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   const db = await getDb();
-  await revokeRecording(db, meetingId);
+  await revokeRecording(db, meetingId, user.companyId);
   revalidatePath(`/meetings/${meetingId}`);
 }

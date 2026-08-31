@@ -23,8 +23,8 @@ export default async function CompanyPage() {
 
   const db = await getDb();
   const key = getEncryptionKey();
-  const profile = await loadCompanyProfile(db, key);
-  const sources = await listCompanySources(db, key);
+  const profile = await loadCompanyProfile(db, user.companyId, key);
+  const sources = await listCompanySources(db, user.companyId, key);
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">

@@ -244,4 +244,67 @@ ALTER TABLE meeting ADD COLUMN IF NOT EXISTS closed_at timestamptz;
 ALTER TABLE meeting ADD COLUMN IF NOT EXISTS participant_count int;
 `,
   },
+  {
+    name: '0010_multi_company',
+    sql: `
+-- Multi-empresa: cada empresa tem seus próprios usuários, reuniões,
+-- conselheiros e conhecimento — isolados. 'coevo' é a empresa default
+-- (backfill de tudo que já existia antes desta migration).
+CREATE TABLE IF NOT EXISTS company (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug       text NOT NULL UNIQUE,
+  name       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO company (slug, name) VALUES ('coevo', 'Coevo Construtora')
+  ON CONFLICT (slug) DO NOTHING;
+
+-- app_user: pertence a UMA empresa (home); is_super_admin ignora o filtro e
+-- acessa qualquer empresa via seletor (ver session.active_company_id).
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+ALTER TABLE app_user ADD COLUMN IF NOT EXISTS is_super_admin boolean NOT NULL DEFAULT false;
+UPDATE app_user SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE app_user ALTER COLUMN company_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_app_user_company ON app_user(company_id);
+
+-- Promove o super-admin combinado (idempotente — no-op se o e-mail não existir ainda)
+UPDATE app_user SET is_super_admin = true WHERE email = 'vitor@coevoconstrutora.com.br';
+
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+UPDATE meeting SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE meeting ALTER COLUMN company_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_meeting_company ON meeting(company_id, created_at);
+
+ALTER TABLE kb_source ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+UPDATE kb_source SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE kb_source ALTER COLUMN company_id SET NOT NULL;
+DROP INDEX IF EXISTS idx_kb_source_agent;
+CREATE INDEX IF NOT EXISTS idx_kb_source_company_agent ON kb_source(company_id, agent_id, created_at);
+
+-- agent_profile: era PK(agent_id) só — vira PK(company_id, agent_id), já que
+-- cada empresa clonada tem sua PRÓPRIA cópia editável dos 9 papéis.
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+UPDATE agent_profile SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE agent_profile ALTER COLUMN company_id SET NOT NULL;
+ALTER TABLE agent_profile DROP CONSTRAINT IF EXISTS agent_profile_pkey;
+ALTER TABLE agent_profile ADD PRIMARY KEY (company_id, agent_id);
+
+-- company_profile: era singleton id=1 — vira singleton POR EMPRESA (PK=company_id).
+ALTER TABLE company_profile DROP CONSTRAINT IF EXISTS company_profile_pkey;
+ALTER TABLE company_profile ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+UPDATE company_profile SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE company_profile ALTER COLUMN company_id SET NOT NULL;
+ALTER TABLE company_profile DROP COLUMN IF EXISTS id;
+ALTER TABLE company_profile ADD PRIMARY KEY (company_id);
+
+ALTER TABLE company_source ADD COLUMN IF NOT EXISTS company_id uuid REFERENCES company(id);
+UPDATE company_source SET company_id = (SELECT id FROM company WHERE slug = 'coevo') WHERE company_id IS NULL;
+ALTER TABLE company_source ALTER COLUMN company_id SET NOT NULL;
+DROP INDEX IF EXISTS idx_company_source_created;
+CREATE INDEX IF NOT EXISTS idx_company_source_company ON company_source(company_id, created_at);
+
+-- session: empresa que o super-admin está VISUALIZANDO agora (NULL = a própria/home).
+ALTER TABLE session ADD COLUMN IF NOT EXISTS active_company_id uuid REFERENCES company(id);
+`,
+  },
 ];

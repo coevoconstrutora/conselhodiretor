@@ -28,7 +28,7 @@ export async function saveCompanyProfileAction(
   };
 
   const db = await getDb();
-  await saveCompanyProfile(db, getEncryptionKey(), profile);
+  await saveCompanyProfile(db, user.companyId, getEncryptionKey(), profile);
   revalidatePath('/company');
   revalidatePath('/');
   return { ok: 'Perfil da empresa salvo — já vale para os 9 conselheiros.' };
@@ -48,7 +48,7 @@ export async function addCompanyTextSourceAction(
     if (!title) return { error: 'Dê um título ao documento (ex.: "Plano de negócios 2026").' };
     if (content.length < 20) return { error: 'O texto é curto demais (mínimo 20 caracteres).' };
     const db = await getDb();
-    await addCompanySource(db, getEncryptionKey(), { kind: 'text', title, content });
+    await addCompanySource(db, user.companyId, getEncryptionKey(), { kind: 'text', title, content });
     revalidatePath('/company');
     return { ok: 'Texto adicionado — já vale para os 9 conselheiros.' };
   } catch (err) {
@@ -70,7 +70,7 @@ export async function addCompanyUrlSourceAction(
     if (!url) return { error: 'Informe a URL.' };
     const { title, text } = await fetchUrlText(url);
     const db = await getDb();
-    await addCompanySource(db, getEncryptionKey(), { kind: 'url', title, ref: url, content: text });
+    await addCompanySource(db, user.companyId, getEncryptionKey(), { kind: 'url', title, ref: url, content: text });
     revalidatePath('/company');
     return { ok: `Link importado ("${title}") — já vale para os 9 conselheiros.` };
   } catch (err) {
@@ -103,7 +103,7 @@ export async function addCompanyFileSourceAction(
     const content = (await file.text()).trim();
     if (content.length < 20) return { error: 'O arquivo não tem texto útil.' };
     const db = await getDb();
-    await addCompanySource(db, getEncryptionKey(), {
+    await addCompanySource(db, user.companyId, getEncryptionKey(), {
       kind: 'file',
       title: file.name,
       ref: file.name,
@@ -125,6 +125,6 @@ export async function deleteCompanySourceAction(formData: FormData): Promise<voi
   const sourceId = String(formData.get('sourceId') ?? '');
   if (!sourceId) throw new Error('Documento inválido.');
   const db = await getDb();
-  await deleteCompanySource(db, getEncryptionKey(), sourceId);
+  await deleteCompanySource(db, user.companyId, getEncryptionKey(), sourceId);
   revalidatePath('/company');
 }

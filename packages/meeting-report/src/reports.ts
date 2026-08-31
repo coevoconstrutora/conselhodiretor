@@ -1,7 +1,7 @@
 import type { SqlExecutor } from '@conselho/db';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
-import { AGENT_PROFILES, companyProfileBlock } from '@conselho/kb';
+import { getAgentProfiles, companyProfileBlock } from '@conselho/kb';
 import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/providers';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 
@@ -23,8 +23,8 @@ export interface AgentReport {
   readonly updatedAt: Date;
 }
 
-function counselorReportSystem(agentId: AgentId): string {
-  const profile = AGENT_PROFILES[agentId];
+function counselorReportSystem(agentId: AgentId, companyId: string): string {
+  const profile = getAgentProfiles(companyId)[agentId];
   return (
     `Você é ${profile.displayName}, conselheiro de IA de uma incorporadora imobiliária. ` +
     `A reunião terminou. Escreva o SEU RELATÓRIO da reunião para o empresário, ESTRITAMENTE ` +
@@ -36,13 +36,13 @@ function counselorReportSystem(agentId: AgentId): string {
     'Termine com a linha "_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE para esta tarefa: ignore qualquer limite de 1-3 frases — ' +
     'o campo text deve conter o RELATÓRIO COMPLETO em markdown (use \\n para quebras de linha).' +
-    companyProfileBlock()
+    companyProfileBlock(companyId)
   );
 }
 
-function presidentSystem(): string {
+function presidentSystem(companyId: string): string {
   return (
-    `Você é ${AGENT_PROFILES.presidente.displayName} de uma incorporadora imobiliária. ` +
+    `Você é ${getAgentProfiles(companyId).presidente.displayName} de uma incorporadora imobiliária. ` +
     'A reunião terminou e cada conselheiro entregou seu relatório. Escreva a SÍNTESE EXECUTIVA ' +
     'em português do Brasil, markdown leve, com as seções: ' +
     '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
@@ -51,7 +51,7 @@ function presidentSystem(): string {
     '"_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE: ignore qualquer limite de 1-3 frases — o campo text deve conter a SÍNTESE ' +
     'COMPLETA em markdown (use \\n para quebras de linha).' +
-    companyProfileBlock()
+    companyProfileBlock(companyId)
   );
 }
 
@@ -61,6 +61,7 @@ function presidentSystem(): string {
  */
 export async function generateCounselorReport(
   llm: ILlmProvider,
+  companyId: string,
   agentId: AgentId,
   transcriptFinals: readonly string[],
   contributions: readonly AgentContribution[] = [],
@@ -72,13 +73,13 @@ export async function generateCounselorReport(
       ? `\n\nO que VOCÊ apontou ao vivo durante a reunião:\n${own.map((c) => `- ${c.text}`).join('\n')}`
       : '';
   const result = await llm.complete({
-    system: counselorReportSystem(agentId),
+    system: counselorReportSystem(agentId, companyId),
     context: [],
     transcript: `Transcrição da reunião:\n${transcript}${saidBlock}`,
   });
   if (result.skip || !result.text.trim()) {
     throw new Error(
-      `O modelo não gerou conteúdo para o relatório de ${AGENT_PROFILES[agentId].displayName} — tente novamente.`,
+      `O modelo não gerou conteúdo para o relatório de ${getAgentProfiles(companyId)[agentId].displayName} — tente novamente.`,
     );
   }
   return result.text;
@@ -87,13 +88,15 @@ export async function generateCounselorReport(
 /** Gera a síntese executiva do Presidente a partir dos relatórios dos conselheiros. */
 export async function generatePresidentSynthesis(
   llm: ILlmProvider,
+  companyId: string,
   counselorReports: ReadonlyArray<{ agentId: AgentId; content: string }>,
 ): Promise<string> {
+  const profiles = getAgentProfiles(companyId);
   const blocks = counselorReports
-    .map((r) => `### Relatório — ${AGENT_PROFILES[r.agentId].displayName}\n${r.content}`)
+    .map((r) => `### Relatório — ${profiles[r.agentId].displayName}\n${r.content}`)
     .join('\n\n');
   const result = await llm.complete({
-    system: presidentSystem(),
+    system: presidentSystem(companyId),
     context: [],
     transcript: `Relatórios dos conselheiros:\n\n${blocks}`,
   });
@@ -211,6 +214,7 @@ export async function listAgentReports(
 export async function listRecentPresidentSyntheses(
   db: SqlExecutor,
   encryptionKey: Buffer,
+  companyId: string,
   excludeMeetingId: string,
   limit = 3,
 ): Promise<Array<{ meetingTitle: string; closedAt: Date; content: string }>> {
@@ -222,10 +226,10 @@ export async function listRecentPresidentSyntheses(
     `SELECT m.title_enc, m.updated_at, r.content_enc
      FROM meeting m
      JOIN agent_report r ON r.meeting_id = m.id AND r.agent_id = 'presidente'
-     WHERE m.status = 'closed' AND m.id != $1
+     WHERE m.status = 'closed' AND m.id != $1 AND m.company_id = $2
      ORDER BY m.updated_at DESC
-     LIMIT $2`,
-    [excludeMeetingId, limit],
+     LIMIT $3`,
+    [excludeMeetingId, companyId, limit],
   );
   return res.rows.flatMap((row) => {
     try {

@@ -13,6 +13,7 @@
  *   --role    opcional — admin | gestor | convidado (default: admin — este CLI
  *             é o bootstrap do dono; usuários adicionais normalmente entram
  *             pela tela de gestão de usuários, não por aqui)
+ *   --empresa opcional — slug da empresa (default: coevo — cria se não existir)
  *
  * Banco: usa DATABASE_URL se definido (produção/Postgres), senão o PGlite local
  * de desenvolvimento (apps/web/.pgdata) — o MESMO banco que o `pnpm dev` usa.
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
   const senha = argValue('--senha');
   const desativarDemo = process.argv.includes('--desativar-demo');
   const role = argValue('--role') ?? 'admin';
+  const empresaSlug = argValue('--empresa')?.trim().toLowerCase() || 'coevo';
 
   if (!email || !email.includes('@')) fail('Informe um e-mail válido em --email.');
   if (!nome) fail('Informe o nome em --nome.');
@@ -79,6 +81,18 @@ async function main(): Promise<void> {
     console.log(`\n🔌 Banco: ${label}`);
     await runMigrations(db);
 
+    let companyRes = await db.query<{ id: string }>('SELECT id FROM company WHERE slug = $1', [
+      empresaSlug,
+    ]);
+    if (companyRes.rows.length === 0) {
+      companyRes = await db.query<{ id: string }>(
+        'INSERT INTO company (slug, name) VALUES ($1, $2) RETURNING id',
+        [empresaSlug, empresaSlug],
+      );
+      console.log(`🏢 Empresa "${empresaSlug}" criada.`);
+    }
+    const companyId = companyRes.rows[0]!.id;
+
     const passwordHash = hashPassword(senha);
     const existing = await db.query<{ id: string }>('SELECT id FROM app_user WHERE email = $1', [
       email,
@@ -91,10 +105,10 @@ async function main(): Promise<void> {
       console.log(`✅ Usuário ${email} já existia — nome, senha e papel (${role}) ATUALIZADOS.`);
     } else {
       await db.query(
-        'INSERT INTO app_user (email, display_name, password_hash, role) VALUES ($1, $2, $3, $4)',
-        [email, nome, passwordHash, role],
+        'INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, $4, $5)',
+        [email, nome, passwordHash, role, companyId],
       );
-      console.log(`✅ Usuário ${email} criado (papel: ${role}).`);
+      console.log(`✅ Usuário ${email} criado (papel: ${role}, empresa: ${empresaSlug}).`);
     }
 
     if (desativarDemo) {

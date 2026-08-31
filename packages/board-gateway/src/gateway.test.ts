@@ -78,13 +78,15 @@ describe('BoardGateway (Story 3.2 — ADR-003)', () => {
     db = new PGlite();
     exec = pgliteExecutor(db);
     await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    const companyId = company.rows[0]!.id;
     const res = await exec.query<{ id: string }>(
-      'INSERT INTO app_user (email, display_name, password_hash) VALUES ($1, $2, $3) RETURNING id',
-      ['nutro@conselho.test', 'Dra. Ana', 'x'],
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['nutro@conselho.test', 'Dra. Ana', 'x', companyId],
     );
     const userId = res.rows[0]!.id;
     token = (await createSession(exec, userId)).token;
-    meetingId = await createMeeting(exec, userId, 'Reunião', randomBytes(32));
+    meetingId = await createMeeting(exec, userId, companyId, 'Reunião', randomBytes(32));
     gateway = new BoardGateway(exec, { port: 0, heartbeatMs: 60_000 });
   });
 

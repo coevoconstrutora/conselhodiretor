@@ -10,6 +10,8 @@ const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 
 export interface SessionInfo {
   userId: string;
+  /** Empresa que um super-admin escolheu visualizar agora (null = a própria/home). */
+  activeCompanyId: string | null;
 }
 
 function hashToken(token: string): string {
@@ -32,8 +34,8 @@ export async function createSession(
 }
 
 export async function validateSession(db: SqlExecutor, token: string): Promise<SessionInfo | null> {
-  const res = await db.query<{ user_id: string; expires_at: string | Date }>(
-    'SELECT user_id, expires_at FROM session WHERE token_hash = $1',
+  const res = await db.query<{ user_id: string; expires_at: string | Date; active_company_id: string | null }>(
+    'SELECT user_id, expires_at, active_company_id FROM session WHERE token_hash = $1',
     [hashToken(token)],
   );
   const row = res.rows[0];
@@ -42,7 +44,19 @@ export async function validateSession(db: SqlExecutor, token: string): Promise<S
     await deleteSession(db, token);
     return null;
   }
-  return { userId: row.user_id };
+  return { userId: row.user_id, activeCompanyId: row.active_company_id };
+}
+
+/** Super-admin troca a empresa que está visualizando (persiste na própria sessão). */
+export async function setActiveCompany(
+  db: SqlExecutor,
+  token: string,
+  companyId: string | null,
+): Promise<void> {
+  await db.query('UPDATE session SET active_company_id = $2 WHERE token_hash = $1', [
+    hashToken(token),
+    companyId,
+  ]);
 }
 
 export async function deleteSession(db: SqlExecutor, token: string): Promise<void> {

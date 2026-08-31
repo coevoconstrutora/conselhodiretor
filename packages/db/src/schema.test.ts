@@ -10,20 +10,21 @@ import { pgliteExecutor } from './testing';
 let db: PGlite;
 let exec: SqlExecutor;
 let firstRun: string[];
+let companyId: string;
 const key = randomBytes(32);
 
 async function insertUser(email: string): Promise<string> {
   const res = await exec.query<{ id: string }>(
-    'INSERT INTO app_user (email, display_name) VALUES ($1, $2) RETURNING id',
-    [email, 'Empresário Teste'],
+    'INSERT INTO app_user (email, display_name, company_id) VALUES ($1, $2, $3) RETURNING id',
+    [email, 'Empresário Teste', companyId],
   );
   return res.rows[0]!.id;
 }
 
 async function insertMeeting(userId: string, title = 'Reunião de diretoria'): Promise<string> {
   const res = await exec.query<{ id: string }>(
-    'INSERT INTO meeting (user_id, title_enc) VALUES ($1, $2) RETURNING id',
-    [userId, encryptField(title, key)],
+    'INSERT INTO meeting (user_id, company_id, title_enc) VALUES ($1, $2, $3) RETURNING id',
+    [userId, companyId, encryptField(title, key)],
   );
   return res.rows[0]!.id;
 }
@@ -32,6 +33,8 @@ beforeAll(async () => {
   db = new PGlite();
   exec = pgliteExecutor(db);
   firstRun = await runMigrations(exec);
+  const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+  companyId = company.rows[0]!.id;
 });
 
 afterAll(async () => {
@@ -50,6 +53,7 @@ describe('Migrations — schema base', () => {
       '0007_company_profile',
       '0008_company_sources',
       '0009_meeting_summary',
+      '0010_multi_company',
     ]);
   });
 

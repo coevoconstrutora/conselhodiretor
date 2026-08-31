@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
-import { AGENT_PROFILES } from '@conselho/kb';
+import { getAgentProfiles } from '@conselho/kb';
 import { ALL_AGENT_IDS, type AgentId } from '@conselho/providers';
 import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
@@ -38,10 +38,10 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
 
   const db = await getDb();
   // perfis personalizados aplicados antes de ler (boot pode ter sido de outro processo)
-  await loadAndApplyProfileOverrides(db);
-  const profile = AGENT_PROFILES[agentId];
+  await loadAndApplyProfileOverrides(db, user.companyId);
+  const profile = getAgentProfiles(user.companyId)[agentId];
   const isPresident = agentId === 'presidente';
-  const sources = isPresident ? [] : await listKbSources(db, agentId, getEncryptionKey());
+  const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
 
   return (

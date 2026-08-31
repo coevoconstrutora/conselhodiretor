@@ -14,7 +14,7 @@ import {
   type GatekeeperConfig,
   type TriggerMatch,
 } from '@conselho/engines';
-import { AgentReasoner, AGENT_PROFILES, buildAgentSystem } from '@conselho/kb';
+import { AgentReasoner, getAgentProfiles, buildAgentSystem } from '@conselho/kb';
 import type { IKnowledgeRetriever } from '@conselho/providers';
 import { CaseStateTracker } from './case-state';
 import { CASE_REVIEW_SYSTEM, parseCaseReview } from './case-review';
@@ -132,7 +132,10 @@ export class FullBoardOrchestrator {
   private readonly config2: Pick<FullBoardConfig, 'onDecision' | 'onContributionLatency'>;
   private readonly configReview: Pick<FullBoardConfig, 'caseReviewMs' | 'onCaseReview' | 'pauseMs'>;
 
+  private readonly profiles: Record<AgentId, { agentId: AgentId; displayName: string; scope: string }>;
+
   constructor(
+    private readonly companyId: string,
     private readonly db: SqlExecutor,
     private readonly session: MeetingSession,
     private readonly llm: ILlmProvider,
@@ -140,7 +143,8 @@ export class FullBoardOrchestrator {
     config: FullBoardConfig = {},
   ) {
     this.gate = new BoardGatekeeper(config);
-    this.reasoner = new AgentReasoner(retriever, llm);
+    this.reasoner = new AgentReasoner(companyId, retriever, llm);
+    this.profiles = getAgentProfiles(companyId);
     this.semanticDedupThreshold = config.semanticDedupThreshold ?? DEFAULT_SEMANTIC_DEDUP_THRESHOLD;
     this.semanticDedup = new SemanticDeduplicator({ threshold: this.semanticDedupThreshold });
     this.caseState = new CaseStateTracker(llm, {
@@ -272,12 +276,12 @@ export class FullBoardOrchestrator {
     this.caseReviewInFlight = true;
     this.lastCaseReviewAt = now;
     try {
-      const scopes = (Object.values(AGENT_PROFILES) as Array<(typeof AGENT_PROFILES)['cfo']>)
+      const scopes = Object.values(this.profiles)
         .map((p) => `- ${p.agentId} (${p.displayName}): ${p.scope}`)
         .join('\n');
       const said = this.history
         .slice(-20)
-        .map((h) => `- [${AGENT_PROFILES[h.agentId].displayName}] ${h.text}`)
+        .map((h) => `- [${this.profiles[h.agentId].displayName}] ${h.text}`)
         .join('\n');
       const caseBlock = this.renderCaseState();
       const res = await this.llm.completeText!({
@@ -413,11 +417,11 @@ export class FullBoardOrchestrator {
     try {
       const caseBlock = this.renderCaseState(); // render 1× (era 2× na template)
       const summary = entries
-        .map((e) => `- ${AGENT_PROFILES[e.contribution.agentId].displayName}: ${e.contribution.text}`)
+        .map((e) => `- ${this.profiles[e.contribution.agentId].displayName}: ${e.contribution.text}`)
         .join('\n');
       const synthesis = await this.llm.complete({
         system:
-          buildAgentSystem(AGENT_PROFILES.presidente) +
+          buildAgentSystem(this.profiles.presidente, this.companyId) +
           ' Agora seu papel é o de SÍNTESE: integre as contribuições do conselho abaixo numa recomendação única e curta. ' +
           'Se houver divergência entre os conselheiros, exponha-a com transparência e modere. ' +
           'Termine SEMPRE devolvendo a decisão ao empresário (ex.: "a decisão é sua").',
@@ -428,7 +432,7 @@ export class FullBoardOrchestrator {
         // síntese repetida e dá ao Presidente a progressão da reunião
         priorContributions: this.history
           .slice(-20)
-          .map((h) => `[${AGENT_PROFILES[h.agentId].displayName}] ${h.text}`),
+          .map((h) => `[${this.profiles[h.agentId].displayName}] ${h.text}`),
       });
       if (synthesis.skip || !synthesis.text.trim()) {
         // síntese vazia NUNCA vira card/persistência — rodada permanece p/ nova tentativa

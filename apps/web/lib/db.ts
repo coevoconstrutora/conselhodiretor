@@ -22,9 +22,11 @@ const DEMO_PASSWORD = 'conselho123';
 async function seedDemoUser(db: SqlExecutor): Promise<void> {
   const res = await db.query<{ count: number }>('SELECT count(*)::int AS count FROM app_user');
   if (Number(res.rows[0]?.count ?? 0) > 0) return;
+  const company = await db.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+  const companyId = company.rows[0]!.id; // migration 0010 sempre cria 'coevo'
   await db.query(
-    "INSERT INTO app_user (email, display_name, password_hash, role) VALUES ($1, $2, $3, 'admin')",
-    [DEMO_EMAIL, 'Empresário Demo', hashPassword(DEMO_PASSWORD)],
+    "INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', $4)",
+    [DEMO_EMAIL, 'Empresário Demo', hashPassword(DEMO_PASSWORD), companyId],
   );
 }
 

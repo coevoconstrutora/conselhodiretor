@@ -15,6 +15,8 @@ import { stripHtml, isBlockedUrl } from './text-extract';
 
 /**
  * "NotebookLM por conselheiro" — fontes de conhecimento geridas pelo DONO.
+ * Multi-tenant: toda leitura/escrita é escopada por `companyId` — empresas
+ * diferentes NUNCA compartilham fonte, perfil ou namespace de RAG.
  *
  * O namespace de cada agente = seed do repositório (docs/agents-knowledge-seed.md)
  * + fontes persistidas no banco (texto colado, links, arquivos). Toda mudança
@@ -83,6 +85,7 @@ export async function fetchUrlText(url: string): Promise<{ title: string; text: 
 
 export async function addKbSource(
   db: SqlExecutor,
+  companyId: string,
   agentId: AgentId,
   input: { kind: KbSourceKind; title: string; ref?: string | null; content: string },
   encryptionKey: Buffer,
@@ -94,8 +97,9 @@ export async function addKbSource(
     { triggeredBy: `kb-source-add-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       const res = await tx.query<{ id: string }>(
-        'INSERT INTO kb_source (agent_id, kind, title, ref, content_enc) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        'INSERT INTO kb_source (company_id, agent_id, kind, title, ref, content_enc) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
         [
+          companyId,
           agentId,
           input.kind,
           input.title.trim().slice(0, 160) || 'Sem título',
@@ -111,6 +115,7 @@ export async function addKbSource(
 
 export async function deleteKbSource(
   db: SqlExecutor,
+  companyId: string,
   sourceId: string,
   agentId: AgentId,
 ): Promise<boolean> {
@@ -119,8 +124,8 @@ export async function deleteKbSource(
     { triggeredBy: `kb-source-delete-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       const res = await tx.query<{ id: string }>(
-        'DELETE FROM kb_source WHERE id = $1 AND agent_id = $2 RETURNING id',
-        [sourceId, agentId],
+        'DELETE FROM kb_source WHERE id = $1 AND agent_id = $2 AND company_id = $3 RETURNING id',
+        [sourceId, agentId, companyId],
       );
       return res.rows[0]?.id ?? null;
     },
@@ -128,9 +133,10 @@ export async function deleteKbSource(
   return originId !== null;
 }
 
-/** Lista as fontes de um agente (metadados + tamanho; decifra só p/ contar). */
+/** Lista as fontes de um agente DA EMPRESA (metadados + tamanho; decifra só p/ contar). */
 export async function listKbSources(
   db: SqlExecutor,
+  companyId: string,
   agentId: AgentId,
   encryptionKey: Buffer,
 ): Promise<KbSourceSummary[]> {
@@ -142,8 +148,8 @@ export async function listKbSources(
     content_enc: string;
     created_at: Date | string;
   }>(
-    'SELECT id, kind, title, ref, content_enc, created_at FROM kb_source WHERE agent_id = $1 ORDER BY created_at DESC',
-    [agentId],
+    'SELECT id, kind, title, ref, content_enc, created_at FROM kb_source WHERE company_id = $1 AND agent_id = $2 ORDER BY created_at DESC',
+    [companyId, agentId],
   );
   return res.rows.map((r) => {
     let chars = 0;
@@ -164,10 +170,11 @@ export async function listKbSources(
   });
 }
 
-/** Contagem de fontes por agente (grid da home — 1 query, sem decifrar). */
-export async function countKbSourcesByAgent(db: SqlExecutor): Promise<Map<string, number>> {
+/** Contagem de fontes por agente DA EMPRESA (grid da home — 1 query, sem decifrar). */
+export async function countKbSourcesByAgent(db: SqlExecutor, companyId: string): Promise<Map<string, number>> {
   const res = await db.query<{ agent_id: string; count: string | number }>(
-    'SELECT agent_id, COUNT(*) AS count FROM kb_source GROUP BY agent_id',
+    'SELECT agent_id, COUNT(*) AS count FROM kb_source WHERE company_id = $1 GROUP BY agent_id',
+    [companyId],
   );
   return new Map(res.rows.map((r) => [r.agent_id, Number(r.count)]));
 }
@@ -176,6 +183,7 @@ export async function countKbSourcesByAgent(db: SqlExecutor): Promise<Map<string
 
 export async function saveAgentProfile(
   db: SqlExecutor,
+  companyId: string,
   agentId: AgentId,
   displayName: string,
   scope: string,
@@ -185,23 +193,25 @@ export async function saveAgentProfile(
     { triggeredBy: `agent-profile-edit-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (agent_id, display_name, scope) VALUES ($1, $2, $3)
-         ON CONFLICT (agent_id) DO UPDATE
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (company_id, agent_id) DO UPDATE
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope, updated_at = now()`,
-        [agentId, displayName.trim().slice(0, 80), scope.trim().slice(0, 600)],
+        [companyId, agentId, displayName.trim().slice(0, 80), scope.trim().slice(0, 600)],
       );
       return agentId;
     },
   );
-  applyAgentProfileOverrides([{ agentId, displayName, scope }]);
+  applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope }]);
 }
 
-/** Carrega e APLICA os perfis personalizados (boot + após edição). */
-export async function loadAndApplyProfileOverrides(db: SqlExecutor): Promise<void> {
+/** Carrega e APLICA os perfis personalizados da EMPRESA (boot/1º acesso + após edição). */
+export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: string): Promise<void> {
   const res = await db.query<{ agent_id: string; display_name: string; scope: string }>(
-    'SELECT agent_id, display_name, scope FROM agent_profile',
+    'SELECT agent_id, display_name, scope FROM agent_profile WHERE company_id = $1',
+    [companyId],
   );
   applyAgentProfileOverrides(
+    companyId,
     res.rows.map((r) => ({
       agentId: r.agent_id as AgentId,
       displayName: r.display_name,
@@ -223,13 +233,15 @@ export function readSeedMarkdown(): string {
 }
 
 /**
- * Reconstrói o namespace de UM agente: chunks da seed + chunks de cada fonte
- * do banco. IDs de chunk levam o id curto da fonte (proveniência na auditoria:
- * `cfo:fonte-ab12cd34:0`). Substituição atômica do namespace (sem resíduo).
+ * Reconstrói o namespace de UM agente DE UMA EMPRESA: chunks da seed + chunks
+ * de cada fonte do banco (só as daquela empresa). IDs de chunk levam o id
+ * curto da fonte (proveniência na auditoria: `cfo:fonte-ab12cd34:0`).
+ * Substituição atômica do namespace (sem resíduo).
  */
 export async function rebuildAgentKnowledge(
   store: NamespacedKnowledgeStore,
   db: SqlExecutor,
+  companyId: string,
   agentId: AgentId,
   encryptionKey: Buffer,
 ): Promise<{ chunkCount: number; sourceCount: number }> {
@@ -241,8 +253,8 @@ export async function rebuildAgentKnowledge(
   if (seed) chunks.push(...chunkContent(agentId, seed.source, seed.content, 'seed-v1'));
 
   const res = await db.query<{ id: string; title: string; content_enc: string }>(
-    'SELECT id, title, content_enc FROM kb_source WHERE agent_id = $1 ORDER BY created_at ASC',
-    [agentId],
+    'SELECT id, title, content_enc FROM kb_source WHERE company_id = $1 AND agent_id = $2 ORDER BY created_at ASC',
+    [companyId, agentId],
   );
   for (const row of res.rows) {
     let content: string;
@@ -260,18 +272,19 @@ export async function rebuildAgentKnowledge(
   return { chunkCount: chunks.length, sourceCount: res.rows.length };
 }
 
-/** Rebuild de TODOS os conselheiros (boot). Falha de um não trava os demais. */
+/** Rebuild de TODOS os conselheiros DE UMA EMPRESA (boot/1º acesso). Falha de um não trava os demais. */
 export async function rebuildAllKnowledge(
   store: NamespacedKnowledgeStore,
   db: SqlExecutor,
+  companyId: string,
   encryptionKey: Buffer,
   agentIds: readonly AgentId[],
 ): Promise<void> {
   for (const agentId of agentIds) {
     try {
-      await rebuildAgentKnowledge(store, db, agentId, encryptionKey);
+      await rebuildAgentKnowledge(store, db, companyId, agentId, encryptionKey);
     } catch (error) {
-      console.error(`[kb] rebuild do agente ${agentId} falhou:`, error);
+      console.error(`[kb] rebuild do agente ${agentId} (empresa ${companyId}) falhou:`, error);
     }
   }
 }

@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { closeMeeting } from '@conselho/meetings';
+import { closeMeeting, meetingBelongsToCompany } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { startDemoBoard, requestSynthesis, startLiveBoard, stopLiveBoard } from './board-runtime';
@@ -14,6 +14,10 @@ export async function startDemoBoardAction(formData: FormData): Promise<void> {
   if (!canWrite(user)) throw new Error('Convidados não podem iniciar reuniões.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
+  const db = await getDb();
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    throw new Error('Reunião não encontrada.');
+  }
   await startDemoBoard(meetingId);
 }
 
@@ -24,6 +28,10 @@ export async function requestSynthesisAction(formData: FormData): Promise<void> 
   if (!canWrite(user)) throw new Error('Convidados não podem pedir síntese.');
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
+  const db = await getDb();
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    throw new Error('Reunião não encontrada.');
+  }
   await requestSynthesis(meetingId);
 }
 
@@ -38,6 +46,10 @@ export async function startLiveBoardAction(meetingId: string): Promise<ActionRes
   if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem iniciar reuniões.' };
   if (!meetingId) return { ok: false, code: 'invalid-input' };
   try {
+    const db = await getDb();
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
     await startLiveBoard(meetingId);
     return { ok: true };
   } catch (err) {
@@ -71,9 +83,12 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
   if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem encerrar reuniões.' };
   if (!meetingId) return { ok: false, code: 'invalid-input' };
   try {
-    await stopLiveBoard(meetingId);
     const db = await getDb();
-    await closeMeeting(db, meetingId);
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
+    await stopLiveBoard(meetingId);
+    await closeMeeting(db, meetingId, user.companyId);
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
   } catch (err) {

@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect, notFound } from 'next/navigation';
 import { getMeeting } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
-import { AGENT_PROFILES } from '@conselho/kb';
+import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
@@ -11,7 +11,7 @@ import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-act
 import { startDemoBoardAction, requestSynthesisAction } from '@/lib/board-actions';
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
-import { getBoardRuntime, getTelemetryReport, BOARD_WS_PORT } from '@/lib/board-runtime';
+import { getCompanyKnowledgeStore, getTelemetryReport, BOARD_WS_PORT } from '@/lib/board-runtime';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
@@ -36,7 +36,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   const { id } = await params;
   const db = await getDb();
-  const meeting = await getMeeting(db, id, user.id, getEncryptionKey());
+  const meeting = await getMeeting(db, id, user.companyId, getEncryptionKey());
   if (!meeting) notFound();
 
   const authorized = meeting.recordingConfirmed;
@@ -45,8 +45,9 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
     meeting.confirmedAt ?? meeting.createdAt,
     meeting.closedAt,
   );
+  const profiles = getAgentProfiles(user.companyId);
 
-  await getBoardRuntime();
+  await getCompanyKnowledgeStore(user.companyId);
   const sessionToken = (await cookies()).get(SESSION_COOKIE)?.value ?? '';
   const wsBaseUrl =
     process.env.BOARD_WS_MODE === 'attached'
@@ -260,7 +261,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                     >
                       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink">
                         {report.agentId === 'presidente' ? '⭐ ' : ''}
-                        {AGENT_PROFILES[report.agentId].displayName}
+                        {profiles[report.agentId].displayName}
                         <span className="ml-2 text-[11px] font-normal text-ink-muted">
                           atualizado {report.updatedAt.toLocaleString('pt-BR')}
                         </span>
@@ -273,7 +274,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                           name="content"
                           defaultValue={report.content}
                           rows={12}
-                          aria-label={`Relatório — ${AGENT_PROFILES[report.agentId].displayName}`}
+                          aria-label={`Relatório — ${profiles[report.agentId].displayName}`}
                           className="font-mono-data w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                         />
                         <div className="flex justify-end">
