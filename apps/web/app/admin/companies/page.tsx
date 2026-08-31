@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { listCompanies } from '@/lib/company-actions';
+import { listSuperAdminCandidates } from '@/lib/super-admin-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
 import { RenameCompanyForm } from '@/components/rename-company-form';
+import { SuperAdminManager } from '@/components/super-admin-manager';
 
 /** Gestão de empresas — só super-admin. Clona a estrutura dos 9 conselheiros
  * da Coevo (nome/escopo) para toda empresa nova; conhecimento nunca é copiado. */
@@ -12,7 +14,10 @@ export default async function CompaniesAdminPage() {
   if (!user) redirect('/login');
   if (!user.isSuperAdmin) redirect('/');
 
-  const companies = await listCompanies();
+  const [companies, superAdminCandidates] = await Promise.all([
+    listCompanies(),
+    listSuperAdminCandidates(),
+  ]);
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl p-8">
@@ -52,6 +57,14 @@ export default async function CompaniesAdminPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="mt-8">
+        <h2 className="font-display text-lg font-semibold text-ink">Super-admins</h2>
+        <p className="text-sm text-ink-muted">
+          Acesso a TODAS as empresas. Promover/remover pela tela — nunca é preciso mexer no banco.
+        </p>
+        <SuperAdminManager candidates={superAdminCandidates} />
       </section>
     </main>
   );
