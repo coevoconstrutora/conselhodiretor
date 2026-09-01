@@ -3,6 +3,12 @@
 import { useActionState, useState, type ChangeEvent } from 'react';
 import type { CompanyProfile } from '@conselho/kb';
 import { saveCompanyAppearanceAction, type CompanyAppearanceState } from '@/lib/company-profile-actions';
+import { THEME_PALETTES } from '@/lib/theme-palettes';
+
+/** HSL triplo ("H S% L%") → string CSS pra pintar o swatch de preview. */
+function hslSwatch(triplet: string): string {
+  return `hsl(${triplet})`;
+}
 
 const buttonCls =
   'rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50';
@@ -15,6 +21,7 @@ export function CompanyAppearanceForm({ profile }: { profile: CompanyProfile }) 
   );
   const [logoPreview, setLogoPreview] = useState<string | null>(profile.logoDataUrl ?? null);
   const [removeLogo, setRemoveLogo] = useState(false);
+  const [palette, setPalette] = useState(profile.themePalette ?? '');
   const [textColor, setTextColor] = useState(profile.themeTextColor ?? '');
   const [titleColor, setTitleColor] = useState(profile.themeTitleColor ?? '');
   const [background, setBackground] = useState<'grid' | 'plain'>(profile.themeBackground ?? 'grid');
@@ -35,7 +42,11 @@ export function CompanyAppearanceForm({ profile }: { profile: CompanyProfile }) 
         <div className="mt-2 flex items-center gap-4">
           <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[var(--radius)] border border-dashed border-ink/20 bg-surface-muted">
             {logoPreview && !removeLogo ? (
-              <img src={logoPreview} alt="Logo da empresa" className="h-full w-full object-contain" />
+              <img
+                src={logoPreview}
+                alt="Logo da empresa"
+                className="h-full w-full object-contain mix-blend-multiply"
+              />
             ) : (
               <span className="text-[10px] text-ink-muted">sem logo</span>
             )}
@@ -69,9 +80,57 @@ export function CompanyAppearanceForm({ profile }: { profile: CompanyProfile }) 
         </div>
       </div>
 
+      <div>
+        <span className="text-xs font-semibold text-ink">Cores do tema</span>
+        <p className="mt-0.5 text-[11px] text-ink-muted">
+          Um conjunto coordenado de cores (botões, links, filetes) com 1 clique — como os temas do
+          Office/PowerPoint.
+        </p>
+        <ul className="mt-2 divide-y divide-ink/10 overflow-hidden rounded-[var(--radius)] border border-ink/15 bg-white">
+          <li>
+            <button
+              type="button"
+              onClick={() => setPalette('')}
+              aria-pressed={palette === ''}
+              className={`flex w-full items-center gap-3 px-3 py-2 text-left text-xs transition-colors ${
+                palette === '' ? 'bg-brand/10 font-semibold text-brand' : 'text-ink hover:bg-surface-muted'
+              }`}
+            >
+              <span className="h-4 w-4 shrink-0 rounded-full border border-ink/15 bg-surface" />
+              Padrão do produto (Navy)
+            </button>
+          </li>
+          {THEME_PALETTES.filter((p) => p.key !== 'navy').map((p) => (
+            <li key={p.key}>
+              <button
+                type="button"
+                onClick={() => setPalette(p.key)}
+                aria-pressed={palette === p.key}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left text-xs transition-colors ${
+                  palette === p.key ? 'bg-brand/10 font-semibold text-brand' : 'text-ink hover:bg-surface-muted'
+                }`}
+              >
+                <span className="flex shrink-0 -space-x-1">
+                  <span
+                    className="h-4 w-4 rounded-full border border-white shadow-sm"
+                    style={{ backgroundColor: hslSwatch(p.brand) }}
+                  />
+                  <span
+                    className="h-4 w-4 rounded-full border border-white shadow-sm"
+                    style={{ backgroundColor: hslSwatch(p.accentGold) }}
+                  />
+                </span>
+                {p.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <input type="hidden" name="themePalette" value={palette} />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
-          <span className="text-xs font-semibold text-ink">Cor do texto</span>
+          <span className="text-xs font-semibold text-ink">Cor do texto (opcional, além do tema)</span>
           <div className="mt-1 flex items-center gap-2">
             <input
               type="color"
@@ -90,7 +149,7 @@ export function CompanyAppearanceForm({ profile }: { profile: CompanyProfile }) 
           <input type="hidden" name="themeTextColor" value={textColor} />
         </label>
         <label className="block">
-          <span className="text-xs font-semibold text-ink">Cor dos títulos</span>
+          <span className="text-xs font-semibold text-ink">Cor dos títulos (opcional, além do tema)</span>
           <div className="mt-1 flex items-center gap-2">
             <input
               type="color"

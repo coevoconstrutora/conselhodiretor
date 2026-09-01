@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { loadCompanyProfile } from '@/lib/company-profile';
+import { findThemePalette } from '@/lib/theme-palettes';
 import './globals.css';
 
 /* Tipografia corporativa: uma única família sans (Inter) para título e corpo,
@@ -36,6 +37,8 @@ export const metadata: Metadata = {
  * fora) degrada pro padrão do produto, nunca derruba a página.
  */
 async function loadRootTheme(): Promise<{
+  brand: string | null;
+  accentGold: string | null;
   textColor: string | null;
   titleColor: string | null;
   background: 'grid' | 'plain' | null;
@@ -45,7 +48,10 @@ async function loadRootTheme(): Promise<{
     if (!user) return null;
     const db = await getDb();
     const profile = await loadCompanyProfile(db, user.companyId, getEncryptionKey());
+    const palette = findThemePalette(profile.themePalette);
     return {
+      brand: palette?.brand ?? null,
+      accentGold: palette?.accentGold ?? null,
       textColor: profile.themeTextColor ?? null,
       titleColor: profile.themeTitleColor ?? null,
       background: profile.themeBackground ?? null,
@@ -58,6 +64,8 @@ async function loadRootTheme(): Promise<{
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const theme = await loadRootTheme();
   const htmlStyle: CSSProperties = {
+    ...(theme?.brand ? { '--brand': theme.brand } : {}),
+    ...(theme?.accentGold ? { '--accent-gold': theme.accentGold } : {}),
     ...(theme?.textColor ? { '--company-text': theme.textColor } : {}),
     ...(theme?.titleColor ? { '--company-title': theme.titleColor } : {}),
   } as CSSProperties;

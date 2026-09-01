@@ -49,13 +49,19 @@ function latestBy(
 export function CounselorStrip({
   agents,
   closed = false,
+  voiceEnabled = true,
 }: {
   agents: readonly StripCounselor[];
   closed?: boolean;
+  /** Voz ligada (não mutada/Modo Foco)? Com voz, "falando" sincroniza com o
+   * áudio de verdade (`speakingAgentId`); sem voz, cai na janela de tempo
+   * (só feedback visual — nunca haveria áudio pra sincronizar com). */
+  voiceEnabled?: boolean;
 }) {
   const contributions = useBoardStore((s) => s.contributions);
   const silenced = useBoardStore((s) => s.silenced);
   const toggleSilence = useBoardStore((s) => s.toggleSilence);
+  const speakingAgentId = useBoardStore((s) => s.speakingAgentId);
   const [, tick] = useReducer((x: number) => x + 1, 0);
   const now = Date.now();
 
@@ -71,7 +77,11 @@ export function CounselorStrip({
           c.contribution.severity === 'critical' &&
           now - c.at < SIGNAL_WINDOW_MS,
       );
-    const speaking = !closed && !signaling && !!latest && now - latest.at < SPEAK_WINDOW_MS;
+    const speaking =
+      !closed &&
+      !signaling &&
+      !!latest &&
+      (voiceEnabled ? speakingAgentId === counselor.id : now - latest.at < SPEAK_WINDOW_MS);
     return { counselor, latest, isSilenced, signaling, speaking };
   });
 

@@ -19,7 +19,9 @@ export interface CompanyProfile {
   readonly sourcesText?: string;
   /** Logo da empresa — data URL (base64), sem storage externo. Só exibição, nunca entra no prompt. */
   readonly logoDataUrl?: string | null;
-  /** Tema visual por empresa — hex (#rrggbb) ou null (usa o padrão do produto). Só exibição. */
+  /** Paleta pré-montada (`apps/web/lib/theme-palettes.ts`) — dirige brand/accent coordenados. Só exibição. */
+  readonly themePalette?: string | null;
+  /** Tema visual por empresa — hex (#rrggbb) ou null (usa o padrão do produto/paleta). Só exibição. */
   readonly themeTextColor?: string | null;
   readonly themeTitleColor?: string | null;
   readonly themeBackground?: 'grid' | 'plain' | null;

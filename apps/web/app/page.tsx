@@ -33,7 +33,7 @@ export default async function DashboardPage() {
             <img
               src={companyProfile.logoDataUrl}
               alt={companyProfile.name ?? 'Logo da empresa'}
-              className="h-10 w-10 shrink-0 rounded-[var(--radius)] object-contain"
+              className="h-14 w-14 shrink-0 object-contain mix-blend-multiply"
             />
           ) : null}
           <div>

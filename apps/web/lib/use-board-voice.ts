@@ -70,6 +70,7 @@ export function useBoardVoice(meetingId: string, muted: boolean) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         audioRef.current.src = url;
+        useBoardStore.getState().setSpeakingAgent(next.agentId); // sincroniza o indicador com o áudio de verdade
         await audioRef.current.play().catch(() => {});
         await new Promise<void>((resolve) => {
           if (!audioRef.current) return resolve();
@@ -81,6 +82,7 @@ export function useBoardVoice(meetingId: string, muted: boolean) {
     } catch {
       // falha de rede/TTS não trava a reunião — só essa fala fica muda
     } finally {
+      useBoardStore.getState().setSpeakingAgent(null);
       playingRef.current = false;
       void pump();
     }

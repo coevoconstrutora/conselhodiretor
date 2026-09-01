@@ -9,6 +9,7 @@ import { saveCompanyProfile, loadCompanyProfile, addCompanySource, deleteCompany
 import { fetchUrlText } from './kb-sources';
 import { extractUploadedFileText } from './text-extract';
 import { lookupCnpj, CnpjLookupError, type CnpjData } from './cnpj-lookup';
+import { findThemePalette } from './theme-palettes';
 
 export type CompanyProfileActionState = { error?: string; ok?: string } | null;
 
@@ -89,6 +90,8 @@ export async function saveCompanyAppearanceAction(
     logoDataUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
   }
 
+  const paletteRaw = String(formData.get('themePalette') ?? '').trim();
+  const themePalette = findThemePalette(paletteRaw)?.key ?? null;
   const textColorRaw = String(formData.get('themeTextColor') ?? '').trim();
   const titleColorRaw = String(formData.get('themeTitleColor') ?? '').trim();
   const themeTextColor = HEX_COLOR_RE.test(textColorRaw) ? textColorRaw : null;
@@ -98,6 +101,7 @@ export async function saveCompanyAppearanceAction(
   const profile: CompanyProfile = {
     ...current,
     logoDataUrl,
+    themePalette,
     themeTextColor,
     themeTitleColor,
     themeBackground,

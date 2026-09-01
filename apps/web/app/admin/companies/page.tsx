@@ -5,7 +5,7 @@ import { listCompanies } from '@/lib/company-actions';
 import { listSuperAdminCandidates } from '@/lib/super-admin-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
 import { RenameCompanyForm } from '@/components/rename-company-form';
-import { ResetCompanyCounselorsForm } from '@/components/reset-counselors-form';
+import { ResetCompanyHistoryForm } from '@/components/reset-counselors-form';
 import { SuperAdminManager } from '@/components/super-admin-manager';
 import { formatDateBR } from '@/lib/format';
 
@@ -56,7 +56,7 @@ export default async function CompaniesAdminPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <ResetCompanyCounselorsForm companyId={c.id} />
+                <ResetCompanyHistoryForm companyId={c.id} />
                 <RenameCompanyForm companyId={c.id} name={c.name} />
               </div>
             </li>

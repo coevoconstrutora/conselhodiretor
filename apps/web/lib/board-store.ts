@@ -50,8 +50,13 @@ interface BoardState {
   heldByFocus: number;
   transcript: TranscriptState;
   pipeline: PipelineState;
+  /** agentId cujo áudio (TTS) está tocando AGORA — null em repouso/entre falas.
+   * Fonte de verdade do indicador "falando" (sincroniza com a voz de verdade,
+   * em vez de uma janela de tempo fixa desde que o card apareceu). */
+  speakingAgentId: string | null;
 
   addContribution(item: BoardContributionItem): void;
+  setSpeakingAgent(agentId: string | null): void;
   addTranscript(text: string, isFinal: boolean): void;
   setSttStatus(stt: PipelineState['stt']): void;
   setWsConnected(connected: boolean): void;
@@ -74,6 +79,9 @@ export const useBoardStore = create<BoardState>((set) => ({
   heldByFocus: 0,
   transcript: { finals: [], partial: null },
   pipeline: { stt: 'idle', wsConnected: false, wsGaveUp: false, lastTranscriptAt: null },
+  speakingAgentId: null,
+
+  setSpeakingAgent: (agentId) => set({ speakingAgentId: agentId }),
 
   addContribution: (item) =>
     set((state) => {
@@ -147,6 +155,7 @@ export const useBoardStore = create<BoardState>((set) => ({
       heldByFocus: 0,
       transcript: { finals: [], partial: null },
       pipeline: { stt: 'idle', wsConnected: false, wsGaveUp: false, lastTranscriptAt: null },
+      speakingAgentId: null,
     }),
 }));
 

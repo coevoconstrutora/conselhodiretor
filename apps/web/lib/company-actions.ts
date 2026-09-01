@@ -4,7 +4,6 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { setActiveCompany } from '@conselho/auth';
-import { resetAgentProfiles } from '@conselho/kb';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 import type { CompanyRow } from '@conselho/db';
 import { getCurrentUser, SESSION_COOKIE } from './auth';
@@ -115,34 +114,53 @@ export async function createCompanyAction(
   return { ok: `Empresa "${name}" criada — use o seletor no topo para trocar para ela.` };
 }
 
-export type ResetCounselorsState = { error?: string; ok?: string } | null;
+export type ResetHistoryState = { error?: string; ok?: string } | null;
 
 /**
- * Reseta os conselheiros de UMA empresa pros 9 papéis genéricos do produto —
- * apaga toda personalização (nomes/escopos editados + conselheiros custom
- * daquela empresa). Remediação da era em que `createCompanyAction` clonava
- * o perfil da Coevo em toda empresa nova (corrigido); serve pra limpar
- * qualquer empresa que ainda carregue esse resíduo.
+ * Apaga o HISTÓRICO DE REUNIÕES de uma empresa (reuniões, transcrições,
+ * relatórios, sínteses e análises de melhoria) — NUNCA mexe em
+ * `agent_profile` (nome/escopo/perfil profissional dos conselheiros
+ * continuam do jeito que o dono configurou). Uso: limpar reuniões de teste
+ * feitas com dados errados, sem perder a personalização dos conselheiros.
  */
-export async function resetCompanyCounselorsAction(
-  _prev: ResetCounselorsState,
+export async function resetCompanyMeetingHistoryAction(
+  _prev: ResetHistoryState,
   formData: FormData,
-): Promise<ResetCounselorsState> {
+): Promise<ResetHistoryState> {
   const user = await getCurrentUser();
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
-  if (!user.isSuperAdmin) return { error: 'Só super-admin reseta conselheiros.' };
+  if (!user.isSuperAdmin) return { error: 'Só super-admin apaga histórico de reuniões.' };
 
   const companyId = String(formData.get('companyId') ?? '');
   if (!companyId) return { error: 'Empresa inválida.' };
 
   const db = await getDb();
-  await db.query('DELETE FROM agent_profile WHERE company_id = $1', [companyId]);
-  resetAgentProfiles(companyId); // limpa o cache em memória — vale na próxima leitura, sem restart
+  await db.transaction(async (tx) => {
+    // ordem importa: essas tabelas referenciam meeting(id) sem ON DELETE CASCADE
+    await tx.query(
+      'DELETE FROM transcript_segment WHERE meeting_id IN (SELECT id FROM meeting WHERE company_id = $1)',
+      [companyId],
+    );
+    await tx.query(
+      'DELETE FROM transcript_review WHERE meeting_id IN (SELECT id FROM meeting WHERE company_id = $1)',
+      [companyId],
+    );
+    await tx.query(
+      'DELETE FROM board_synthesis WHERE meeting_id IN (SELECT id FROM meeting WHERE company_id = $1)',
+      [companyId],
+    );
+    await tx.query(
+      'DELETE FROM agent_report WHERE meeting_id IN (SELECT id FROM meeting WHERE company_id = $1)',
+      [companyId],
+    );
+    // meeting_improvement referencia meeting(id) ON DELETE CASCADE — some sozinho
+    await tx.query('DELETE FROM meeting WHERE company_id = $1', [companyId]);
+    return null;
+  });
 
   revalidatePath('/admin/companies');
   revalidatePath('/');
-  revalidatePath('/counselors');
-  return { ok: 'Conselheiros resetados para o padrão do produto.' };
+  return { ok: 'Histórico de reuniões apagado — conselheiros preservados.' };
 }
 
 export type RenameCompanyState = { error?: string; ok?: string } | null;
