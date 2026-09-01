@@ -13,6 +13,7 @@ export {
   buildAgentSystem,
   applyAgentProfileOverrides,
   removeAgentProfile,
+  resetAgentProfiles,
   type AgentProfile,
   type RiskPosture,
   type ReasonInput,

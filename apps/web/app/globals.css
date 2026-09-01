@@ -80,6 +80,26 @@ body {
   background-color: hsl(var(--surface));
 }
 
+/* Tema visual POR EMPRESA (cor de texto/título) — regras SEM @layer de
+   propósito: em Tailwind v4 as utilities vivem em `@layer utilities`, e por
+   spec de cascade layers uma regra sem layer sempre vence uma regra COM
+   layer, não importa a especificidade/ordem. Isso deixa sobrepor `.text-ink`
+   em TODO o site com 2 linhas, sem tocar no token `--text` (usado em blends
+   tipo `hsl(var(--text) / 0.1)` por toda a UI, que quebraria com um hex
+   arbitrário no lugar). `layout.tsx` injeta `--company-text`/`--company-title`
+   só quando a empresa configurou algo em /company; sem isso, cai no padrão. */
+.text-ink {
+  color: var(--company-text, hsl(var(--text)));
+}
+.font-display.text-ink {
+  color: var(--company-title, var(--company-text, hsl(var(--text))));
+}
+
+/* Fundo "plano": empresa desligou a grade de desenho técnico em /company. */
+body.theme-plain::before {
+  display: none;
+}
+
 /* Fundo ambiente: papel milimetrado — grade fina de desenho técnico, quase
    imperceptível (4% de opacidade). Referência à Engenharia/planta baixa da
    incorporadora, sem virar decoração chamativa. */

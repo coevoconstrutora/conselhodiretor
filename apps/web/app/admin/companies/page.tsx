@@ -5,11 +5,13 @@ import { listCompanies } from '@/lib/company-actions';
 import { listSuperAdminCandidates } from '@/lib/super-admin-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
 import { RenameCompanyForm } from '@/components/rename-company-form';
+import { ResetCompanyCounselorsForm } from '@/components/reset-counselors-form';
 import { SuperAdminManager } from '@/components/super-admin-manager';
 import { formatDateBR } from '@/lib/format';
 
-/** Gestão de empresas — só super-admin. Clona a estrutura dos 9 conselheiros
- * da Coevo (nome/escopo) para toda empresa nova; conhecimento nunca é copiado. */
+/** Gestão de empresas — só super-admin. Toda empresa nasce isolada: só os 9
+ * papéis genéricos do produto, zero conselheiro custom, zero conhecimento —
+ * nunca clona nada de outra empresa. */
 export default async function CompaniesAdminPage() {
   const user = await requireCurrentUser();
   if (!user.isSuperAdmin) redirect('/');
@@ -53,7 +55,10 @@ export default async function CompaniesAdminPage() {
                   {c.slug} · criada em {formatDateBR(c.createdAt)}
                 </p>
               </div>
-              <RenameCompanyForm companyId={c.id} name={c.name} />
+              <div className="flex items-center gap-3">
+                <ResetCompanyCounselorsForm companyId={c.id} />
+                <RenameCompanyForm companyId={c.id} name={c.name} />
+              </div>
             </li>
           ))}
         </ul>

@@ -6,6 +6,7 @@ import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import { loadCompanyProfile } from '@/lib/company-profile';
 import { formatMeetingDuration, formatDateTimeBR, formatTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { CompanySwitcher } from '@/components/company-switcher';
@@ -17,20 +18,31 @@ export default async function DashboardPage() {
   const user = await requireCurrentUser();
 
   const db = await getDb();
-  const meetings = await listMeetings(db, user.companyId, getEncryptionKey());
+  const key = getEncryptionKey();
+  const meetings = await listMeetings(db, user.companyId, key);
   await loadAndApplyProfileOverrides(db, user.companyId); // nomes personalizados no grid
   const profiles = getAgentProfiles(user.companyId);
   const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
+  const companyProfile = await loadCompanyProfile(db, user.companyId, key);
 
   return (
     <main className="mx-auto min-h-screen max-w-6xl p-6 sm:p-8">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
-          <p className="text-sm text-ink-muted">
-            Seu conselho de {specialistCount} especialista{specialistCount === 1 ? '' : 's'} em cada
-            reunião
-          </p>
+        <div className="flex items-center gap-3">
+          {companyProfile.logoDataUrl ? (
+            <img
+              src={companyProfile.logoDataUrl}
+              alt={companyProfile.name ?? 'Logo da empresa'}
+              className="h-10 w-10 shrink-0 rounded-[var(--radius)] object-contain"
+            />
+          ) : null}
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
+            <p className="text-sm text-ink-muted">
+              Seu conselho de {specialistCount} especialista{specialistCount === 1 ? '' : 's'} em cada
+              reunião
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />

@@ -25,8 +25,8 @@ export type UiEventKind = 'focus-on' | 'focus-off' | 'silence' | 'unsilence' | '
 
 /** Preços de referência (USD) — atualizar junto com a POC 3.4/2.5. */
 export const PRICING = {
-  llmInputPerMTok: 1.0, // claude-haiku-4-5
-  llmOutputPerMTok: 5.0,
+  llmInputPerMTok: 3.0, // claude-sonnet-5 (piso 5.x do produto — NUNCA modelo abaixo disso)
+  llmOutputPerMTok: 15.0,
   sttPerMinute: 0.0059, // deepgram nova-2 streaming
   videoPerConsultation: 0, // catálogo pré-renderizado (ADR-007)
 } as const;

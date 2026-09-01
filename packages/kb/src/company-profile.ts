@@ -17,6 +17,12 @@ export interface CompanyProfile {
   readonly notes?: string;
   /** Texto extraído dos documentos anexados (company_source), já concatenado/truncado. */
   readonly sourcesText?: string;
+  /** Logo da empresa — data URL (base64), sem storage externo. Só exibição, nunca entra no prompt. */
+  readonly logoDataUrl?: string | null;
+  /** Tema visual por empresa — hex (#rrggbb) ou null (usa o padrão do produto). Só exibição. */
+  readonly themeTextColor?: string | null;
+  readonly themeTitleColor?: string | null;
+  readonly themeBackground?: 'grid' | 'plain' | null;
 }
 
 const profilesByCompany = new Map<string, CompanyProfile>();

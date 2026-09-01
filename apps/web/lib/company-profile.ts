@@ -3,6 +3,7 @@ import type { SqlExecutor } from '@conselho/db';
 import { decryptField, encryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
 import { applyCompanyProfile, type CompanyProfile } from '@conselho/kb';
+import { fetchUrlText, buildPreview } from './kb-sources';
 
 /**
  * Perfil da empresa — área central de contexto compartilhado por TODOS os 9
@@ -27,6 +28,9 @@ export interface CompanySourceSummary {
   readonly ref: string | null;
   readonly chars: number;
   readonly createdAt: Date;
+  /** Só faz sentido para `kind: 'url'` — revisão automática a cada N dias. */
+  readonly rescanDays: number | null;
+  readonly lastScannedAt: Date | null;
 }
 
 /**
@@ -132,8 +136,10 @@ export async function listCompanySources(
     ref: string | null;
     content_enc: string;
     created_at: Date | string;
+    rescan_days: number | null;
+    last_scanned_at: Date | string | null;
   }>(
-    'SELECT id, kind, title, ref, content_enc, created_at FROM company_source WHERE company_id = $1 ORDER BY created_at DESC',
+    'SELECT id, kind, title, ref, content_enc, created_at, rescan_days, last_scanned_at FROM company_source WHERE company_id = $1 ORDER BY created_at DESC',
     [companyId],
   );
   return res.rows.map((r) => {
@@ -150,6 +156,8 @@ export async function listCompanySources(
       ref: r.ref,
       chars,
       createdAt: new Date(r.created_at),
+      rescanDays: r.rescan_days,
+      lastScannedAt: r.last_scanned_at ? new Date(r.last_scanned_at) : null,
     };
   });
 }
@@ -158,28 +166,85 @@ export async function addCompanySource(
   db: SqlExecutor,
   companyId: string,
   key: Buffer,
-  input: { kind: CompanySourceKind; title: string; ref?: string | null; content: string },
-): Promise<void> {
+  input: {
+    kind: CompanySourceKind;
+    title: string;
+    ref?: string | null;
+    content: string;
+    /** Só faz sentido para `kind: 'url'` — revisão automática a cada N dias. */
+    rescanDays?: number | null;
+  },
+): Promise<{ id: string; chars: number; preview: string }> {
   const content = input.content.trim().slice(0, MAX_SOURCE_CHARS);
   if (content.length < 20) throw new Error('Conteúdo curto demais para virar contexto.');
-  await auditedClinicalWrite(
+  const rescanDays =
+    input.kind === 'url' && input.rescanDays && input.rescanDays > 0
+      ? Math.min(Math.round(input.rescanDays), 365)
+      : null;
+  const { originId } = await auditedClinicalWrite(
     db,
     { triggeredBy: 'company-source-add', kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       const res = await tx.query<{ id: string }>(
-        'INSERT INTO company_source (company_id, kind, title, ref, content_enc) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        `INSERT INTO company_source (company_id, kind, title, ref, content_enc, rescan_days, last_scanned_at)
+         VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $2 = 'url' THEN now() ELSE NULL END)
+         RETURNING id`,
         [
           companyId,
           input.kind,
           input.title.trim().slice(0, 160) || 'Sem título',
           input.ref ?? null,
           encryptField(content, key),
+          rescanDays,
         ],
       );
       return res.rows[0]!.id;
     },
   );
   await loadAndApplyCompanyProfile(db, companyId, key);
+  return { id: originId, chars: content.length, preview: buildPreview(content) };
+}
+
+/**
+ * Re-busca fontes por LINK vencidas do perfil da EMPRESA — mesmo padrão do
+ * `rescanDueUrlSources` por conselheiro (kb-sources.ts), aplicado ao
+ * `company_source` compartilhado por todos. Best-effort: chamado ao abrir
+ * /company sem bloquear o render.
+ */
+export async function rescanDueCompanySources(
+  db: SqlExecutor,
+  companyId: string,
+  key: Buffer,
+): Promise<{ rescanned: number }> {
+  const due = await db.query<{ id: string; ref: string | null }>(
+    `SELECT id, ref FROM company_source
+     WHERE company_id = $1 AND kind = 'url' AND rescan_days IS NOT NULL
+       AND (last_scanned_at IS NULL OR last_scanned_at < now() - (rescan_days || ' days')::interval)`,
+    [companyId],
+  );
+  let rescanned = 0;
+  for (const row of due.rows) {
+    if (!row.ref) continue;
+    try {
+      const { title, text } = await fetchUrlText(row.ref);
+      await auditedClinicalWrite(
+        db,
+        { triggeredBy: 'company-source-rescan', kbSources: [], modelVersion: 'auto-rescan' },
+        async (tx) => {
+          await tx.query(
+            'UPDATE company_source SET title = $2, content_enc = $3, last_scanned_at = now() WHERE id = $1',
+            [row.id, title.trim().slice(0, 160) || 'Sem título', encryptField(text.trim().slice(0, MAX_SOURCE_CHARS), key)],
+          );
+          return null;
+        },
+      );
+      rescanned += 1;
+    } catch (err) {
+      console.error(`[empresa] revisão automática de ${row.ref} falhou:`, err);
+    }
+  }
+  if (rescanned > 0) await loadAndApplyCompanyProfile(db, companyId, key);
+  return { rescanned };
 }
 
 export async function deleteCompanySource(

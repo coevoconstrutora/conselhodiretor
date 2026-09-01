@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import type { CompanySourceSummary } from '@/lib/company-profile';
 import { formatDateBR } from '@/lib/format';
 import {
@@ -28,7 +28,7 @@ function Feedback({ state }: { state: CompanyProfileActionState }) {
     );
   if (state.ok)
     return (
-      <p role="status" className="mt-2 text-xs font-medium text-success">
+      <p role="status" className="mt-2 whitespace-pre-line text-xs font-medium text-success">
         ✓ {state.ok}
       </p>
     );
@@ -59,6 +59,12 @@ export function CompanySourcesList({ sources }: { sources: CompanySourceSummary[
                   <a href={s.ref} target="_blank" rel="noreferrer" className="underline hover:text-ink">
                     abrir origem
                   </a>
+                </>
+              ) : null}
+              {s.rescanDays ? (
+                <>
+                  {' · '}🔄 a cada {s.rescanDays}d
+                  {s.lastScannedAt ? ` (última: ${formatDateBR(s.lastScannedAt)})` : ''}
                 </>
               ) : null}
             </p>
@@ -103,6 +109,7 @@ export function AddCompanyTextForm() {
 
 export function AddCompanyUrlForm() {
   const [state, formAction, pending] = useActionState(addCompanyUrlSourceAction, null);
+  const [autoRescan, setAutoRescan] = useState(false);
   return (
     <form action={formAction} className="space-y-3">
       <label className="block">
@@ -110,6 +117,25 @@ export function AddCompanyUrlForm() {
           URL (o sistema baixa a página e extrai o texto)
         </span>
         <input name="url" type="url" placeholder="https://exemplo.com/institucional" required className={inputCls} />
+      </label>
+      <label className="flex items-center gap-2 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={autoRescan}
+          onChange={(e) => setAutoRescan(e.target.checked)}
+          className="rounded border-ink/25"
+        />
+        Revisar automaticamente a cada
+        <input
+          type="number"
+          name="rescanDays"
+          min={1}
+          max={365}
+          defaultValue={30}
+          disabled={!autoRescan}
+          className="w-16 rounded-[var(--radius)] border border-ink/15 bg-white px-2 py-1 text-xs disabled:opacity-40"
+        />
+        dia(s)
       </label>
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />

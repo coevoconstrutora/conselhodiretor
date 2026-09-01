@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { requireCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
-import { loadCompanyProfile, listCompanySources } from '@/lib/company-profile';
+import { loadCompanyProfile, listCompanySources, rescanDueCompanySources } from '@/lib/company-profile';
 import { CompanyProfileForm } from '@/components/company-profile-form';
+import { CompanyAppearanceForm } from '@/components/company-appearance-form';
 import {
   CompanySourcesList,
   AddCompanyTextForm,
@@ -23,6 +24,11 @@ export default async function CompanyPage() {
   const key = getEncryptionKey();
   const profile = await loadCompanyProfile(db, user.companyId, key);
   const sources = await listCompanySources(db, user.companyId, key);
+
+  // revisão automática de links vencidos — best-effort, nunca bloqueia o render
+  void rescanDueCompanySources(db, user.companyId, key).catch((error) => {
+    console.error('[empresa] revisão automática falhou:', error);
+  });
 
   return (
     <main className="mx-auto min-h-screen max-w-5xl p-6 sm:p-8">
@@ -45,6 +51,17 @@ export default async function CompanyPage() {
 
       <section className="mt-8 max-w-2xl">
         <CompanyProfileForm profile={profile} />
+      </section>
+
+      {/* Aparência: logo + tema visual — separado do perfil de negócio de propósito. */}
+      <section className="mt-6 max-w-2xl">
+        <h2 className="font-display text-base font-semibold text-ink">Aparência</h2>
+        <p className="mt-1 text-xs text-ink-muted">
+          Logo e cores aparecem só na tela — nunca entram no contexto dos conselheiros.
+        </p>
+        <div className="mt-3">
+          <CompanyAppearanceForm profile={profile} />
+        </div>
       </section>
 
       {/* Documentos: mesmo padrão do "NotebookLM por conselheiro", mas

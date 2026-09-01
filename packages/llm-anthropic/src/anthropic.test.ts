@@ -54,7 +54,7 @@ describe('AnthropicLlmProvider (Claude Haiku — Stories 3.1/3.4)', () => {
     const [url, init] = doFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.anthropic.com/v1/messages');
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe('claude-haiku-4-5');
+    expect(body.model).toBe('claude-sonnet-5');
     expect(body.system).toContain('Dr. Paulo');
     expect(body.system).toContain('JSON');
     expect(body.messages[0].content).toContain('semaglutida');

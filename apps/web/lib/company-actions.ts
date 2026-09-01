@@ -4,12 +4,11 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { setActiveCompany } from '@conselho/auth';
-import { getAgentProfiles } from '@conselho/kb';
+import { resetAgentProfiles } from '@conselho/kb';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 import type { CompanyRow } from '@conselho/db';
 import { getCurrentUser, SESSION_COOKIE } from './auth';
 import { getDb } from './db';
-import { loadAndApplyProfileOverrides } from './kb-sources';
 
 /**
  * Multi-empresa (super-admin): listar/criar empresas e trocar qual está
@@ -71,10 +70,13 @@ function slugify(name: string): string {
 export type CreateCompanyState = { error?: string; ok?: string } | null;
 
 /**
- * Cria uma empresa nova — clona a ESTRUTURA dos 9 conselheiros (nome/escopo)
- * da Coevo (empresa default) como ponto de partida; NUNCA copia conhecimento
- * (kb_source), perfil da empresa ou reuniões — a empresa nova começa "limpa"
- * nisso, só herdando os papéis.
+ * Cria uma empresa nova — SEMPRE 100% isolada: nasce só com os 9 papéis
+ * genéricos do produto (`DEFAULT_AGENT_PROFILES`, aplicado automaticamente
+ * por `getAgentProfiles` quando não há linha em `agent_profile`), zero
+ * conselheiro custom e zero conhecimento. NUNCA clona nome/escopo/perfil de
+ * outra empresa — mesmo campos "estruturais" como escopo viraram, na prática,
+ * lugar de contexto de NEGÓCIO (perfil profissional, critérios de decisão),
+ * então clonar de uma empresa real vazaria informação dela pras demais.
  */
 export async function createCompanyAction(
   _prev: CreateCompanyState,
@@ -102,23 +104,6 @@ export async function createCompanyAction(
   );
   const companyId = created.rows[0]!.id;
 
-  // Clona TODOS os papéis a partir da Coevo (default) — os 9 padrão +
-  // conselheiros CUSTOM que a Coevo já tenha criado — nome/escopo ATUAIS
-  // dela, NUNCA conhecimento (kb_source).
-  const coevo = await db.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
-  const templateCompanyId = coevo.rows[0]?.id;
-  if (templateCompanyId) {
-    await loadAndApplyProfileOverrides(db, templateCompanyId); // hidrata em memória com o que está no banco
-    const templateProfiles = getAgentProfiles(templateCompanyId);
-    for (const p of Object.values(templateProfiles)) {
-      await db.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope) VALUES ($1, $2, $3, $4)
-         ON CONFLICT (company_id, agent_id) DO NOTHING`,
-        [companyId, p.agentId, p.displayName, p.scope],
-      );
-    }
-  }
-
   // "Comitê Geral" (todos os conselheiros) — toda empresa precisa de pelo
   // menos 1 tipo de reunião pra escolher ao criar reunião.
   await db.query(
@@ -128,6 +113,36 @@ export async function createCompanyAction(
 
   revalidatePath('/admin/companies');
   return { ok: `Empresa "${name}" criada — use o seletor no topo para trocar para ela.` };
+}
+
+export type ResetCounselorsState = { error?: string; ok?: string } | null;
+
+/**
+ * Reseta os conselheiros de UMA empresa pros 9 papéis genéricos do produto —
+ * apaga toda personalização (nomes/escopos editados + conselheiros custom
+ * daquela empresa). Remediação da era em que `createCompanyAction` clonava
+ * o perfil da Coevo em toda empresa nova (corrigido); serve pra limpar
+ * qualquer empresa que ainda carregue esse resíduo.
+ */
+export async function resetCompanyCounselorsAction(
+  _prev: ResetCounselorsState,
+  formData: FormData,
+): Promise<ResetCounselorsState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!user.isSuperAdmin) return { error: 'Só super-admin reseta conselheiros.' };
+
+  const companyId = String(formData.get('companyId') ?? '');
+  if (!companyId) return { error: 'Empresa inválida.' };
+
+  const db = await getDb();
+  await db.query('DELETE FROM agent_profile WHERE company_id = $1', [companyId]);
+  resetAgentProfiles(companyId); // limpa o cache em memória — vale na próxima leitura, sem restart
+
+  revalidatePath('/admin/companies');
+  revalidatePath('/');
+  revalidatePath('/counselors');
+  return { ok: 'Conselheiros resetados para o padrão do produto.' };
 }
 
 export type RenameCompanyState = { error?: string; ok?: string } | null;

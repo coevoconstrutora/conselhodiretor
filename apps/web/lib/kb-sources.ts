@@ -177,7 +177,7 @@ export async function addKbSource(
 }
 
 /** Resumo curto do que foi extraído — pro dono conferir sem abrir a fonte. */
-function buildPreview(content: string, maxChars = 260): string {
+export function buildPreview(content: string, maxChars = 260): string {
   const flat = content.trim().replace(/\s+/g, ' ');
   return flat.length > maxChars ? `${flat.slice(0, maxChars)}…` : flat;
 }

@@ -226,6 +226,16 @@ export function applyAgentProfileOverrides(
   }
 }
 
+/**
+ * Reseta a empresa pros 9 papéis genéricos do produto — descarta TODA
+ * personalização em memória (nomes/escopos editados + conselheiros custom).
+ * Não mexe no banco: quem chama também precisa `DELETE FROM agent_profile
+ * WHERE company_id = $1` (o caller decide isso, esta função só limpa o cache).
+ */
+export function resetAgentProfiles(companyId: string): void {
+  profilesByCompany.delete(companyId);
+}
+
 /** Remove um conselheiro CUSTOM da memória desta empresa (nunca os padrão). */
 export function removeAgentProfile(companyId: string, agentId: AgentId): void {
   const profiles = getAgentProfiles(companyId);

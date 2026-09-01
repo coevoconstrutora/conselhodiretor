@@ -12,10 +12,10 @@ import type {
 /**
  * Adapter Anthropic (Claude) para `ILlmProvider` (Stories 3.1/3.4 — NFR8).
  *
- * Default: **claude-haiku-4-5** — melhor custo/latência p/ contribuições do
- * board (~2-3k tokens entrada, ~150 saída ⇒ ~US$0,003/contribuição); o tier
- * pode subir por persona (ex.: Sonnet na síntese do Aurélio — E6) trocando só
- * a config. Implementado sobre `fetch` (Messages API) — sem SDK de vendor.
+ * Default: **claude-sonnet-5** — piso de geração 5.x exigido pelo produto
+ * (nunca abaixo disso, mesmo pro board de contribuições curtas); trocável só
+ * por env (`ANTHROPIC_MODEL`, se algum dia precisar). Implementado sobre
+ * `fetch` (Messages API) — sem SDK de vendor.
  *
  * O modelo responde JSON `{type, severity, text, relevanceScore}`; `agentId`
  * vem da config (a persona é decisão do orchestrator, não do modelo) e
@@ -78,7 +78,7 @@ async function fetchWithTimeout(
 }
 
 const DEFAULT_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const DEFAULT_MODEL = 'claude-haiku-4-5';
+const DEFAULT_MODEL = 'claude-sonnet-5';
 
 export function anthropicConfigFromEnv(
   agentId: AgentId,
