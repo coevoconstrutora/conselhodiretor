@@ -36,6 +36,14 @@ export function MeetingRoom({
   endMeetingButton?: React.ReactNode;
   closed?: boolean;
 }) {
+  // `useBoardStore` é um singleton global (fora da árvore React): sem isto,
+  // trocar de reunião por navegação client-side (sem reload) deixava o
+  // feed/transcrição da reunião ANTERIOR visível até a próxima mensagem do WS.
+  const clearBoard = useBoardStore((s) => s.clear);
+  useEffect(() => {
+    clearBoard();
+  }, [meetingId, clearBoard]);
+
   useBoardStream(meetingId, { baseUrl: wsBaseUrl, token });
   useUiTelemetry(meetingId); // E10 — ruído/aceite (R3/§9)
   const [voiceMuted, setVoiceMuted] = useState(false);
