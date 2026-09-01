@@ -45,8 +45,17 @@ export async function loadCompanyProfile(db: SqlExecutor, companyId: string, key
   const row = res.rows[0];
   if (!row) return { name };
   try {
-    const stored = JSON.parse(decryptField(row.content_enc, key)) as CompanyProfile;
-    return { ...stored, name };
+    const parsed = JSON.parse(decryptField(row.content_enc, key)) as Record<string, unknown>;
+    // `region` era string livre antes desta etapa — normaliza pra array em
+    // registros antigos, sem exigir migration (o perfil inteiro é 1 JSON só).
+    const rawRegion = parsed.region;
+    const region = Array.isArray(rawRegion)
+      ? (rawRegion as string[])
+      : typeof rawRegion === 'string' && rawRegion.trim()
+        ? [rawRegion.trim()]
+        : undefined;
+    const stored = parsed as unknown as CompanyProfile;
+    return { ...stored, region, name };
   } catch {
     return { name }; // chave trocada/dado corrompido — degrada para "sem perfil" em vez de derrubar a página
   }

@@ -5,7 +5,13 @@ import type { AgentId } from '@conselho/providers';
 import { requireCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
-import { listKbSources, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import {
+  listKbSources,
+  loadAndApplyProfileOverrides,
+  rescanDueUrlSources,
+  rebuildAgentKnowledge,
+} from '@/lib/kb-sources';
+import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
 import { getAgentEmoji } from '@/lib/agent-display';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
@@ -33,6 +39,24 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
 
+  // Revisão automática de fontes por LINK vencidas — não bloqueia o render
+  // (best-effort; processo fica de pé no Fly Machine, então isso completa
+  // em background mesmo depois da resposta ir pro navegador).
+  if (!isPresident) {
+    void (async () => {
+      try {
+        const key = getEncryptionKey();
+        const { rescanned } = await rescanDueUrlSources(db, user.companyId, agentId, key);
+        if (rescanned > 0) {
+          const kb = await getCompanyKnowledgeStore(user.companyId);
+          await rebuildAgentKnowledge(kb, db, user.companyId, agentId, key);
+        }
+      } catch (err) {
+        console.error(`[kb] revisão automática (${agentId}) falhou:`, err);
+      }
+    })();
+  }
+
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">
       <header className="border-b border-ink/10 pb-5">
@@ -45,7 +69,6 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           </span>
           {profile.displayName}
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">{profile.scope}</p>
       </header>
 
       {/* Perfil */}
@@ -112,6 +135,17 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
                             >
                               abrir origem
                             </a>
+                          </>
+                        ) : null}
+                        {s.kind === 'url' && s.rescanDays ? (
+                          <>
+                            {' · '}
+                            <span className="text-brand/80">
+                              🔄 a cada {s.rescanDays}d
+                              {s.lastScannedAt
+                                ? ` (última: ${s.lastScannedAt.toLocaleDateString('pt-BR')})`
+                                : ''}
+                            </span>
                           </>
                         ) : null}
                       </p>

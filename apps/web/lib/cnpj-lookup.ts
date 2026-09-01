@@ -11,6 +11,10 @@ export interface CnpjData {
   readonly nomeFantasia: string | null;
   readonly segmento: string | null;
   readonly regiao: string | null;
+  /** CNAE principal (código + descrição) — mesma fonte do `segmento`, exibido à parte pro dono conferir. */
+  readonly cnaePrincipal: string | null;
+  /** CNAEs secundários (atividades econômicas adicionais registradas na Receita). */
+  readonly cnaesSecundarios: readonly string[];
 }
 
 export class CnpjLookupError extends Error {}
@@ -41,7 +45,9 @@ export async function lookupCnpj(rawCnpj: string): Promise<CnpjData> {
   const data = (await response.json()) as {
     razao_social?: string;
     nome_fantasia?: string | null;
+    cnae_fiscal?: number | null;
     cnae_fiscal_descricao?: string | null;
+    cnaes_secundarios?: ReadonlyArray<{ codigo?: number; descricao?: string }> | null;
     municipio?: string | null;
     uf?: string | null;
   };
@@ -52,5 +58,12 @@ export async function lookupCnpj(rawCnpj: string): Promise<CnpjData> {
     nomeFantasia: data.nome_fantasia?.trim() || null,
     segmento: data.cnae_fiscal_descricao?.trim() || null,
     regiao: data.municipio && data.uf ? `${data.municipio}/${data.uf}` : null,
+    cnaePrincipal:
+      data.cnae_fiscal && data.cnae_fiscal_descricao
+        ? `${data.cnae_fiscal} - ${data.cnae_fiscal_descricao}`
+        : (data.cnae_fiscal_descricao?.trim() ?? null),
+    cnaesSecundarios: (data.cnaes_secundarios ?? [])
+      .filter((c) => c.descricao?.trim())
+      .map((c) => (c.codigo ? `${c.codigo} - ${c.descricao!.trim()}` : c.descricao!.trim())),
   };
 }

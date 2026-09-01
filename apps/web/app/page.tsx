@@ -10,6 +10,7 @@ import { formatMeetingDuration } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { ConfigMenu } from '@/components/config-menu';
+import { CounselorsGrid } from '@/components/counselors-grid';
 
 /** Home: reuniões do empresário + gestão dos conselheiros (NotebookLM por agente). */
 export default async function DashboardPage() {
@@ -123,32 +124,8 @@ export default async function DashboardPage() {
             (textos, links e arquivos) — aplicado ao vivo, sem reiniciar.
           </p>
         </div>
-        <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Padrão + CUSTOM desta empresa — o Presidente sempre por último. */}
-          {buildAgentRoster(profiles).map((agent) => (
-            <li key={agent.id}>
-              <Link
-                href={`/counselors/${agent.id}`}
-                className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
-              >
-                <span aria-hidden="true" className="text-2xl leading-none">
-                  {agent.emoji}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-semibold text-ink">{agent.name}</span>
-                  {agent.area ? (
-                    <span className="block truncate text-xs font-medium text-brand/80">
-                      {agent.area}
-                    </span>
-                  ) : null}
-                  <span className="mt-1 line-clamp-3 block text-xs leading-snug text-ink-muted">
-                    {agent.briefing}
-                  </span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        {/* Padrão + CUSTOM desta empresa — o Presidente sempre por último. */}
+        <CounselorsGrid agents={buildAgentRoster(profiles)} />
       </section>
     </main>
   );

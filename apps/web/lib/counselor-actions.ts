@@ -86,10 +86,12 @@ export async function addTextSourceAction(
     const content = String(formData.get('content') ?? '').trim();
     if (!title) return { error: 'Dê um título à fonte (ex.: "Política de contingência 2026").' };
     if (content.length < 20) return { error: 'O texto é curto demais (mínimo 20 caracteres).' };
-    await addKbSource(db, user.companyId, agentId, { kind: 'text', title, content }, getEncryptionKey());
+    const added = await addKbSource(db, user.companyId, agentId, { kind: 'text', title, content }, getEncryptionKey());
     await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
-    return { ok: `Texto adicionado ao conhecimento — aplicado ao vivo.` };
+    return {
+      ok: `Texto adicionado (${added.chars.toLocaleString('pt-BR')} caracteres) — aplicado ao vivo.\n"${added.preview}"`,
+    };
   } catch (err) {
     console.error('[conselheiros] adicionar texto falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao adicionar o texto.' };
@@ -111,11 +113,22 @@ export async function addUrlSourceAction(
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
     const url = String(formData.get('url') ?? '').trim();
     if (!url) return { error: 'Informe a URL.' };
+    const rescanDaysRaw = String(formData.get('rescanDays') ?? '').trim();
+    const rescanDays = rescanDaysRaw ? Number(rescanDaysRaw) : null;
     const { title, text } = await fetchUrlText(url);
-    await addKbSource(db, user.companyId, agentId, { kind: 'url', title, ref: url, content: text }, getEncryptionKey());
+    const added = await addKbSource(
+      db,
+      user.companyId,
+      agentId,
+      { kind: 'url', title, ref: url, content: text, rescanDays },
+      getEncryptionKey(),
+    );
     await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
-    return { ok: `Link importado ("${title}") — conhecimento aplicado ao vivo.` };
+    const rescanNote = rescanDays ? ` Revisão automática a cada ${rescanDays} dia(s).` : '';
+    return {
+      ok: `Link importado ("${title}", ${added.chars.toLocaleString('pt-BR')} caracteres) — aplicado ao vivo.${rescanNote}\n"${added.preview}"`,
+    };
   } catch (err) {
     console.error('[conselheiros] importar URL falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao importar a URL.' };
@@ -139,7 +152,7 @@ export async function addFileSourceAction(
     if (!(file instanceof File) || file.size === 0)
       return { error: 'Selecione um arquivo .txt, .md, .csv, .pdf ou .docx.' };
     const content = await extractUploadedFileText(file);
-    await addKbSource(
+    const added = await addKbSource(
       db,
       user.companyId,
       agentId,
@@ -148,7 +161,9 @@ export async function addFileSourceAction(
     );
     await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
-    return { ok: `Arquivo "${file.name}" adicionado — conhecimento aplicado ao vivo.` };
+    return {
+      ok: `Arquivo "${file.name}" adicionado (${added.chars.toLocaleString('pt-BR')} caracteres) — aplicado ao vivo.\n"${added.preview}"`,
+    };
   } catch (err) {
     console.error('[conselheiros] upload falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada no upload.' };

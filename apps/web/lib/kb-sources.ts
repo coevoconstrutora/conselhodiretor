@@ -39,6 +39,9 @@ export interface KbSourceSummary {
   /** Tamanho do texto extraído (chars) — sem decifrar tudo na listagem. */
   readonly chars: number;
   readonly createdAt: Date;
+  /** Só para fontes por LINK: de quantos em quantos dias revisar (null = nunca, manual). */
+  readonly rescanDays: number | null;
+  readonly lastScannedAt: Date | null;
 }
 
 const MAX_SOURCE_CHARS = 200_000; // ~200 KB de texto por fonte — suficiente p/ docs longos
@@ -90,17 +93,30 @@ export async function addKbSource(
   db: SqlExecutor,
   companyId: string,
   agentId: AgentId,
-  input: { kind: KbSourceKind; title: string; ref?: string | null; content: string },
+  input: {
+    kind: KbSourceKind;
+    title: string;
+    ref?: string | null;
+    content: string;
+    /** Só faz sentido para `kind: 'url'` — revisão automática a cada N dias. */
+    rescanDays?: number | null;
+  },
   encryptionKey: Buffer,
-): Promise<string> {
+): Promise<{ id: string; chars: number; preview: string }> {
   const content = input.content.trim().slice(0, MAX_SOURCE_CHARS);
   if (content.length < 20) throw new Error('Conteúdo curto demais para virar conhecimento.');
+  const rescanDays =
+    input.kind === 'url' && input.rescanDays && input.rescanDays > 0
+      ? Math.min(Math.round(input.rescanDays), 365)
+      : null;
   const { originId } = await auditedClinicalWrite(
     db,
     { triggeredBy: `kb-source-add-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       const res = await tx.query<{ id: string }>(
-        'INSERT INTO kb_source (company_id, agent_id, kind, title, ref, content_enc) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        `INSERT INTO kb_source (company_id, agent_id, kind, title, ref, content_enc, rescan_days, last_scanned_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $3 = 'url' THEN now() ELSE NULL END)
+         RETURNING id`,
         [
           companyId,
           agentId,
@@ -108,12 +124,19 @@ export async function addKbSource(
           input.title.trim().slice(0, 160) || 'Sem título',
           input.ref ?? null,
           encryptField(content, encryptionKey),
+          rescanDays,
         ],
       );
       return res.rows[0]!.id;
     },
   );
-  return originId;
+  return { id: originId, chars: content.length, preview: buildPreview(content) };
+}
+
+/** Resumo curto do que foi extraído — pro dono conferir sem abrir a fonte. */
+function buildPreview(content: string, maxChars = 260): string {
+  const flat = content.trim().replace(/\s+/g, ' ');
+  return flat.length > maxChars ? `${flat.slice(0, maxChars)}…` : flat;
 }
 
 export async function deleteKbSource(
@@ -150,8 +173,10 @@ export async function listKbSources(
     ref: string | null;
     content_enc: string;
     created_at: Date | string;
+    rescan_days: number | null;
+    last_scanned_at: Date | string | null;
   }>(
-    'SELECT id, kind, title, ref, content_enc, created_at FROM kb_source WHERE company_id = $1 AND agent_id = $2 ORDER BY created_at DESC',
+    'SELECT id, kind, title, ref, content_enc, created_at, rescan_days, last_scanned_at FROM kb_source WHERE company_id = $1 AND agent_id = $2 ORDER BY created_at DESC',
     [companyId, agentId],
   );
   return res.rows.map((r) => {
@@ -169,8 +194,53 @@ export async function listKbSources(
       ref: r.ref,
       chars,
       createdAt: new Date(r.created_at),
+      rescanDays: r.rescan_days,
+      lastScannedAt: r.last_scanned_at ? new Date(r.last_scanned_at) : null,
     };
   });
+}
+
+/**
+ * Re-busca fontes por LINK vencidas (`rescan_days` configurado e
+ * `last_scanned_at` mais velho que isso) e reconstrói o namespace se algo
+ * mudou. Chamado ao abrir a página do conselheiro, sem bloquear o render
+ * (best-effort — uma URL fora do ar não deve travar a tela).
+ */
+export async function rescanDueUrlSources(
+  db: SqlExecutor,
+  companyId: string,
+  agentId: AgentId,
+  encryptionKey: Buffer,
+): Promise<{ rescanned: number }> {
+  const due = await db.query<{ id: string; ref: string | null }>(
+    `SELECT id, ref FROM kb_source
+     WHERE company_id = $1 AND agent_id = $2 AND kind = 'url' AND rescan_days IS NOT NULL
+       AND (last_scanned_at IS NULL OR last_scanned_at < now() - (rescan_days || ' days')::interval)`,
+    [companyId, agentId],
+  );
+  let rescanned = 0;
+  for (const row of due.rows) {
+    if (!row.ref) continue;
+    try {
+      const { title, text } = await fetchUrlText(row.ref);
+      await auditedClinicalWrite(
+        db,
+        { triggeredBy: `kb-source-rescan-${agentId}`, kbSources: [], modelVersion: 'auto-rescan' },
+        async (tx) => {
+          await tx.query(
+            'UPDATE kb_source SET title = $2, content_enc = $3, last_scanned_at = now() WHERE id = $1',
+            [row.id, title.trim().slice(0, 160) || 'Sem título', encryptField(text.trim().slice(0, MAX_SOURCE_CHARS), encryptionKey)],
+          );
+          return null;
+        },
+      );
+      rescanned += 1;
+    } catch (err) {
+      // fonte fora do ar/mudou de formato — mantém o conteúdo antigo, tenta de novo no próximo vencimento
+      console.error(`[kb] revisão automática de ${row.ref} falhou:`, err);
+    }
+  }
+  return { rescanned };
 }
 
 /** Contagem de fontes por agente DA EMPRESA (grid da home — 1 query, sem decifrar). */

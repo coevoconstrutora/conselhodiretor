@@ -32,7 +32,7 @@ export default async function CompanyPage() {
             Perfil da empresa
           </h1>
           <p className="text-sm text-ink-muted">
-            Contexto compartilhado por todos os 9 conselheiros — sem precisar repetir em cada um.
+            Contexto compartilhado por todos os conselheiros — sem precisar repetir em cada um.
           </p>
         </div>
         <Link

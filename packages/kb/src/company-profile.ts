@@ -12,7 +12,8 @@ export interface CompanyProfile {
   readonly cnpj?: string;
   readonly size?: string;
   readonly segment?: string;
-  readonly region?: string;
+  /** Cidades onde a empresa atua — uma empresa raramente atua numa cidade só. */
+  readonly region?: readonly string[];
   readonly notes?: string;
   /** Texto extraído dos documentos anexados (company_source), já concatenado/truncado. */
   readonly sourcesText?: string;
@@ -36,7 +37,7 @@ export function companyProfileBlock(companyId: string): string {
   if (current.cnpj) parts.push(`CNPJ: ${current.cnpj}`);
   if (current.size) parts.push(`Porte: ${current.size}`);
   if (current.segment) parts.push(`Segmento: ${current.segment}`);
-  if (current.region) parts.push(`Região de atuação: ${current.region}`);
+  if (current.region?.length) parts.push(`Região de atuação: ${current.region.join(', ')}`);
   if (current.notes) parts.push(`Contexto adicional: ${current.notes}`);
   const header = parts.length > 0 ? `\n\nCONTEXTO DA EMPRESA (use como referência em toda contribuição):\n${parts.join('\n')}` : '';
   const docs = current.sourcesText

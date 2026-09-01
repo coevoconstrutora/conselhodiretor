@@ -21,12 +21,21 @@ export async function saveCompanyProfileAction(
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
   if (!canWrite(user)) return { error: 'Convidados não podem editar o perfil da empresa.' };
 
+  const region = [
+    ...new Set(
+      formData
+        .getAll('region')
+        .map((v) => String(v).trim())
+        .filter(Boolean),
+    ),
+  ];
+
   const profile: CompanyProfile = {
     name: String(formData.get('name') ?? '').trim() || undefined,
     cnpj: String(formData.get('cnpj') ?? '').trim() || undefined,
     size: String(formData.get('size') ?? '').trim() || undefined,
     segment: String(formData.get('segment') ?? '').trim() || undefined,
-    region: String(formData.get('region') ?? '').trim() || undefined,
+    region: region.length > 0 ? region : undefined,
     notes: String(formData.get('notes') ?? '').trim() || undefined,
   };
 
@@ -34,7 +43,7 @@ export async function saveCompanyProfileAction(
   await saveCompanyProfile(db, user.companyId, getEncryptionKey(), profile);
   revalidatePath('/company');
   revalidatePath('/');
-  return { ok: 'Perfil da empresa salvo — já vale para os 9 conselheiros.' };
+  return { ok: 'Perfil da empresa salvo — já vale para todos os conselheiros.' };
 }
 
 /** Adiciona conhecimento por texto colado. */
@@ -53,7 +62,7 @@ export async function addCompanyTextSourceAction(
     const db = await getDb();
     await addCompanySource(db, user.companyId, getEncryptionKey(), { kind: 'text', title, content });
     revalidatePath('/company');
-    return { ok: 'Texto adicionado — já vale para os 9 conselheiros.' };
+    return { ok: 'Texto adicionado — já vale para todos os conselheiros.' };
   } catch (err) {
     console.error('[empresa] adicionar texto falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao adicionar o texto.' };
@@ -75,7 +84,7 @@ export async function addCompanyUrlSourceAction(
     const db = await getDb();
     await addCompanySource(db, user.companyId, getEncryptionKey(), { kind: 'url', title, ref: url, content: text });
     revalidatePath('/company');
-    return { ok: `Link importado ("${title}") — já vale para os 9 conselheiros.` };
+    return { ok: `Link importado ("${title}") — já vale para todos os conselheiros.` };
   } catch (err) {
     console.error('[empresa] importar URL falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao importar a URL.' };
@@ -103,7 +112,7 @@ export async function addCompanyFileSourceAction(
       content,
     });
     revalidatePath('/company');
-    return { ok: `Arquivo "${file.name}" adicionado — já vale para os 9 conselheiros.` };
+    return { ok: `Arquivo "${file.name}" adicionado — já vale para todos os conselheiros.` };
   } catch (err) {
     console.error('[empresa] upload falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada no upload.' };

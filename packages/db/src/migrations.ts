@@ -376,4 +376,16 @@ ALTER TABLE meeting ADD COLUMN IF NOT EXISTS meeting_type_id uuid REFERENCES mee
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS trigger_keywords text[];
 `,
   },
+  {
+    name: '0014_kb_source_rescan',
+    sql: `
+-- Revisão automática de fontes por LINK: o dono marca "revisar a cada N
+-- dias" (opcional) e o sistema rebaixa o link de novo quando vence — sem
+-- isso, uma fonte de URL fica congelada no dia em que foi importada.
+ALTER TABLE kb_source ADD COLUMN IF NOT EXISTS rescan_days integer;
+ALTER TABLE kb_source ADD COLUMN IF NOT EXISTS last_scanned_at timestamptz;
+ALTER TABLE company_source ADD COLUMN IF NOT EXISTS rescan_days integer;
+ALTER TABLE company_source ADD COLUMN IF NOT EXISTS last_scanned_at timestamptz;
+`,
+  },
 ];

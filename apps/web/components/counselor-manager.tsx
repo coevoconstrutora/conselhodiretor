@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import {
   updateCounselorProfileAction,
   addTextSourceAction,
@@ -26,7 +26,7 @@ function Feedback({ state }: { state: CounselorActionState }) {
     );
   if (state.ok)
     return (
-      <p role="status" className="mt-2 text-xs font-medium text-success">
+      <p role="status" className="mt-2 whitespace-pre-line text-xs font-medium text-success">
         ✓ {state.ok}
       </p>
     );
@@ -111,6 +111,7 @@ export function AddTextForm({ agentId }: { agentId: string }) {
 
 export function AddUrlForm({ agentId }: { agentId: string }) {
   const [state, formAction, pending] = useActionState(addUrlSourceAction, null);
+  const [autoRescan, setAutoRescan] = useState(false);
   return (
     <form action={formAction} className="space-y-3">
       <input type="hidden" name="agentId" value={agentId} />
@@ -125,6 +126,25 @@ export function AddUrlForm({ agentId }: { agentId: string }) {
           required
           className={inputCls}
         />
+      </label>
+      <label className="flex items-center gap-2 text-xs text-ink">
+        <input
+          type="checkbox"
+          checked={autoRescan}
+          onChange={(e) => setAutoRescan(e.target.checked)}
+          className="rounded border-ink/25"
+        />
+        Revisar automaticamente a cada
+        <input
+          type="number"
+          name="rescanDays"
+          min={1}
+          max={365}
+          defaultValue={30}
+          disabled={!autoRescan}
+          className="w-16 rounded-[var(--radius)] border border-ink/15 bg-white px-2 py-1 text-xs disabled:opacity-40"
+        />
+        dia(s)
       </label>
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />

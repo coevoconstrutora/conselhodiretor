@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useState, type KeyboardEvent } from 'react';
 import type { CompanyProfile } from '@conselho/kb';
 import {
   saveCompanyProfileAction,
@@ -23,9 +23,29 @@ export function CompanyProfileForm({ profile }: { profile: CompanyProfile }) {
   const [cnpj, setCnpj] = useState(profile.cnpj ?? '');
   const [name, setName] = useState(profile.name ?? '');
   const [segment, setSegment] = useState(profile.segment ?? '');
-  const [region, setRegion] = useState(profile.region ?? '');
+  const [regions, setRegions] = useState<string[]>([...(profile.region ?? [])]);
+  const [regionInput, setRegionInput] = useState('');
   const [looking, setLooking] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [cnaeInfo, setCnaeInfo] = useState<{ principal: string | null; secundarios: readonly string[] } | null>(
+    null,
+  );
+
+  function addRegion(raw: string) {
+    const city = raw.trim();
+    if (!city) return;
+    setRegions((prev) => (prev.includes(city) ? prev : [...prev, city]));
+    setRegionInput('');
+  }
+
+  function handleRegionKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addRegion(regionInput);
+    } else if (e.key === 'Backspace' && !regionInput && regions.length > 0) {
+      setRegions((prev) => prev.slice(0, -1));
+    }
+  }
 
   async function handleLookupCnpj() {
     setLooking(true);
@@ -38,7 +58,10 @@ export function CompanyProfileForm({ profile }: { profile: CompanyProfile }) {
       }
       setName(result.data.nomeFantasia || result.data.razaoSocial);
       if (result.data.segmento) setSegment(result.data.segmento);
-      if (result.data.regiao) setRegion(result.data.regiao);
+      // adiciona a cidade da sede à lista (nunca substitui — a empresa pode
+      // já ter cadastrado outras cidades onde atua além da matriz).
+      if (result.data.regiao) addRegion(result.data.regiao);
+      setCnaeInfo({ principal: result.data.cnaePrincipal, secundarios: result.data.cnaesSecundarios });
     } finally {
       setLooking(false);
     }
@@ -66,10 +89,31 @@ export function CompanyProfileForm({ profile }: { profile: CompanyProfile }) {
           </button>
         </div>
         <p className="mt-1 text-[11px] text-ink-muted">
-          Preenche nome, segmento e região automaticamente a partir da base pública da Receita —
-          revise antes de salvar.
+          Preenche nome, segmento e cidade da sede automaticamente a partir da base pública da
+          Receita — revise antes de salvar.
         </p>
         {lookupError ? <p className="mt-1 text-xs text-attn-critical">⚠ {lookupError}</p> : null}
+        {cnaeInfo ? (
+          <div className="mt-2 rounded-[var(--radius)] border border-ink/10 bg-surface-muted p-2.5 text-[11px] text-ink-muted">
+            {cnaeInfo.principal ? (
+              <p>
+                <span className="font-semibold text-ink">CNAE principal:</span> {cnaeInfo.principal}
+              </p>
+            ) : null}
+            {cnaeInfo.secundarios.length > 0 ? (
+              <>
+                <p className="mt-1 font-semibold text-ink">
+                  CNAEs secundários ({cnaeInfo.secundarios.length}):
+                </p>
+                <ul className="mt-0.5 list-inside list-disc space-y-0.5">
+                  {cnaeInfo.secundarios.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -97,14 +141,39 @@ export function CompanyProfileForm({ profile }: { profile: CompanyProfile }) {
           />
         </label>
         <label className="block">
-          <span className="text-xs font-semibold text-ink">Região de atuação</span>
-          <input
-            name="region"
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            placeholder="ex.: Grande São Paulo"
-            className={inputCls}
-          />
+          <span className="text-xs font-semibold text-ink">Cidades onde atua</span>
+          <div className={`${inputCls} flex flex-wrap items-center gap-1.5`}>
+            {regions.map((city) => (
+              <span
+                key={city}
+                className="flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand"
+              >
+                {city}
+                <button
+                  type="button"
+                  aria-label={`Remover ${city}`}
+                  onClick={() => setRegions((prev) => prev.filter((c) => c !== city))}
+                  className="text-brand/70 hover:text-brand"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              value={regionInput}
+              onChange={(e) => setRegionInput(e.target.value)}
+              onKeyDown={handleRegionKeyDown}
+              onBlur={() => addRegion(regionInput)}
+              placeholder={regions.length === 0 ? 'ex.: Taubaté — Enter para adicionar' : 'adicionar cidade…'}
+              className="min-w-[8rem] flex-1 border-0 p-0 text-sm outline-none focus:ring-0"
+            />
+          </div>
+          {regions.map((city) => (
+            <input key={city} type="hidden" name="region" value={city} />
+          ))}
+          <p className="mt-1 text-[11px] text-ink-muted">
+            Uma cidade por vez — Enter, vírgula ou clicar fora adiciona.
+          </p>
         </label>
       </div>
       <label className="block">
