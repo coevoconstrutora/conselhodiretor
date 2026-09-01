@@ -10,6 +10,7 @@ import { listMeetings } from '@conselho/meetings';
 import { countKbSourcesByAgent, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { formatMeetingDuration } from '@/lib/format';
 import { CompanySwitcher } from '@/components/company-switcher';
+import { ConfigMenu } from '@/components/config-menu';
 
 const AGENT_EMOJI: Record<string, string> = {
   engenharia: '🏗️',
@@ -45,36 +46,14 @@ export default async function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
-          {user.isSuperAdmin ? (
-            <Link
-              href="/admin/companies"
-              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-            >
-              Empresas
-            </Link>
-          ) : null}
-          <Link
-            href="/company"
-            className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-          >
-            Empresa
-          </Link>
-          {canWrite(user) ? (
-            <Link
-              href="/meeting-types"
-              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-            >
-              Tipos de reunião
-            </Link>
-          ) : null}
-          {isAdmin(user) ? (
-            <Link
-              href="/users"
-              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-            >
-              Usuários
-            </Link>
-          ) : null}
+          <ConfigMenu
+            items={[
+              { href: '/company', label: 'Empresa' },
+              ...(canWrite(user) ? [{ href: '/meeting-types', label: 'Tipos de reunião' }] : []),
+              ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),
+              ...(user.isSuperAdmin ? [{ href: '/admin/companies', label: 'Empresas' }] : []),
+            ]}
+          />
           <form action={logoutAction}>
             <button
               type="submit"

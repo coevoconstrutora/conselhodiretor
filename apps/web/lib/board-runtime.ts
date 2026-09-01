@@ -28,6 +28,7 @@ import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
+import { createSpeakerNameTracker } from './speaker-names';
 
 /**
  * Runtime do board no processo do Next (demo do walking skeleton — E3).
@@ -229,6 +230,9 @@ function wireSessionBroadcast(
   opts: { persistTranscript: boolean },
 ): { flushTranscript: () => Promise<void> } {
   let lastFinalAt: number | null = null;
+  // Nomeia quem fala por autoapresentação ("sou a Marina") — troca "Locutor N"
+  // pelo nome dali em diante, só nesta sessão ao vivo (não é biometria).
+  const speakerNames = createSpeakerNameTracker();
   // A4: cada final REAL é persistido cifrado no ato (fila encadeada preserva a
   // ordem) — a transcrição sobrevive a deploy/restart no meio da reunião
   // (incidente 23:52). A DEMO NÃO persiste (persistTranscript=false): o script
@@ -259,13 +263,14 @@ function wireSessionBroadcast(
   }
   session.subscribe((event) => {
     if (event.type === 'segment') {
+      const text = speakerNames.apply(event.segment.text);
       if (event.segment.isFinal) {
         lastFinalAt = Date.now();
         runtime.lastFinalAt.set(meetingId, lastFinalAt);
         runtime.telemetry.sttSegment(meetingId);
-        if (opts.persistTranscript) persistFinal(event.segment.text);
+        if (opts.persistTranscript) persistFinal(text);
       }
-      runtime.gateway.broadcastTranscript(meetingId, event.segment.text, event.segment.isFinal);
+      runtime.gateway.broadcastTranscript(meetingId, text, event.segment.isFinal);
       return;
     }
     if (event.type === 'status') {
