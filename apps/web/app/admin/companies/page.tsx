@@ -6,6 +6,7 @@ import { listSuperAdminCandidates } from '@/lib/super-admin-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
 import { RenameCompanyForm } from '@/components/rename-company-form';
 import { SuperAdminManager } from '@/components/super-admin-manager';
+import { formatDateBR } from '@/lib/format';
 
 /** Gestão de empresas — só super-admin. Clona a estrutura dos 9 conselheiros
  * da Coevo (nome/escopo) para toda empresa nova; conhecimento nunca é copiado. */
@@ -19,8 +20,8 @@ export default async function CompaniesAdminPage() {
   ]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl p-8">
-      <header className="flex items-center justify-between border-b border-ink/10 pb-5">
+    <main className="mx-auto min-h-screen max-w-3xl p-6 sm:p-8">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Empresas</h1>
           <p className="text-sm text-ink-muted">
@@ -49,7 +50,7 @@ export default async function CompaniesAdminPage() {
               <div>
                 <p className="text-sm font-medium text-ink">{c.name}</p>
                 <p className="text-xs text-ink-muted">
-                  {c.slug} · criada em {c.createdAt.toLocaleDateString('pt-BR')}
+                  {c.slug} · criada em {formatDateBR(c.createdAt)}
                 </p>
               </div>
               <RenameCompanyForm companyId={c.id} name={c.name} />

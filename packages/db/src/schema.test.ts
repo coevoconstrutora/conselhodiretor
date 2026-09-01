@@ -61,6 +61,8 @@ describe('Migrations — schema base', () => {
       '0015_agent_profile_scope_split',
       '0016_agent_profile_icon',
       '0017_agent_profile_decision_context',
+      '0018_agent_profile_icon_color',
+      '0019_meeting_improvement',
     ]);
   });
 

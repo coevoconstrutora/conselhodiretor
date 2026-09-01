@@ -59,14 +59,19 @@ export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[]
       </div>
 
       {view === 'cards' ? (
-        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {agents.map((agent) => (
             <li key={agent.id}>
               <Link
                 href={`/counselors/${agent.id}`}
                 className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
               >
-                <AgentIcon iconKey={agent.iconKey} emoji={agent.emoji} className="text-2xl leading-none" />
+                <AgentIcon
+                  iconKey={agent.iconKey}
+                  iconColor={agent.iconColor}
+                  emoji={agent.emoji}
+                  className="text-2xl leading-none"
+                />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-ink">{agent.name}</span>
                   {agent.area ? (
@@ -88,7 +93,12 @@ export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[]
                 href={`/counselors/${agent.id}`}
                 className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-muted"
               >
-                <AgentIcon iconKey={agent.iconKey} emoji={agent.emoji} className="text-lg leading-none" />
+                <AgentIcon
+                  iconKey={agent.iconKey}
+                  iconColor={agent.iconColor}
+                  emoji={agent.emoji}
+                  className="text-lg leading-none"
+                />
                 <span className="w-40 shrink-0 truncate text-sm font-semibold text-ink">{agent.name}</span>
                 <span className="w-52 shrink-0 truncate text-xs font-medium text-brand/80">{agent.area}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">{agent.briefing}</span>

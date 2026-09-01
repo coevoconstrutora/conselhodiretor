@@ -25,8 +25,8 @@ export default async function MeetingTypesPage() {
   const types = await listMeetingTypes(user.companyId);
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl p-8">
-      <header className="flex items-center justify-between border-b border-ink/10 pb-5">
+    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Tipos de reunião</h1>
           <p className="text-sm text-ink-muted">

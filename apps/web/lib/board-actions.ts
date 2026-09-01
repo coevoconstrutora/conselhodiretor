@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { closeMeeting, meetingBelongsToCompany } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
-import { startDemoBoard, requestSynthesis, startLiveBoard, stopLiveBoard } from './board-runtime';
+import {
+  startDemoBoard,
+  requestSynthesis,
+  startLiveBoard,
+  stopLiveBoard,
+  runMeetingImprovementAnalysis,
+} from './board-runtime';
 import { toActionResult, type ActionResult } from './action-result';
 
 /** Server action: inicia a demo do board (auth + gate de consentimento no caminho). */
@@ -90,6 +96,10 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
     await stopLiveBoard(meetingId);
     await closeMeeting(db, meetingId, user.companyId);
     revalidatePath(`/meetings/${meetingId}`);
+    // aprendizado do produto: nunca bloqueia nem falha o encerramento (fire-and-forget)
+    void runMeetingImprovementAnalysis(meetingId, user.companyId).catch((error) => {
+      console.error('[melhorias] análise pós-reunião falhou:', error);
+    });
     return { ok: true };
   } catch (err) {
     console.error('[board] endMeeting falhou:', err);

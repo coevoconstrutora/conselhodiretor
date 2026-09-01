@@ -339,8 +339,11 @@ export const PROFESSIONAL_PROFILE_MAX = 2000;
 export const DECISION_CRITERIA_MAX = 2000;
 const RISK_POSTURE_VALUES = new Set<RiskPosture>(['conservative', 'moderate', 'aggressive']);
 
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
 export interface ProfileFieldsInput {
   readonly iconKey?: string | null;
+  readonly iconColor?: string | null;
   readonly professionalProfile?: string | null;
   readonly decisionCriteria?: string | null;
   readonly riskPosture?: string | null;
@@ -349,6 +352,7 @@ export interface ProfileFieldsInput {
 
 interface NormalizedProfileFields {
   readonly iconKey: string | null;
+  readonly iconColor: string | null;
   readonly professionalProfile: string | null;
   readonly decisionCriteria: string | null;
   readonly riskPosture: RiskPosture | null;
@@ -360,8 +364,12 @@ function normalizeProfileFields(fields: ProfileFieldsInput | undefined): Normali
     fields?.riskPosture && RISK_POSTURE_VALUES.has(fields.riskPosture as RiskPosture)
       ? (fields.riskPosture as RiskPosture)
       : null;
+  const iconKey = fields?.iconKey?.trim() || null;
+  // cor só faz sentido junto de um ícone escolhido — emoji mantém a cor própria
+  const iconColor = iconKey && fields?.iconColor && HEX_COLOR_RE.test(fields.iconColor.trim()) ? fields.iconColor.trim() : null;
   return {
-    iconKey: fields?.iconKey?.trim() || null,
+    iconKey,
+    iconColor,
     professionalProfile: fields?.professionalProfile?.trim().slice(0, PROFESSIONAL_PROFILE_MAX) || null,
     decisionCriteria: fields?.decisionCriteria?.trim().slice(0, DECISION_CRITERIA_MAX) || null,
     riskPosture,
@@ -388,13 +396,14 @@ export async function saveAgentProfile(
     async (tx) => {
       await tx.query(
         `INSERT INTO agent_profile
-           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key,
+           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key, icon_color,
             professional_profile, decision_criteria, risk_posture, risk_posture_notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (company_id, agent_id) DO UPDATE
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope,
                scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot,
-               icon_key = EXCLUDED.icon_key, professional_profile = EXCLUDED.professional_profile,
+               icon_key = EXCLUDED.icon_key, icon_color = EXCLUDED.icon_color,
+               professional_profile = EXCLUDED.professional_profile,
                decision_criteria = EXCLUDED.decision_criteria, risk_posture = EXCLUDED.risk_posture,
                risk_posture_notes = EXCLUDED.risk_posture_notes, updated_at = now()`,
         [
@@ -405,6 +414,7 @@ export async function saveAgentProfile(
           can,
           cannot,
           f.iconKey,
+          f.iconColor,
           f.professionalProfile,
           f.decisionCriteria,
           f.riskPosture,
@@ -469,9 +479,9 @@ export async function createCustomCounselor(
     async (tx) => {
       await tx.query(
         `INSERT INTO agent_profile
-           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords, icon_key,
+           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords, icon_key, icon_color,
             professional_profile, decision_criteria, risk_posture, risk_posture_notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           companyId,
           agentId,
@@ -481,6 +491,7 @@ export async function createCustomCounselor(
           cannot,
           keywords,
           f.iconKey,
+          f.iconColor,
           f.professionalProfile,
           f.decisionCriteria,
           f.riskPosture,
@@ -523,12 +534,13 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
     display_name: string;
     scope: string;
     icon_key: string | null;
+    icon_color: string | null;
     professional_profile: string | null;
     decision_criteria: string | null;
     risk_posture: string | null;
     risk_posture_notes: string | null;
   }>(
-    `SELECT agent_id, display_name, scope, icon_key, professional_profile, decision_criteria,
+    `SELECT agent_id, display_name, scope, icon_key, icon_color, professional_profile, decision_criteria,
             risk_posture, risk_posture_notes
      FROM agent_profile WHERE company_id = $1`,
     [companyId],
@@ -540,6 +552,7 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
       displayName: r.display_name,
       scope: r.scope,
       iconKey: r.icon_key,
+      iconColor: r.icon_color,
       professionalProfile: r.professional_profile,
       decisionCriteria: r.decision_criteria,
       riskPosture: r.risk_posture as RiskPosture | null,

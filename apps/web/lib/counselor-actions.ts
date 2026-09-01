@@ -27,6 +27,7 @@ import {
 function parseProfileFields(formData: FormData): ProfileFieldsInput {
   return {
     iconKey: String(formData.get('iconKey') ?? '').trim() || null,
+    iconColor: String(formData.get('iconColor') ?? '').trim() || null,
     professionalProfile: String(formData.get('professionalProfile') ?? '').trim() || null,
     decisionCriteria: String(formData.get('decisionCriteria') ?? '').trim() || null,
     riskPosture: String(formData.get('riskPosture') ?? '').trim() || null,

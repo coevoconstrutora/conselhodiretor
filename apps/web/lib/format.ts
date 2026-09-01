@@ -1,3 +1,19 @@
+/** Empresa é brasileira, servidor pode rodar em UTC (Fly.io) — toda data exibida ao
+ * usuário usa ESTE fuso, nunca o do processo, senão horários saem 3h adiantados. */
+const TIME_ZONE = 'America/Sao_Paulo';
+
+export function formatDateTimeBR(date: Date): string {
+  return date.toLocaleString('pt-BR', { timeZone: TIME_ZONE });
+}
+
+export function formatDateBR(date: Date): string {
+  return date.toLocaleDateString('pt-BR', { timeZone: TIME_ZONE });
+}
+
+export function formatTimeBR(date: Date, opts?: Intl.DateTimeFormatOptions): string {
+  return date.toLocaleTimeString('pt-BR', { timeZone: TIME_ZONE, ...opts });
+}
+
 /** "1h 12min" entre o início (confirmação da gravação) e o encerramento — null se ainda não encerrou. */
 export function formatMeetingDuration(start: Date, end: Date | null): string | null {
   if (!end) return null;

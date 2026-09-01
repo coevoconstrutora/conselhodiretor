@@ -153,7 +153,8 @@ describe('AgentReasoner + prompts restritos', () => {
       expect(system).toContain(DEFAULT_AGENT_PROFILES[agentId]!.scope);
       expect(system).toContain('NUNCA opine fora do seu escopo');
       expect(system).toContain('não invente números nem fatos');
-      expect(system).toContain('tom de sugestão');
+      expect(system).toContain('nunca de comando');
+      expect(system).toContain('varie a forma como você se dirige ao grupo');
     }
   });
 

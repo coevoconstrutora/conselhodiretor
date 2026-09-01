@@ -6,7 +6,7 @@ import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
-import { formatMeetingDuration } from '@/lib/format';
+import { formatMeetingDuration, formatDateTimeBR, formatTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { ConfigMenu } from '@/components/config-menu';
@@ -23,8 +23,8 @@ export default async function DashboardPage() {
   const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl p-8">
-      <header className="flex items-center justify-between border-b border-ink/10 pb-5">
+    <main className="mx-auto min-h-screen max-w-6xl p-6 sm:p-8">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
           <p className="text-sm text-ink-muted">
@@ -32,13 +32,14 @@ export default async function DashboardPage() {
             reunião
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
           <ConfigMenu
             items={[
               { href: '/company', label: 'Empresa' },
               ...(canWrite(user) ? [{ href: '/counselors', label: 'Conselheiros' }] : []),
               ...(canWrite(user) ? [{ href: '/meeting-types', label: 'Tipos de reunião' }] : []),
+              ...(canWrite(user) ? [{ href: '/improvements', label: '🧠 Melhorias' }] : []),
               ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),
               ...(user.isSuperAdmin ? [{ href: '/admin/companies', label: 'Empresas' }] : []),
             ]}
@@ -96,13 +97,13 @@ export default async function DashboardPage() {
                   <div>
                     <p className="font-medium text-ink">{m.title}</p>
                     <p className="text-xs text-ink-muted">
-                      {m.createdAt.toLocaleString('pt-BR')} ·{' '}
+                      {formatDateTimeBR(m.createdAt)} ·{' '}
                       {closed
                         ? '🔒 encerrada'
                         : m.recordingConfirmed
                           ? '🟢 gravação confirmada'
                           : '🔒 gravação pendente'}
-                      {closed && m.closedAt ? ` às ${m.closedAt.toLocaleTimeString('pt-BR')}` : ''}
+                      {closed && m.closedAt ? ` às ${formatTimeBR(m.closedAt)}` : ''}
                       {duration ? ` · ⏱ ${duration}` : ''}
                       {m.participantCount ? ` · 👥 ${m.participantCount}` : ''}
                     </p>

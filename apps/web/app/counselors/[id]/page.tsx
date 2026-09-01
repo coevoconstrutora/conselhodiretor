@@ -16,6 +16,7 @@ import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
 import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
+import { formatDateBR } from '@/lib/format';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
 
 const KIND_LABEL: Record<string, string> = {
@@ -61,13 +62,18 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl p-8">
+    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
       <header className="border-b border-ink/10 pb-5">
         <Link href="/" className="text-sm text-ink-muted hover:text-ink hover:underline">
           ← Painel
         </Link>
         <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-          <AgentIcon iconKey={profile.iconKey} emoji={getAgentEmoji(agentId)} className="mr-2" />
+          <AgentIcon
+            iconKey={profile.iconKey}
+            iconColor={profile.iconColor}
+            emoji={getAgentEmoji(agentId)}
+            className="mr-2"
+          />
           {profile.displayName}
         </h1>
         {profile.professionalProfile ? (
@@ -91,6 +97,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           scopeCan={scopeCan}
           scopeCannot={scopeCannot}
           iconKey={profile.iconKey ?? null}
+          iconColor={profile.iconColor ?? null}
           professionalProfile={profile.professionalProfile ?? null}
           decisionCriteria={profile.decisionCriteria ?? null}
           riskPosture={profile.riskPosture ?? null}
@@ -137,7 +144,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
                       <p className="truncate text-sm font-medium text-ink">{s.title}</p>
                       <p className="text-[11px] text-ink-muted">
                         {KIND_LABEL[s.kind] ?? s.kind} · {Math.max(1, Math.round(s.chars / 1000))}k
-                        chars · {s.createdAt.toLocaleDateString('pt-BR')}
+                        chars · {formatDateBR(s.createdAt)}
                         {s.ref && s.kind === 'url' ? (
                           <>
                             {' · '}
@@ -157,7 +164,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
                             <span className="text-brand/80">
                               🔄 a cada {s.rescanDays}d
                               {s.lastScannedAt
-                                ? ` (última: ${s.lastScannedAt.toLocaleDateString('pt-BR')})`
+                                ? ` (última: ${formatDateBR(s.lastScannedAt)})`
                                 : ''}
                             </span>
                           </>

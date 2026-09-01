@@ -41,7 +41,7 @@ export function DiagnosticsPanel({ meetingId }: { meetingId: string }) {
     let disposed = false;
     const load = async () => {
       try {
-        const res = await fetch(`/api/consultations/${meetingId}/pipeline-status`);
+        const res = await fetch(`/api/meetings/${meetingId}/pipeline-status`);
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as PipelineStatusReport;
         if (!disposed) {

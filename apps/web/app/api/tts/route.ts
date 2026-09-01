@@ -3,7 +3,7 @@ import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
-import { resolveAgentVoice } from '@/lib/tts-voices';
+import { resolveAgentVoice, buildVoiceInstructions } from '@/lib/tts-voices';
 
 /**
  * Voz dos conselheiros (OpenAI TTS) — texto de uma contribuição → áudio.
@@ -34,12 +34,14 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
   // roster REAL da empresa (padrão + conselheiros CUSTOM), nunca uma lista fixa no código
   const db = await getDb();
   await loadAndApplyProfileOverrides(db, user.companyId);
-  if (!getAgentProfiles(user.companyId)[agentId]) {
+  const profile = getAgentProfiles(user.companyId)[agentId];
+  if (!profile) {
     return NextResponse.json({ error: 'invalid-agent' }, { status: 400 });
   }
   if (!text) return NextResponse.json({ error: 'empty-text' }, { status: 400 });
 
   const voice = resolveAgentVoice(agentId);
+  const instructions = buildVoiceInstructions(profile.displayName, profile.riskPosture);
   const response = await fetch(OPENAI_TTS_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -50,6 +52,7 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
       model: TTS_MODEL,
       voice,
       input: text.slice(0, MAX_CHARS),
+      instructions,
       response_format: 'mp3',
     }),
   });

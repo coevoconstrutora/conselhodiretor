@@ -7,7 +7,8 @@ import {
   type FullBoardConfig,
 } from '@conselho/board';
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
-import { NamespacedKnowledgeStore } from '@conselho/kb';
+import { NamespacedKnowledgeStore, getCompanyProfile } from '@conselho/kb';
+import { analyzeMeetingForImprovements, saveMeetingImprovement } from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
 import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
 import { TelemetryRegistry, type GateDecisionKind, type UiEventKind, type CaseReviewOutcome } from '@conselho/telemetry';
@@ -143,48 +144,135 @@ export async function getCompanyKnowledgeStore(companyId: string): Promise<Names
   return kb;
 }
 
-/** Roteiro da reunião simulada (PT-BR) — dispara vários conselheiros (CFO,
- * Legal crítico, Engenharia, Mercado) e deixa pausa p/ a síntese do Presidente. */
-const DEMO_SCRIPT: ReadonlyArray<{ segment: TranscriptSegment; delayMs: number }> = [
-  { segment: { text: 'Bom dia a todos, vamos começar a reunião de diretoria.', isFinal: true }, delayMs: 1500 },
-  {
-    segment: {
-      text: 'O cronograma da obra da fase dois atrasou três semanas e o orçamento de obra já consumiu metade da contingência.',
-      isFinal: true,
+type DemoScriptStep = { segment: TranscriptSegment; delayMs: number };
+
+/** Roteiros da reunião simulada (PT-BR) — cada um dispara vários conselheiros
+ * (CFO, Legal crítico, Engenharia, Mercado) e deixa pausa p/ a síntese do
+ * Presidente. Vários cenários (não um só) pra que empresas diferentes não
+ * vejam sempre a MESMA demo; o nome/região da empresa entra no roteiro. */
+const DEMO_TEMPLATES: ReadonlyArray<(company: string, region: string) => DemoScriptStep[]> = [
+  (company) => [
+    { segment: { text: `Bom dia a todos, vamos começar a reunião de diretoria da ${company}.`, isFinal: true }, delayMs: 1500 },
+    {
+      segment: {
+        text: 'O cronograma da obra da fase dois atrasou três semanas e o orçamento de obra já consumiu metade da contingência.',
+        isFinal: true,
+      },
+      delayMs: 4000,
     },
-    delayMs: 4000,
-  },
-  {
-    segment: {
-      text: 'Recebemos uma ação judicial do condomínio vizinho sobre o muro de divisa, e isso pode travar o registro de incorporação.',
-      isFinal: true,
+    {
+      segment: {
+        text: 'Recebemos uma ação judicial do condomínio vizinho sobre o muro de divisa, e isso pode travar o registro de incorporação.',
+        isFinal: true,
+      },
+      delayMs: 8000,
     },
-    delayMs: 8000,
-  },
-  {
-    segment: {
-      text: 'A velocidade de vendas caiu e o preço por metro quadrado dos concorrentes do bairro está dez por cento abaixo do nosso.',
-      isFinal: true,
+    {
+      segment: {
+        text: 'A velocidade de vendas caiu e o preço por metro quadrado dos concorrentes do bairro está dez por cento abaixo do nosso.',
+        isFinal: true,
+      },
+      delayMs: 11_000,
     },
-    delayMs: 11_000,
-  },
-  {
-    segment: {
-      text: 'Precisamos decidir o enquadramento MCMV da próxima torre e revisar o fluxo de caixa do trimestre antes de aprovar o terreno novo.',
-      isFinal: true,
+    {
+      segment: {
+        text: 'Precisamos decidir o enquadramento MCMV da próxima torre e revisar o fluxo de caixa do trimestre antes de aprovar o terreno novo.',
+        isFinal: true,
+      },
+      delayMs: 14_000,
     },
-    delayMs: 14_000,
-  },
+  ],
+  (company, region) => [
+    { segment: { text: `Bom dia, vamos abrir a reunião de diretoria da ${company}.`, isFinal: true }, delayMs: 1500 },
+    {
+      segment: {
+        text: `Fechamos o terreno em ${region} e agora precisamos definir o mix de unidades antes de protocolar o projeto.`,
+        isFinal: true,
+      },
+      delayMs: 4000,
+    },
+    {
+      segment: {
+        text: 'O banco sinalizou que o funding do próximo lançamento depende de atingirmos 30% de VSO ainda na pré-venda.',
+        isFinal: true,
+      },
+      delayMs: 8000,
+    },
+    {
+      segment: {
+        text: 'A construtora parceira pediu reajuste de 12% no contrato por conta do aço e do cimento — isso muda a margem do projeto.',
+        isFinal: true,
+      },
+      delayMs: 11_000,
+    },
+    {
+      segment: {
+        text: 'Também chegou uma reclamação recorrente de pós-venda sobre infiltração em um empreendimento entregue há um ano.',
+        isFinal: true,
+      },
+      delayMs: 14_000,
+    },
+  ],
+  (company, region) => [
+    { segment: { text: `Bom dia, começando a reunião de diretoria da ${company}.`, isFinal: true }, delayMs: 1500 },
+    {
+      segment: {
+        text: `A prefeitura de ${region} publicou uma revisão no plano diretor que pode reduzir o gabarito permitido no nosso terreno.`,
+        isFinal: true,
+      },
+      delayMs: 4000,
+    },
+    {
+      segment: {
+        text: 'Um corretor parceiro trouxe uma proposta de permuta por terreno maior, mas com matrícula ainda em inventário.',
+        isFinal: true,
+      },
+      delayMs: 8000,
+    },
+    {
+      segment: {
+        text: 'O caixa do trimestre ficou apertado porque distratos subiram acima do previsto nas duas últimas torres entregues.',
+        isFinal: true,
+      },
+      delayMs: 11_000,
+    },
+    {
+      segment: {
+        text: 'Também estamos avaliando trocar o sistema construtivo por um modular, pra reduzir prazo de obra nos próximos lançamentos.',
+        isFinal: true,
+      },
+      delayMs: 14_000,
+    },
+  ],
 ];
+
+/** Escolha determinística (mesma empresa sempre cai no mesmo roteiro — troca só entre empresas diferentes). */
+function pickDemoTemplate(companyId: string): (typeof DEMO_TEMPLATES)[number] {
+  let hash = 0;
+  for (let i = 0; i < companyId.length; i++) {
+    hash = (hash * 31 + companyId.charCodeAt(i)) >>> 0;
+  }
+  return DEMO_TEMPLATES[hash % DEMO_TEMPLATES.length]!;
+}
+
+function buildDemoScript(companyId: string): DemoScriptStep[] {
+  const profile = getCompanyProfile(companyId);
+  const company = profile.name?.trim() || 'nossa incorporadora';
+  const region = profile.region?.[0]?.trim() || 'nossa região de atuação';
+  return pickDemoTemplate(companyId)(company, region);
+}
 
 /** STT roteirizado: emite o script com timing realista (demo sem microfone). */
 class ScriptedDemoStt implements ISttProvider {
+  constructor(private readonly script: DemoScriptStep[]) {}
+
   openStream(): SttSession {
     let closed = false;
+    const script = this.script;
     return {
       async *[Symbol.asyncIterator](): AsyncIterator<TranscriptSegment> {
         const start = Date.now();
-        for (const { segment, delayMs } of DEMO_SCRIPT) {
+        for (const { segment, delayMs } of script) {
           const wait = start + delayMs - Date.now();
           if (wait > 0) await new Promise((r) => setTimeout(r, wait));
           if (closed) return;
@@ -393,9 +481,13 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     await previous.flushTranscript().catch(() => {});
   }
 
-  const session = await startMeetingSession(db, meetingId, companyId, new ScriptedDemoStt(), {
-    vocabularyBoost: BUSINESS_VOCABULARY,
-  });
+  const session = await startMeetingSession(
+    db,
+    meetingId,
+    companyId,
+    new ScriptedDemoStt(buildDemoScript(companyId)),
+    { vocabularyBoost: BUSINESS_VOCABULARY },
+  );
   const hooks = telemetryHooks(runtime, meetingId);
   runtime.telemetry.sessionStarted(meetingId);
   const { llm, label } = makeLlm(hooks.onUsage);
@@ -403,7 +495,9 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
   const extraTriggers = await getCompanyExtraTriggers(db, companyId);
   const orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
-    pauseMs: 2500,
+    // "quiet board": segurar não-críticos até uma pausa natural de verdade —
+    // 2.5s cortava no meio de frases com respiração natural (ADR-008/FR12).
+    pauseMs: envNumber('BOARD_PAUSE_MS', 4000),
     tickMs: 1000,
     synthesisQuietMs: 10_000,
     synthesisMinPersonas: 3,
@@ -504,6 +598,26 @@ export async function getNoteInputs(meetingId: string): Promise<{
   // pós-restart sem sessão ativa: tudo do banco
   if (!reviewedFinals && dbFinals.length === 0 && synthesesAsContributions.length === 0) return null;
   return { finals: reviewedFinals ?? dbFinals, contributions: synthesesAsContributions };
+}
+
+/**
+ * Aprendizado do PRODUTO: roda uma análise (LLM) do que dava pra melhorar no
+ * PRÓPRIO Conselho nesta reunião — nunca do negócio da empresa — e guarda só
+ * pra leitura (tela /melhorias). Best-effort: chamado fire-and-forget ao
+ * encerrar a reunião; falha aqui NUNCA derruba o "Encerrar reunião".
+ */
+export async function runMeetingImprovementAnalysis(meetingId: string, companyId: string): Promise<void> {
+  try {
+    const inputs = await getNoteInputs(meetingId);
+    if (!inputs) return;
+    const { llm, label } = createLlm({ maxTokens: 1200 });
+    const content = await analyzeMeetingForImprovements(llm, inputs.finals, inputs.contributions);
+    if (!content) return;
+    const db = await getDb();
+    await saveMeetingImprovement(db, meetingId, companyId, content, getEncryptionKey(), label);
+  } catch (error) {
+    console.error('[melhorias] análise pós-reunião falhou:', error);
+  }
 }
 
 /** Snapshot do pipeline para o modo diagnóstico (A5). Só booleanos/contadores
@@ -617,7 +731,9 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
     const extraTriggers = await getCompanyExtraTriggers(db, companyId);
     orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
-      pauseMs: 2500,
+      // "quiet board": segurar não-críticos até uma pausa natural de verdade —
+    // 2.5s cortava no meio de frases com respiração natural (ADR-008/FR12).
+    pauseMs: envNumber('BOARD_PAUSE_MS', 4000),
       tickMs: 1000,
       synthesisQuietMs: 20_000,
       synthesisMinPersonas: 3,

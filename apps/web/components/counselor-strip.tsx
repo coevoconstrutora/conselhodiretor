@@ -20,6 +20,7 @@ export interface StripCounselor {
   readonly id: string;
   readonly emoji: string;
   readonly iconKey?: string | null;
+  readonly iconColor?: string | null;
   readonly name: string;
   readonly area: string;
 }
@@ -113,7 +114,12 @@ export function CounselorStrip({
         >
           <p className="text-[12px] leading-snug text-white/95">
             <span className="mr-1 font-semibold">
-              <AgentIcon iconKey={active.counselor.iconKey} emoji={active.counselor.emoji} /> {active.counselor.name}:
+              <AgentIcon
+                iconKey={active.counselor.iconKey}
+                iconColor={active.counselor.iconColor}
+                emoji={active.counselor.emoji}
+              />{' '}
+              {active.counselor.name}:
             </span>
             <span className="mr-1">{TYPE_ICON[active.latest!.contribution.type] ?? '💡'}</span>
             {bubble}
@@ -149,6 +155,7 @@ export function CounselorStrip({
             >
               <AgentIcon
                 iconKey={counselor.iconKey}
+                iconColor={counselor.iconColor}
                 emoji={counselor.emoji}
                 className={`text-2xl ${isSilenced ? 'grayscale' : ''}`}
               />

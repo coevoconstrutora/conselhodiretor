@@ -17,7 +17,7 @@ import {
   getMeetingActiveAgentIds,
   BOARD_WS_PORT,
 } from '@/lib/board-runtime';
-import { formatMeetingDuration } from '@/lib/format';
+import { formatMeetingDuration, formatDateTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
@@ -75,9 +75,9 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   return (
     <main className="min-h-screen">
       <header className="surface-deep-gradient sticky top-0 z-10 border-b border-white/10">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <div className="flex items-baseline gap-4">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="flex flex-wrap items-baseline gap-3 sm:gap-4">
+            <h1 className="font-display text-xl font-semibold tracking-tight text-white sm:text-2xl">
               Conselho
               <span className="ml-2 text-sm font-normal text-white/50">· {meeting.title}</span>
             </h1>
@@ -111,7 +111,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         <div className="gold-hairline absolute inset-x-0 bottom-0" />
       </header>
 
-      <div className="mx-auto max-w-7xl p-6">
+      <div className="mx-auto max-w-7xl p-4 sm:p-6">
         {!authorized ? (
           <section className="card-premium gold-hairline mx-auto mt-14 max-w-md p-7">
             <h2 className="font-display text-lg font-semibold text-ink">
@@ -218,7 +218,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-ink-muted">
                       {transcriptReview
-                        ? `Revisada em ${transcriptReview.updatedAt.toLocaleString('pt-BR')} — regenere os relatórios para refletir as correções.`
+                        ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
                         : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
                     </p>
                     <button
@@ -265,7 +265,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                         {report.agentId === 'presidente' ? '⭐ ' : ''}
                         {profiles[report.agentId]?.displayName ?? report.agentId}
                         <span className="ml-2 text-[11px] font-normal text-ink-muted">
-                          atualizado {report.updatedAt.toLocaleString('pt-BR')}
+                          atualizado {formatDateTimeBR(report.updatedAt)}
                         </span>
                       </summary>
                       <form action={saveAgentReportAction} className="space-y-3 px-4 pb-4">
@@ -307,7 +307,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                     <li key={s.id} className="rounded-[var(--radius)] border border-ink/10 bg-surface p-4">
                       <p className="text-sm leading-relaxed text-ink">{s.content}</p>
                       <p className="mt-2 text-[11px] text-ink-muted">
-                        {s.createdAt.toLocaleString('pt-BR')}
+                        {formatDateTimeBR(s.createdAt)}
                         {s.modelVersion ? ` · ${s.modelVersion}` : ''}
                       </p>
                     </li>

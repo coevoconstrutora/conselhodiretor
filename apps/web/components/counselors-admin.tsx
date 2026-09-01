@@ -21,6 +21,7 @@ export interface CounselorSummary {
   readonly scope: string;
   readonly isDefault: boolean;
   readonly iconKey: string | null;
+  readonly iconColor: string | null;
 }
 
 export function CreateCounselorForm() {
@@ -43,7 +44,7 @@ export function CreateCounselorForm() {
       <div>
         <span className="text-xs font-semibold text-ink">Ícone</span>
         <div className="mt-1">
-          <IconPicker name="iconKey" emojiFallback="🧑‍💼" />
+          <IconPicker name="iconKey" colorName="iconColor" emojiFallback="🧑‍💼" />
         </div>
       </div>
       <ScopeTextarea
@@ -117,7 +118,11 @@ function CounselorRow({ counselor }: { counselor: CounselorSummary }) {
           href={`/counselors/${counselor.agentId}`}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-ink hover:underline"
         >
-          <AgentIcon iconKey={counselor.iconKey} emoji={getAgentEmoji(counselor.agentId)} />
+          <AgentIcon
+            iconKey={counselor.iconKey}
+            iconColor={counselor.iconColor}
+            emoji={getAgentEmoji(counselor.agentId)}
+          />
           {counselor.displayName}
         </Link>
         {counselor.isDefault ? (

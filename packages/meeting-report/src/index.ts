@@ -20,3 +20,9 @@ export {
   buildPriorMeetingsBlock,
   type AgentReport,
 } from './reports';
+export {
+  analyzeMeetingForImprovements,
+  saveMeetingImprovement,
+  listMeetingImprovements,
+  type MeetingImprovement,
+} from './improvements';

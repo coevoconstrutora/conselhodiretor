@@ -2,6 +2,7 @@
 
 import { useActionState } from 'react';
 import type { CompanySourceSummary } from '@/lib/company-profile';
+import { formatDateBR } from '@/lib/format';
 import {
   addCompanyTextSourceAction,
   addCompanyUrlSourceAction,
@@ -51,7 +52,7 @@ export function CompanySourcesList({ sources }: { sources: CompanySourceSummary[
             <p className="truncate text-sm font-medium text-ink">{s.title}</p>
             <p className="text-[11px] text-ink-muted">
               {KIND_LABEL[s.kind] ?? s.kind} · {Math.max(1, Math.round(s.chars / 1000))}k chars ·{' '}
-              {s.createdAt.toLocaleDateString('pt-BR')}
+              {formatDateBR(s.createdAt)}
               {s.ref && s.kind === 'url' ? (
                 <>
                   {' · '}

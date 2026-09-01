@@ -25,8 +25,8 @@ export default async function CompanyPage() {
   const sources = await listCompanySources(db, user.companyId, key);
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl p-8">
-      <header className="flex items-center justify-between border-b border-ink/10 pb-5">
+    <main className="mx-auto min-h-screen max-w-5xl p-6 sm:p-8">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
             Perfil da empresa
@@ -43,7 +43,7 @@ export default async function CompanyPage() {
         </Link>
       </header>
 
-      <section className="mt-8">
+      <section className="mt-8 max-w-2xl">
         <CompanyProfileForm profile={profile} />
       </section>
 

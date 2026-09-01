@@ -426,4 +426,31 @@ ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS risk_posture text;
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS risk_posture_notes text;
 `,
   },
+  {
+    name: '0018_agent_profile_icon_color',
+    sql: `
+-- Cor do ícone (hex) — só vale quando icon_key também está setado (o emoji
+-- de fallback mantém a cor própria dele, não dá pra tingir emoji).
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS icon_color text;
+`,
+  },
+  {
+    name: '0019_meeting_improvement',
+    sql: `
+-- Aprendizado do PRODUTO (não do negócio): a cada reunião ENCERRADA, uma
+-- análise automática ("o que dava pra melhorar no Conselho nesta reunião" —
+-- gatilhos, repetição, tom, lacuna de KB) fica registrada aqui, só para
+-- LEITURA por enquanto — nada aqui é aplicado sozinho (tela /melhorias).
+CREATE TABLE IF NOT EXISTS meeting_improvement (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  meeting_id   uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  company_id   uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  content_enc  text NOT NULL,
+  model_version text,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_improvement_company ON meeting_improvement(company_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_improvement_meeting ON meeting_improvement(meeting_id);
+`,
+  },
 ];

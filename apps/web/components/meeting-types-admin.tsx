@@ -22,7 +22,7 @@ interface AgentOption {
 
 function AgentCheckboxes({ agentOptions, defaultSelected }: { agentOptions: AgentOption[]; defaultSelected?: string[] }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
       {agentOptions.map((a) => (
         <label key={a.id} className="flex items-center gap-1.5 text-xs text-ink">
           <input

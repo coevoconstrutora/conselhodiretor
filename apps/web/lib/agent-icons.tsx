@@ -113,18 +113,30 @@ export const AGENT_ICONS: Record<string, IconDefinition> = {
 
 export const AGENT_ICON_KEYS = Object.keys(AGENT_ICONS);
 
-/** Renderiza o ícone escolhido (Font Awesome) OU o emoji de fallback — nunca os dois. */
+/** Renderiza o ícone escolhido (Font Awesome, com cor opcional) OU o emoji de fallback — nunca os dois. */
 export function AgentIcon({
   iconKey,
+  iconColor,
   emoji,
   className,
 }: {
   iconKey: string | null | undefined;
+  /** Só vale com iconKey — emoji mantém a cor própria dele, não dá pra tingir. */
+  iconColor?: string | null;
   emoji: string;
   className?: string;
 }) {
   const icon = iconKey ? AGENT_ICONS[iconKey] : undefined;
-  if (icon) return <FontAwesomeIcon icon={icon} className={className} aria-hidden="true" />;
+  if (icon) {
+    return (
+      <FontAwesomeIcon
+        icon={icon}
+        className={className}
+        style={iconColor ? { color: iconColor } : undefined}
+        aria-hidden="true"
+      />
+    );
+  }
   return (
     <span aria-hidden="true" className={className}>
       {emoji}

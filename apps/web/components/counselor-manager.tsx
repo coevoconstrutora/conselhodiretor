@@ -48,6 +48,7 @@ export function ProfileForm({
   scopeCan,
   scopeCannot,
   iconKey,
+  iconColor,
   professionalProfile,
   decisionCriteria,
   riskPosture,
@@ -58,6 +59,7 @@ export function ProfileForm({
   scopeCan: string;
   scopeCannot: string;
   iconKey: string | null;
+  iconColor: string | null;
   professionalProfile: string | null;
   decisionCriteria: string | null;
   riskPosture: string | null;
@@ -74,7 +76,13 @@ export function ProfileForm({
       <div>
         <span className="text-xs font-semibold text-ink">Ícone</span>
         <div className="mt-1">
-          <IconPicker name="iconKey" defaultValue={iconKey} emojiFallback={getAgentEmoji(agentId)} />
+          <IconPicker
+            name="iconKey"
+            colorName="iconColor"
+            defaultValue={iconKey}
+            defaultColor={iconColor}
+            emojiFallback={getAgentEmoji(agentId)}
+          />
         </div>
       </div>
       <ScopeTextarea

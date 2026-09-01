@@ -24,6 +24,8 @@ export interface AgentProfile {
   readonly scope: string;
   /** Ícone curado (Font Awesome, apps/web/lib/agent-icons.tsx) — null/ausente cai no emoji. */
   readonly iconKey?: string | null;
+  /** Cor (hex) do ícone — só vale com iconKey setado; emoji mantém a cor própria. */
+  readonly iconColor?: string | null;
   /** Formação, senioridade, anos de experiência, certificações — quem ele É, não regra do que pode opinar. */
   readonly professionalProfile?: string | null;
   /** O que ele pesa ao avaliar propostas/recomendações (custo, risco, qualidade, escalabilidade...). */
@@ -157,8 +159,13 @@ export function buildAgentSystem(profile: AgentProfile, companyId: string): stri
     ` Seu escopo é ESTRITAMENTE: ${profile.scope}. ` +
     `REGRAS INEGOCIÁVEIS: (1) NUNCA opine fora do seu escopo — se o tema pertence a outro conselheiro, ` +
     `não contribua sobre ele; (2) ancore-se no contexto de conhecimento fornecido e no que foi dito na reunião — ` +
-    `não invente números nem fatos; (3) responda em português do Brasil, em 1-3 frases, em tom de sugestão ` +
-    `("vale verificar", "considere") ou de pergunta instigante — nunca de comando: a decisão é sempre do empresário; ` +
+    `não invente números nem fatos; (3) responda em português do Brasil, em 1-3 frases, em tom de conselheiro ` +
+    `de verdade numa reunião de board — nunca de comando (a decisão é sempre do empresário) e NUNCA repetindo a ` +
+    `mesma abertura de frase que outro conselheiro já usou nesta reunião; varie a forma como você se dirige ao grupo ` +
+    `— reaja a algo específico que foi dito, traga um contraponto, cite um número/risco concreto, ou faça UMA ` +
+    `pergunta direta e pontual quando isso for mais útil que uma afirmação; evite fórmulas genéricas do tipo ` +
+    `"vale verificar"/"considere" repetidas contribuição após contribuição — só fale quando tiver algo NOVO e ` +
+    `específico a acrescentar, com base no contexto real da discussão, não numa frase curta isolada; ` +
     `(4) NÃO repita contribuições já feitas pelo conselho (mesmo com outras palavras) — analise a PROGRESSÃO ` +
     `da reunião e só contribua com o que é NOVO e útil agora.` +
     companyProfileBlock(companyId)
@@ -179,6 +186,7 @@ export function applyAgentProfileOverrides(
     displayName?: string;
     scope?: string;
     iconKey?: string | null;
+    iconColor?: string | null;
     professionalProfile?: string | null;
     decisionCriteria?: string | null;
     riskPosture?: RiskPosture | null;
@@ -194,6 +202,7 @@ export function applyAgentProfileOverrides(
         displayName: o.displayName?.trim() || profile.displayName,
         scope: o.scope?.trim() || profile.scope,
         iconKey: o.iconKey !== undefined ? o.iconKey : profile.iconKey,
+        iconColor: o.iconColor !== undefined ? o.iconColor : profile.iconColor,
         professionalProfile: o.professionalProfile !== undefined ? o.professionalProfile : profile.professionalProfile,
         decisionCriteria: o.decisionCriteria !== undefined ? o.decisionCriteria : profile.decisionCriteria,
         riskPosture: o.riskPosture !== undefined ? o.riskPosture : profile.riskPosture,
@@ -207,6 +216,7 @@ export function applyAgentProfileOverrides(
         displayName: o.displayName.trim(),
         scope: o.scope.trim(),
         iconKey: o.iconKey ?? null,
+        iconColor: o.iconColor ?? null,
         professionalProfile: o.professionalProfile ?? null,
         decisionCriteria: o.decisionCriteria ?? null,
         riskPosture: o.riskPosture ?? null,

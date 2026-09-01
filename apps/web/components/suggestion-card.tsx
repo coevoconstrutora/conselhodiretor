@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { DisclaimerNote } from './disclaimer-note';
 import { useBoardStore, type BoardContributionItem } from '@/lib/board-store';
+import { formatTimeBR } from '@/lib/format';
 
 /**
  * `<SuggestionCard>` (E7 — FR8/FR15/NFR3/NFR4, frontend-spec §6/§7).
@@ -60,7 +61,7 @@ const PERSONA: Record<string, { name: string; specialty: string; accent: string;
 };
 
 function timeLabel(at: number): string {
-  return new Date(at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return formatTimeBR(new Date(at), { hour: '2-digit', minute: '2-digit' });
 }
 
 export function SuggestionCard({ item }: { item: BoardContributionItem }) {

@@ -11,6 +11,7 @@ primary_region = "gru"
 
 [env]
   PORT = "3000"
+  TZ = "America/Sao_Paulo"
 
 [http_service]
   internal_port = 3000

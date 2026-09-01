@@ -1,6 +1,7 @@
 import 'server-only';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, HeadingLevel, PageBreak } from 'docx';
+import { formatDateTimeBR } from './format';
 
 /**
  * Exportação dos relatórios finais da reunião em PDF/Word — rascunhos
@@ -37,13 +38,13 @@ export async function buildReportsPdf(meetingTitle: string, reports: readonly Re
 
     doc.fontSize(20).text(`Relatórios do Conselho`, { align: 'left' });
     doc.fontSize(14).fillColor('#555').text(meetingTitle);
-    doc.fontSize(9).fillColor('#888').text(`Gerado em ${new Date().toLocaleString('pt-BR')}`);
+    doc.fontSize(9).fillColor('#888').text(`Gerado em ${formatDateTimeBR(new Date())}`);
     doc.fillColor('black');
 
     for (const report of reports) {
       doc.addPage();
       doc.fontSize(16).text(report.displayName, { underline: true });
-      doc.fontSize(9).fillColor('#888').text(`Atualizado em ${report.updatedAt.toLocaleString('pt-BR')}`);
+      doc.fontSize(9).fillColor('#888').text(`Atualizado em ${formatDateTimeBR(report.updatedAt)}`);
       doc.fillColor('black').moveDown(0.6);
 
       for (const line of markdownLines(report.content)) {
@@ -74,13 +75,13 @@ export async function buildReportsDocx(meetingTitle: string, reports: readonly R
   const children: Paragraph[] = [
     new Paragraph({ text: 'Relatórios do Conselho', heading: HeadingLevel.TITLE }),
     new Paragraph({ text: meetingTitle, heading: HeadingLevel.HEADING_3 }),
-    new Paragraph({ text: `Gerado em ${new Date().toLocaleString('pt-BR')}` }),
+    new Paragraph({ text: `Gerado em ${formatDateTimeBR(new Date())}` }),
   ];
 
   reports.forEach((report, idx) => {
     if (idx > 0) children.push(new Paragraph({ children: [new PageBreak()] }));
     children.push(new Paragraph({ text: report.displayName, heading: HeadingLevel.HEADING_1 }));
-    children.push(new Paragraph({ text: `Atualizado em ${report.updatedAt.toLocaleString('pt-BR')}` }));
+    children.push(new Paragraph({ text: `Atualizado em ${formatDateTimeBR(report.updatedAt)}` }));
     children.push(new Paragraph({ text: '' }));
 
     for (const line of markdownLines(report.content)) {
