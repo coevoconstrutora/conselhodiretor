@@ -3,10 +3,18 @@
  * kb-sources.ts (que é server-only) para serem testáveis por unidade.
  */
 
-/** Extrai o texto de um PDF (`pdf-parse`, biblioteca pura Node — sem serviço externo). */
+/**
+ * Extrai o texto de um PDF (`unpdf` — wrapper do pdf.js oficial da Mozilla,
+ * sem serviço externo). Antes usava `pdf-parse@1.1.1` (parado desde ~2020,
+ * empacota um pdf.js antigo): falhava com "bad XRef entry" em PDFs gerados
+ * pelo NOSSO PRÓPRIO export (`report-export.ts`, via `pdfkit`) — alguém que
+ * baixasse um relatório e tentasse reanexá-lo como fonte batia nisso. `unpdf`
+ * resolve (testado contra um PDF real gerado por `pdfkit` neste repo).
+ */
 export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import('pdf-parse')).default;
-  const { text } = await pdfParse(buffer);
+  const { extractText, getDocumentProxy } = await import('unpdf');
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const { text } = await extractText(pdf, { mergePages: true });
   return text.trim();
 }
 

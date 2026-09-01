@@ -1,5 +1,21 @@
 import { describe, it, expect } from 'vitest';
+import PDFDocument from 'pdfkit';
 import { stripHtml, isBlockedUrl, extractUploadedFileText } from './text-extract';
+
+/** Gera um PDF de verdade com `pdfkit` — MESMA lib do export de relatórios
+ * (`report-export.ts`), pra testar o cenário real: alguém baixa um relatório
+ * exportado e tenta reanexá-lo como fonte de conhecimento. */
+function buildTestPdf(lines: string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument();
+    const chunks: Buffer[] = [];
+    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    for (const line of lines) doc.text(line);
+    doc.end();
+  });
+}
 
 describe('stripHtml — extração de texto de páginas', () => {
   it('remove tags, scripts e styles preservando o texto', () => {
@@ -80,5 +96,19 @@ describe('extractUploadedFileText — upload de fonte de conhecimento (.txt/.md/
     const big = 'a'.repeat(2 * 1024 * 1024 + 1);
     const file = new File([big], 'grande.txt');
     await expect(extractUploadedFileText(file)).rejects.toThrow(/grande demais/);
+  });
+
+  it('extrai texto de um PDF gerado pelo pdfkit — mesma lib do export de relatórios', async () => {
+    // Regressão: pdf-parse@1.1.1 (removido) falhava com "bad XRef entry" em
+    // PDFs gerados pelo NOSSO próprio pdfkit — alguém baixando um relatório
+    // exportado e reanexando como fonte batia nisso. `unpdf` resolve.
+    const pdfBuffer = await buildTestPdf([
+      'Relatório de teste da reunião do conselho.',
+      'VGV da Torre 3 é R$ 40 milhões, com margem de 22%.',
+    ]);
+    const file = new File([Uint8Array.from(pdfBuffer)], 'relatorio.pdf', { type: 'application/pdf' });
+    const content = await extractUploadedFileText(file);
+    expect(content).toContain('Relatório de teste da reunião do conselho.');
+    expect(content).toContain('VGV da Torre 3 é R$ 40 milhões, com margem de 22%.');
   });
 });
