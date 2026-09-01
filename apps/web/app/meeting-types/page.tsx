@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
-import { getCurrentUser, canWrite } from '@/lib/auth';
+import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { listMeetingTypes } from '@/lib/meeting-type-actions';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
@@ -11,8 +11,7 @@ import { CreateMeetingTypeForm, MeetingTypesList } from '@/components/meeting-ty
 /** Tipos de reunião ("Comitê Geral", "Comitê de Engenharia", ...) — escopam
  * quais conselheiros participam. "Comitê Geral" é o padrão, não pode ser removido. */
 export default async function MeetingTypesPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
   if (!canWrite(user)) redirect('/');
 
   const db = await getDb();

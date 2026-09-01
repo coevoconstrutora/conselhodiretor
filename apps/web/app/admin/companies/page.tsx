@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth';
+import { requireCurrentUser } from '@/lib/auth';
 import { listCompanies } from '@/lib/company-actions';
 import { listSuperAdminCandidates } from '@/lib/super-admin-actions';
 import { CreateCompanyForm } from '@/components/create-company-form';
@@ -10,8 +10,7 @@ import { SuperAdminManager } from '@/components/super-admin-manager';
 /** Gestão de empresas — só super-admin. Clona a estrutura dos 9 conselheiros
  * da Coevo (nome/escopo) para toda empresa nova; conhecimento nunca é copiado. */
 export default async function CompaniesAdminPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
   if (!user.isSuperAdmin) redirect('/');
 
   const [companies, superAdminCandidates] = await Promise.all([

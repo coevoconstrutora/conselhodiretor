@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
-import { getCurrentUser, canWrite, isAdmin } from '@/lib/auth';
+import { requireCurrentUser, canWrite, isAdmin } from '@/lib/auth';
 import { logoutAction } from '@/lib/auth-actions';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
@@ -25,10 +24,7 @@ const AGENT_EMOJI: Record<string, string> = {
 
 /** Home: reuniões do empresário + gestão dos conselheiros (NotebookLM por agente). */
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
-  if (!user) {
-    redirect('/login');
-  }
+  const user = await requireCurrentUser();
 
   const db = await getDb();
   const meetings = await listMeetings(db, user.companyId, getEncryptionKey());

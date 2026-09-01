@@ -1,13 +1,12 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getCurrentUser, isAdmin } from '@/lib/auth';
+import { requireCurrentUser, isAdmin } from '@/lib/auth';
 import { listUsers } from '@/lib/user-actions';
 import { CreateUserForm, UsersTable } from '@/components/users-admin';
 
 /** Gestão de acessos — só admin. Papéis: admin / gestor / convidado (leitura). */
 export default async function UsersPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
   if (!isAdmin(user)) redirect('/');
 
   const users = await listUsers();

@@ -2,15 +2,14 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
-import { getCurrentUser, canWrite } from '@/lib/auth';
+import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
 
 /** Gestão de membros do conselho: os 9 padrão + os CUSTOM desta empresa. */
 export default async function CounselorsPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
   if (!canWrite(user)) redirect('/');
 
   const db = await getDb();

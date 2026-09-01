@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { getMeeting } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
 import { getAgentProfiles } from '@conselho/kb';
-import { getCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
+import { requireCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-actions';
@@ -23,8 +23,7 @@ import { TelemetryReport } from '@/components/telemetry-report';
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
 export default async function MeetingPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
 
   const { id } = await params;
   const db = await getDb();

@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { redirect, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
-import { getCurrentUser } from '@/lib/auth';
+import { requireCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listKbSources, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
@@ -29,8 +29,7 @@ const KIND_LABEL: Record<string, string> = {
 
 /** "NotebookLM do conselheiro": perfil editável + fontes de conhecimento. */
 export default async function CounselorPage({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
 
   const { id } = await params;
   const db = await getDb();

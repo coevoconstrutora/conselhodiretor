@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { validateSession } from '@conselho/auth';
 import type { AppUserRole } from '@conselho/db';
 import { getDb } from './db';
@@ -76,6 +77,21 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     homeCompanyId: user.company_id,
     isSuperAdmin: user.is_super_admin,
   };
+}
+
+/**
+ * Como `getCurrentUser()`, mas redireciona pro login se não autenticado —
+ * substitui o par `const user = await getCurrentUser(); if (!user)
+ * redirect('/login');` duplicado em toda página. O `middleware.ts` já
+ * barra a requisição não-autenticada antes de chegar aqui; esta função
+ * continua existindo como segunda camada (nunca confie só no middleware
+ * pra dado sensível) E porque a página ainda precisa do objeto `CurrentUser`
+ * em si (papel, empresa ativa) — não só saber que "está autenticado".
+ */
+export async function requireCurrentUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+  return user;
 }
 
 /** Empresas que o PRÓPRIO usuário integra (company_member) — pro seletor de quem não é super-admin. */

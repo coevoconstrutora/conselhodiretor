@@ -1,13 +1,11 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/lib/auth';
+import { requireCurrentUser } from '@/lib/auth';
 import { startMeetingAction } from '@/lib/meeting-actions';
 import { listMeetingTypes } from '@/lib/meeting-type-actions';
 
 /** Nova reunião: título + tipo (escopa quais conselheiros participam). */
 export default async function NewMeetingPage() {
-  const user = await getCurrentUser();
-  if (!user) redirect('/login');
+  const user = await requireCurrentUser();
 
   const types = await listMeetingTypes(user.companyId);
   const defaultType = types.find((t) => t.isDefault) ?? types[0];
