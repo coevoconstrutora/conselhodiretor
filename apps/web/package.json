@@ -35,13 +35,19 @@
     "@conselho/meeting-report": "workspace:*",
     "@conselho/audit": "workspace:*",
     "@conselho/llm-gemini": "workspace:*",
-    "@conselho/llm-openai": "workspace:*"
+    "@conselho/llm-openai": "workspace:*",
+    "docx": "^9.7.1",
+    "mammoth": "^1.12.2",
+    "pdf-parse": "^1.1.1",
+    "pdfkit": "^0.20.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.0.0",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.20.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

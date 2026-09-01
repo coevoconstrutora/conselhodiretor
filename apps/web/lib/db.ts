@@ -24,9 +24,16 @@ async function seedDemoUser(db: SqlExecutor): Promise<void> {
   if (Number(res.rows[0]?.count ?? 0) > 0) return;
   const company = await db.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
   const companyId = company.rows[0]!.id; // migration 0010 sempre cria 'coevo'
-  await db.query(
-    "INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', $4)",
+  const inserted = await db.query<{ id: string }>(
+    "INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', $4) RETURNING id",
     [DEMO_EMAIL, 'Empresário Demo', hashPassword(DEMO_PASSWORD), companyId],
+  );
+  // migration 0011 (company_member) passou a ser a ÚNICA fonte de papel por
+  // empresa (getCurrentUser) — sem esta linha o demo vira 'convidado' (só
+  // leitura) assim que essa migration aplica, mesmo com app_user.role='admin'.
+  await db.query(
+    "INSERT INTO company_member (user_id, company_id, role) VALUES ($1, $2, 'admin')",
+    [inserted.rows[0]!.id, companyId],
   );
 }
 

@@ -7,6 +7,7 @@ import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getCompanyKnowledgeStore } from './board-runtime';
+import { extractUploadedFileText } from './text-extract';
 import {
   addKbSource,
   deleteKbSource,
@@ -121,10 +122,7 @@ export async function addUrlSourceAction(
   }
 }
 
-const TEXT_FILE_RE = /\.(txt|md|markdown|csv)$/i;
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB de texto puro
-
-/** Adiciona conhecimento por ARQUIVO (.txt/.md/.csv — texto puro). */
+/** Adiciona conhecimento por ARQUIVO (.txt/.md/.csv/.pdf/.docx). */
 export async function addFileSourceAction(
   _prev: CounselorActionState,
   formData: FormData,
@@ -139,15 +137,8 @@ export async function addFileSourceAction(
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0)
-      return { error: 'Selecione um arquivo .txt, .md ou .csv.' };
-    if (!TEXT_FILE_RE.test(file.name))
-      return {
-        error:
-          'Formato não suportado. Envie .txt, .md ou .csv — para PDF/Word, copie o texto e use "Colar texto".',
-      };
-    if (file.size > MAX_FILE_BYTES) return { error: 'Arquivo grande demais (máx. 2 MB de texto).' };
-    const content = (await file.text()).trim();
-    if (content.length < 20) return { error: 'O arquivo não tem texto útil.' };
+      return { error: 'Selecione um arquivo .txt, .md, .csv, .pdf ou .docx.' };
+    const content = await extractUploadedFileText(file);
     await addKbSource(
       db,
       user.companyId,

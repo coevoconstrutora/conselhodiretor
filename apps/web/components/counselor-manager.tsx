@@ -143,13 +143,12 @@ export function AddFileForm({ agentId }: { agentId: string }) {
       <input type="hidden" name="agentId" value={agentId} />
       <label className="block">
         <span className="text-xs font-semibold text-ink">
-          Arquivo .txt, .md ou .csv (máx. 2 MB) — para PDF/Word, copie o texto e use
-          &ldquo;Adicionar texto&rdquo;
+          Arquivo .txt, .md, .csv, .pdf ou .docx (máx. 2 MB texto / 15 MB PDF/Word)
         </span>
         <input
           name="file"
           type="file"
-          accept=".txt,.md,.markdown,.csv,text/plain,text/markdown,text/csv"
+          accept=".txt,.md,.markdown,.csv,.pdf,.docx,text/plain,text/markdown,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
           required
           className={`${inputCls} file:mr-3 file:rounded-[var(--radius)] file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
         />

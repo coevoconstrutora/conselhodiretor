@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripHtml, isBlockedUrl } from './text-extract';
+import { stripHtml, isBlockedUrl, extractUploadedFileText } from './text-extract';
 
 describe('stripHtml — extração de texto de páginas', () => {
   it('remove tags, scripts e styles preservando o texto', () => {
@@ -53,5 +53,32 @@ describe('isBlockedUrl — guarda anti-SSRF do importador de links', () => {
     expect(isBlockedUrl('file:///etc/passwd')).toBe(true);
     expect(isBlockedUrl('ftp://servidor/arquivo')).toBe(true);
     expect(isBlockedUrl('não é url')).toBe(true);
+  });
+});
+
+describe('extractUploadedFileText — upload de fonte de conhecimento (.txt/.md/.csv/.pdf/.docx)', () => {
+  it('lê arquivo de texto puro direto, sem biblioteca de extração', async () => {
+    const file = new File(['VGV da Torre 3 é R$ 40 milhões, com margem de 22%.'], 'nota.txt', {
+      type: 'text/plain',
+    });
+    await expect(extractUploadedFileText(file)).resolves.toBe(
+      'VGV da Torre 3 é R$ 40 milhões, com margem de 22%.',
+    );
+  });
+
+  it('rejeita formato não suportado (.doc antigo, .xlsx etc.)', async () => {
+    const file = new File(['conteúdo qualquer'], 'planilha.xlsx');
+    await expect(extractUploadedFileText(file)).rejects.toThrow(/Formato não suportado/);
+  });
+
+  it('rejeita texto curto demais para virar conhecimento', async () => {
+    const file = new File(['oi'], 'nota.txt');
+    await expect(extractUploadedFileText(file)).rejects.toThrow(/texto útil/);
+  });
+
+  it('rejeita arquivo de texto acima do limite de 2 MB', async () => {
+    const big = 'a'.repeat(2 * 1024 * 1024 + 1);
+    const file = new File([big], 'grande.txt');
+    await expect(extractUploadedFileText(file)).rejects.toThrow(/grande demais/);
   });
 });

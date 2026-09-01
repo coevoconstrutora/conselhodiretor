@@ -16,6 +16,7 @@ import { formatMeetingDuration } from '@/lib/format';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
+import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
 
@@ -281,6 +282,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                   ))}
                 </div>
               )}
+              {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
             </section>
 
             {/* Histórico de sínteses do Presidente durante a reunião */}

@@ -7,14 +7,20 @@ import {
   saveAgentReport,
   listAgentReports,
 } from '@conselho/meeting-report';
-import { meetingBelongsToCompany } from '@conselho/meetings';
-import { COUNSELOR_AGENT_IDS, type AgentId, ALL_AGENT_IDS } from '@conselho/providers';
+import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
+import { PRESIDENT_AGENT_ID, type AgentId } from '@conselho/providers';
+import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getNoteInputs } from './board-runtime';
 import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
+import { loadAndApplyProfileOverrides } from './kb-sources';
+import { buildReportsPdf } from './report-export';
+import { sendReportsEmail } from './email';
+
+export type CounselorEmailState = { error?: string; ok?: string } | null;
 
 /**
  * Gera os relatórios finais da reunião: 1 por conselheiro (visão da
@@ -44,9 +50,16 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     // JSON de string — 1500 tokens cortava a resposta no meio (JSON inválido).
     const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 4000 });
 
-    // 1 relatório por conselheiro, em série (evita rajada de 8 chamadas simultâneas)
+    // roster REAL da empresa (padrão + custom) — nunca uma lista fixa, senão
+    // um conselheiro custom nunca ganharia relatório (Etapa 20)
+    await loadAndApplyProfileOverrides(db, user.companyId);
+    const counselorAgentIds = Object.keys(getAgentProfiles(user.companyId)).filter(
+      (id) => id !== PRESIDENT_AGENT_ID,
+    ) as AgentId[];
+
+    // 1 relatório por conselheiro, em série (evita rajada de N chamadas simultâneas)
     const reports: Array<{ agentId: AgentId; content: string }> = [];
-    for (const agentId of COUNSELOR_AGENT_IDS) {
+    for (const agentId of counselorAgentIds) {
       const content = await generateCounselorReport(llm, user.companyId, agentId, inputs.finals, inputs.contributions);
       await saveAgentReport(db, meetingId, agentId, content, key, {
         action: 'generate',
@@ -79,11 +92,12 @@ export async function saveAgentReportAction(formData: FormData): Promise<void> {
   const agentId = String(formData.get('agentId') ?? '') as AgentId;
   const content = String(formData.get('content') ?? '').trim();
   if (!meetingId || !content) throw new Error('Dados incompletos.');
-  if (!(ALL_AGENT_IDS as readonly string[]).includes(agentId)) throw new Error('Agente inválido.');
   const db = await getDb();
   if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
     throw new Error('Reunião não encontrada.');
   }
+  await loadAndApplyProfileOverrides(db, user.companyId);
+  if (!getAgentProfiles(user.companyId)[agentId]) throw new Error('Agente inválido.');
   await saveAgentReport(db, meetingId, agentId, content, getEncryptionKey(), { action: 'edit' });
   revalidatePath(`/meetings/${meetingId}`);
 }
@@ -92,4 +106,42 @@ export async function saveAgentReportAction(formData: FormData): Promise<void> {
 export async function loadReports(meetingId: string) {
   const db = await getDb();
   return listAgentReports(db, meetingId, getEncryptionKey());
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Envia os relatórios (PDF anexado) por e-mail — reaproveita a infra do Resend. */
+export async function sendReportsEmailAction(
+  _prev: CounselorEmailState,
+  formData: FormData,
+): Promise<CounselorEmailState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem enviar relatórios.' };
+  const meetingId = String(formData.get('meetingId') ?? '');
+  const to = String(formData.get('to') ?? '').trim();
+  if (!meetingId) return { error: 'Reunião inválida.' };
+  if (!EMAIL_RE.test(to)) return { error: 'Informe um e-mail válido.' };
+  try {
+    const db = await getDb();
+    const key = getEncryptionKey();
+    const meeting = await getMeeting(db, meetingId, user.companyId, key);
+    if (!meeting) return { error: 'Reunião não encontrada.' };
+    const reports = await listAgentReports(db, meetingId, key);
+    if (reports.length === 0) return { error: 'Gere os relatórios antes de enviar por e-mail.' };
+    await loadAndApplyProfileOverrides(db, user.companyId);
+    const profiles = getAgentProfiles(user.companyId);
+    const items = reports.map((r) => ({
+      agentId: r.agentId,
+      displayName: profiles[r.agentId]?.displayName ?? r.agentId,
+      content: r.content,
+      updatedAt: r.updatedAt,
+    }));
+    const pdf = await buildReportsPdf(meeting.title, items);
+    await sendReportsEmail(to, meeting.title, pdf);
+    return { ok: `Relatórios enviados para ${to}.` };
+  } catch (err) {
+    console.error('[relatorios] envio por e-mail falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao enviar o e-mail.' };
+  }
 }

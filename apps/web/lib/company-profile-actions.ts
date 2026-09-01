@@ -7,6 +7,7 @@ import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { saveCompanyProfile, addCompanySource, deleteCompanySource } from './company-profile';
 import { fetchUrlText } from './kb-sources';
+import { extractUploadedFileText } from './text-extract';
 import { lookupCnpj, CnpjLookupError, type CnpjData } from './cnpj-lookup';
 
 export type CompanyProfileActionState = { error?: string; ok?: string } | null;
@@ -81,10 +82,7 @@ export async function addCompanyUrlSourceAction(
   }
 }
 
-const TEXT_FILE_RE = /\.(txt|md|markdown|csv)$/i;
-const MAX_FILE_BYTES = 2 * 1024 * 1024; // 2 MB de texto puro
-
-/** Adiciona conhecimento por ARQUIVO (.txt/.md/.csv — texto puro). */
+/** Adiciona conhecimento por ARQUIVO (.txt/.md/.csv/.pdf/.docx). */
 export async function addCompanyFileSourceAction(
   _prev: CompanyProfileActionState,
   formData: FormData,
@@ -95,15 +93,8 @@ export async function addCompanyFileSourceAction(
   try {
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0)
-      return { error: 'Selecione um arquivo .txt, .md ou .csv.' };
-    if (!TEXT_FILE_RE.test(file.name))
-      return {
-        error:
-          'Formato não suportado. Envie .txt, .md ou .csv — para PDF/Word, copie o texto e use "Colar texto".',
-      };
-    if (file.size > MAX_FILE_BYTES) return { error: 'Arquivo grande demais (máx. 2 MB de texto).' };
-    const content = (await file.text()).trim();
-    if (content.length < 20) return { error: 'O arquivo não tem texto útil.' };
+      return { error: 'Selecione um arquivo .txt, .md, .csv, .pdf ou .docx.' };
+    const content = await extractUploadedFileText(file);
     const db = await getDb();
     await addCompanySource(db, user.companyId, getEncryptionKey(), {
       kind: 'file',

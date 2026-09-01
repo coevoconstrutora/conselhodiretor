@@ -1,7 +1,63 @@
 /**
- * Funções PURAS de extração/validação de fontes de conhecimento — separadas de
+ * Funções de extração/validação de fontes de conhecimento — separadas de
  * kb-sources.ts (que é server-only) para serem testáveis por unidade.
  */
+
+/** Extrai o texto de um PDF (`pdf-parse`, biblioteca pura Node — sem serviço externo). */
+export async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pdfParse = (await import('pdf-parse')).default;
+  const { text } = await pdfParse(buffer);
+  return text.trim();
+}
+
+/** Extrai o texto de um Word `.docx` (`mammoth` — só o `.docx` moderno, não o `.doc` binário antigo). */
+export async function extractDocxText(buffer: Buffer): Promise<string> {
+  const mammoth = await import('mammoth');
+  const { value } = await mammoth.extractRawText({ buffer });
+  return value.trim();
+}
+
+const TEXT_FILE_RE = /\.(txt|md|markdown|csv)$/i;
+const MAX_TEXT_FILE_BYTES = 2 * 1024 * 1024; // 2 MB de texto puro
+const MAX_BINARY_FILE_BYTES = 15 * 1024 * 1024; // 15 MB de PDF/DOCX (formato binário, mais pesado que o texto que carrega)
+
+/**
+ * Extrai o texto de um upload de fonte de conhecimento — `.txt/.md/.csv`
+ * (direto), `.pdf` (`pdf-parse`) ou `.docx` (`mammoth`). Compartilhado entre
+ * o "NotebookLM por conselheiro" e o perfil da empresa — mesmo formato,
+ * mesmas regras, um lugar só para não divergir.
+ */
+export async function extractUploadedFileText(file: File): Promise<string> {
+  const isText = TEXT_FILE_RE.test(file.name);
+  const isPdf = /\.pdf$/i.test(file.name);
+  const isDocx = /\.docx$/i.test(file.name);
+  if (!isText && !isPdf && !isDocx) {
+    throw new Error(
+      'Formato não suportado. Envie .txt, .md, .csv, .pdf ou .docx (Word moderno — não o .doc antigo).',
+    );
+  }
+  const maxBytes = isText ? MAX_TEXT_FILE_BYTES : MAX_BINARY_FILE_BYTES;
+  if (file.size > maxBytes) {
+    throw new Error(`Arquivo grande demais (máx. ${Math.round(maxBytes / (1024 * 1024))} MB).`);
+  }
+
+  let content: string;
+  if (isText) {
+    content = (await file.text()).trim();
+  } else {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    try {
+      content = isPdf ? await extractPdfText(buffer) : await extractDocxText(buffer);
+    } catch (err) {
+      console.error(`[upload] extração de ${isPdf ? 'PDF' : 'DOCX'} falhou:`, err);
+      throw new Error(
+        `Não foi possível extrair texto deste ${isPdf ? 'PDF' : 'arquivo Word'} — verifique se não é uma imagem escaneada sem texto (OCR não é suportado).`,
+      );
+    }
+  }
+  if (content.length < 20) throw new Error('O arquivo não tem texto útil extraível.');
+  return content;
+}
 
 /** Remove tags/estilos/scripts de HTML e devolve texto legível por linhas. */
 export function stripHtml(html: string): string {

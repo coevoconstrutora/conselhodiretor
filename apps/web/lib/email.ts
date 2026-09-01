@@ -19,10 +19,23 @@ export class EmailError extends Error {
   }
 }
 
-async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+export interface EmailAttachment {
+  readonly filename: string;
+  /** Conteúdo binário do anexo — convertido para base64 antes de ir pro Resend. */
+  readonly content: Buffer;
+}
+
+async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  attachments?: readonly EmailAttachment[],
+): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.warn(`[email] RESEND_API_KEY ausente — e-mail p/ ${to} (${subject}) não enviado, só logado:\n${html}`);
+    console.warn(
+      `[email] RESEND_API_KEY ausente — e-mail p/ ${to} (${subject}${attachments?.length ? `, ${attachments.length} anexo(s)` : ''}) não enviado, só logado:\n${html}`,
+    );
     return;
   }
 
@@ -33,7 +46,13 @@ async function sendEmail(to: string, subject: string, html: string): Promise<voi
       'content-type': 'application/json',
       authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      html,
+      attachments: attachments?.map((a) => ({ filename: a.filename, content: a.content.toString('base64') })),
+    }),
   });
 
   if (!response.ok) {
@@ -51,6 +70,23 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string): Prom
       <p><a href="${resetUrl}">Clique aqui para escolher uma nova senha</a> (o link expira em 1 hora).</p>
       <p>Se não foi você, ignore este e-mail — sua senha continua a mesma.</p>
     `.trim(),
+  );
+}
+
+/** Envia os relatórios finais de uma reunião (PDF anexado) — botão "Enviar por e-mail". */
+export async function sendReportsEmail(
+  to: string,
+  meetingTitle: string,
+  pdfBuffer: Buffer,
+): Promise<void> {
+  await sendEmail(
+    to,
+    `Relatórios do Conselho — ${meetingTitle}`,
+    `
+      <p>Segue em anexo (PDF) os relatórios do conselho para a reunião <strong>${meetingTitle}</strong>.</p>
+      <p>Lembrete: são rascunhos gerados por IA, revisados/editados pelo empresário antes do envio — a decisão é sempre sua.</p>
+    `.trim(),
+    [{ filename: 'relatorios-conselho.pdf', content: pdfBuffer }],
   );
 }
 
