@@ -42,6 +42,19 @@ export interface MeetingRow {
   confirmed_at: Date | null;
   closed_at: Date | null;
   participant_count: number | null;
+  meeting_type_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/** Tipo de reunião (Comitê Geral, Comitê de Engenharia, ...) — escopa quais
+ * conselheiros participam; Presidente nunca entra aqui, sempre sintetiza. */
+export interface MeetingTypeRow {
+  id: string;
+  company_id: string;
+  name: string;
+  agent_ids: string[];
+  is_default: boolean;
   created_at: Date;
   updated_at: Date;
 }

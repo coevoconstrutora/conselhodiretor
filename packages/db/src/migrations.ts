@@ -334,4 +334,35 @@ SELECT id, company_id, role FROM app_user
 ON CONFLICT (user_id, company_id) DO NOTHING;
 `,
   },
+  {
+    name: '0012_meeting_types',
+    sql: `
+-- Tipos de reunião (ex.: "Comitê Geral" com os 8 conselheiros, "Comitê de
+-- Engenharia" só com Engenharia) — o dono define quais conselheiros
+-- participam de cada tipo; o Presidente sempre sintetiza no final e por
+-- isso NUNCA entra em agent_ids (não é um "participante" que reage a gatilho).
+CREATE TABLE IF NOT EXISTS meeting_type (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id  uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  agent_ids   text[] NOT NULL,
+  is_default  boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (company_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_type_company ON meeting_type(company_id);
+
+-- Semeia "Comitê Geral" (todos os 8) pra toda empresa já existente — nunca
+-- deixa uma empresa sem nenhum tipo pra escolher ao criar reunião.
+INSERT INTO meeting_type (company_id, name, agent_ids, is_default)
+SELECT id, 'Comitê Geral',
+  ARRAY['engenharia','vendas','mercado','arquitetura','legal','cs','cfo','futurista'],
+  true
+FROM company
+ON CONFLICT (company_id, name) DO NOTHING;
+
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS meeting_type_id uuid REFERENCES meeting_type(id);
+`,
+  },
 ];

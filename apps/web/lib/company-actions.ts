@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { setActiveCompany } from '@conselho/auth';
 import { getAgentProfiles } from '@conselho/kb';
-import { ALL_AGENT_IDS } from '@conselho/providers';
+import { ALL_AGENT_IDS, COUNSELOR_AGENT_IDS } from '@conselho/providers';
 import type { CompanyRow } from '@conselho/db';
 import { getCurrentUser, SESSION_COOKIE } from './auth';
 import { getDb } from './db';
@@ -118,6 +118,13 @@ export async function createCompanyAction(
       );
     }
   }
+
+  // "Comitê Geral" (todos os conselheiros) — toda empresa precisa de pelo
+  // menos 1 tipo de reunião pra escolher ao criar reunião.
+  await db.query(
+    'INSERT INTO meeting_type (company_id, name, agent_ids, is_default) VALUES ($1, $2, $3, true)',
+    [companyId, 'Comitê Geral', COUNSELOR_AGENT_IDS as string[]],
+  );
 
   revalidatePath('/admin/companies');
   return { ok: `Empresa "${name}" criada — use o seletor no topo para trocar para ela.` };

@@ -55,6 +55,7 @@ describe('Migrations — schema base', () => {
       '0009_meeting_summary',
       '0010_multi_company',
       '0011_company_membership',
+      '0012_meeting_types',
     ]);
   });
 

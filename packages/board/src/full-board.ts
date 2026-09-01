@@ -83,6 +83,13 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * Prefixa o CaseState em toda chamada — sem isso, cada reunião é uma ilha.
    */
   readonly priorMeetingsContext?: string;
+  /**
+   * Tipo de reunião (Etapa "Tipos de reunião"): só estes agentes reagem a
+   * gatilho — o Presidente nunca entra aqui (sintetiza sempre, não é um
+   * "participante"). `undefined` ⇒ todos os conselheiros participam
+   * (compat: reunião sem tipo definido).
+   */
+  readonly activeAgentIds?: readonly AgentId[];
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -133,6 +140,8 @@ export class FullBoardOrchestrator {
   private readonly configReview: Pick<FullBoardConfig, 'caseReviewMs' | 'onCaseReview' | 'pauseMs'>;
 
   private readonly profiles: Record<AgentId, { agentId: AgentId; displayName: string; scope: string }>;
+  /** `undefined` ⇒ todos participam (compat: reunião sem tipo definido). */
+  private readonly activeAgentIds: ReadonlySet<AgentId> | undefined;
 
   constructor(
     private readonly companyId: string,
@@ -145,6 +154,7 @@ export class FullBoardOrchestrator {
     this.gate = new BoardGatekeeper(config);
     this.reasoner = new AgentReasoner(companyId, retriever, llm);
     this.profiles = getAgentProfiles(companyId);
+    this.activeAgentIds = config.activeAgentIds ? new Set(config.activeAgentIds) : undefined;
     this.semanticDedupThreshold = config.semanticDedupThreshold ?? DEFAULT_SEMANTIC_DEDUP_THRESHOLD;
     this.semanticDedup = new SemanticDeduplicator({ threshold: this.semanticDedupThreshold });
     this.caseState = new CaseStateTracker(llm, {
@@ -224,6 +234,9 @@ export class FullBoardOrchestrator {
 
     // 3 personas monitoram o MESMO segmento — sem invocação (FR2)
     for (const match of this.detector.detect(text, at)) {
+      // Tipo de reunião: agente fora do escopo do tipo nunca reage (Presidente
+      // sempre sintetiza no final, independente disso).
+      if (this.activeAgentIds && !this.activeAgentIds.has(match.trigger.agentId)) continue;
       const candidate = toCandidate(match);
       const decision = this.gate.submit(candidate, at);
       this.config2.onDecision?.(decision.kind);
@@ -277,6 +290,7 @@ export class FullBoardOrchestrator {
     this.lastCaseReviewAt = now;
     try {
       const scopes = Object.values(this.profiles)
+        .filter((p) => p.agentId !== 'presidente' && (!this.activeAgentIds || this.activeAgentIds.has(p.agentId)))
         .map((p) => `- ${p.agentId} (${p.displayName}): ${p.scope}`)
         .join('\n');
       const said = this.history

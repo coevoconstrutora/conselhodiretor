@@ -9,7 +9,7 @@ import {
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
 import { NamespacedKnowledgeStore } from '@conselho/kb';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
-import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
+import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
 import { TelemetryRegistry, type GateDecisionKind, type UiEventKind, type CaseReviewOutcome } from '@conselho/telemetry';
 import {
   saveSynthesis,
@@ -343,6 +343,25 @@ async function getMeetingCompanyId(db: SqlExecutor, meetingId: string): Promise<
   return companyId;
 }
 
+/**
+ * Conselheiros que participam desta reunião, pelo tipo escolhido na criação
+ * (Etapa "Tipos de reunião") — `undefined` ⇒ reunião sem tipo (compat), todos
+ * participam. Presidente nunca entra aqui, ele só sintetiza.
+ */
+async function getMeetingActiveAgentIds(
+  db: SqlExecutor,
+  meetingId: string,
+): Promise<readonly AgentId[] | undefined> {
+  const res = await db.query<{ agent_ids: string[] | null }>(
+    `SELECT mt.agent_ids FROM meeting m
+     LEFT JOIN meeting_type mt ON mt.id = m.meeting_type_id
+     WHERE m.id = $1`,
+    [meetingId],
+  );
+  const agentIds = res.rows[0]?.agent_ids;
+  return agentIds ? (agentIds as AgentId[]) : undefined;
+}
+
 export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: string }> {
   const db = await getDb();
   const runtime = await getBoardRuntime();
@@ -364,6 +383,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   runtime.telemetry.sessionStarted(meetingId);
   const { llm, label } = makeLlm(hooks.onUsage);
   const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+  const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
   const orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
     pauseMs: 2500,
     tickMs: 1000,
@@ -376,6 +396,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     onCaseStateUpdate: hooks.onCaseStateUpdate, // B5
     onCaseReview: hooks.onCaseReview,
     priorMeetingsContext,
+    activeAgentIds,
   });
   runtime.gateway.bind(meetingId, orchestrator);
   // transcrição ao vivo p/ o painel (texto via WS — áudio nunca passa aqui, §7).
@@ -574,6 +595,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     runtime.telemetry.sessionStarted(meetingId);
     const { llm } = makeLlm(hooks.onUsage);
     const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+    const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
     orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
       pauseMs: 2500,
       tickMs: 1000,
@@ -586,6 +608,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       ...boardTuningFromEnv(), // B4: caseReviewMs + threshold do dedup por env (calibração do piloto)
       onCaseStateUpdate: hooks.onCaseStateUpdate,
       onCaseReview: hooks.onCaseReview,
+      activeAgentIds,
       priorMeetingsContext,
     });
     runtime.gateway.bind(meetingId, orchestrator);

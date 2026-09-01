@@ -14,8 +14,9 @@ export async function startMeetingAction(formData: FormData): Promise<void> {
   if (!canWrite(user)) throw new Error('Convidados não podem criar reuniões.');
   const title = String(formData.get('title') ?? '').trim();
   if (!title) throw new Error('Informe o título da reunião.');
+  const meetingTypeId = String(formData.get('meetingTypeId') ?? '').trim() || null;
   const db = await getDb();
-  const meetingId = await createMeeting(db, user.id, user.companyId, title, getEncryptionKey());
+  const meetingId = await createMeeting(db, user.id, user.companyId, title, getEncryptionKey(), meetingTypeId);
   redirect(`/meetings/${meetingId}`);
 }
 

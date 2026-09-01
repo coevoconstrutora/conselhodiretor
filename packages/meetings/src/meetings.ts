@@ -45,11 +45,12 @@ export async function createMeeting(
   companyId: string,
   title: string,
   encryptionKey: Buffer,
+  meetingTypeId?: string | null,
 ): Promise<string> {
   const titleEnc = encryptField(title, encryptionKey);
   const res = await db.query<{ id: string }>(
-    'INSERT INTO meeting (user_id, company_id, title_enc) VALUES ($1, $2, $3) RETURNING id',
-    [userId, companyId, titleEnc],
+    'INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id) VALUES ($1, $2, $3, $4) RETURNING id',
+    [userId, companyId, titleEnc, meetingTypeId ?? null],
   );
   return res.rows[0]!.id;
 }

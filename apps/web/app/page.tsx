@@ -59,6 +59,14 @@ export default async function DashboardPage() {
           >
             Empresa
           </Link>
+          {canWrite(user) ? (
+            <Link
+              href="/meeting-types"
+              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+            >
+              Tipos de reunião
+            </Link>
+          ) : null}
           {isAdmin(user) ? (
             <Link
               href="/users"

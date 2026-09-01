@@ -11,6 +11,7 @@ import type {
   LlmCompletionRequest,
   TextCompletionRequest,
   AgentContribution,
+  AgentId,
 } from '@conselho/providers';
 import { FakeTextCompleter } from '@conselho/providers';
 import { startMeetingSession } from '@conselho/session';
@@ -143,6 +144,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       textScript?: readonly string[];
       caseReviewMs?: number;
       onCaseReview?: (outcome: 'skip' | 'contribution' | 'discarded') => void;
+      activeAgentIds?: readonly AgentId[];
     } = {},
   ) {
     const stt = new PushSttProvider();
@@ -162,6 +164,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       caseStateEveryNFinals: opts.caseStateEveryNFinals,
       caseReviewMs: opts.caseReviewMs,
       onCaseReview: opts.onCaseReview,
+      activeAgentIds: opts.activeAgentIds,
     });
     const events: FullBoardEvent[] = [];
     board.subscribe((e) => events.push(e));
@@ -179,12 +182,31 @@ describe('FullBoardOrchestrator — conselho completo', () => {
 
     const agents = new Set(events.map((e) => e.contribution.agentId));
     expect(agents.has('legal')).toBe(true);
-    expect(agents.has('cfo')).toBe(true);
     // KB escopada: cada chamada do reasoner recebeu só chunks do próprio agente
     for (const call of llm.calls) {
       const namespaces = new Set(call.context.map((c) => c.agentId));
       expect(namespaces.size).toBeLessThanOrEqual(1);
     }
+    board.stop();
+    await session.stop();
+  });
+
+  it('Tipo de reunião — activeAgentIds restringe quem reage, mesmo com gatilho batendo', async () => {
+    let t = 0;
+    // mesma fala do teste acima (dispara 'legal' e outros) — mas o tipo desta
+    // reunião só inclui 'cfo': 'legal' NUNCA deve aparecer nos eventos.
+    const { stt, session, board, events } = await setup({
+      now: () => (t += 3000),
+      activeAgentIds: ['cfo'],
+    });
+
+    stt.push('A ação judicial do terreno pressiona o fluxo de caixa do empreendimento.');
+    await flush();
+    await board.flush();
+
+    const agents = new Set(events.map((e) => e.contribution.agentId));
+    expect(agents.has('legal')).toBe(false);
+    expect(agents.has('cfo')).toBe(true);
     board.stop();
     await session.stop();
   });
