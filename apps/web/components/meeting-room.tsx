@@ -8,7 +8,7 @@ import { useBoardVoice } from '@/lib/use-board-voice';
 import { useBoardStore } from '@/lib/board-store';
 import { TranscriptPanel, type TranscriptSource } from './transcript-panel';
 import { SuggestionFeed } from './suggestion-feed';
-import { CounselorStrip } from './counselor-strip';
+import { CounselorStrip, type StripCounselor } from './counselor-strip';
 import { AlertVignette } from './alert-vignette';
 import { LiveMicButton } from './live-mic-button';
 import { PipelineStatusBadge } from './pipeline-status-badge';
@@ -27,6 +27,7 @@ export function MeetingRoom({
   synthesisForm,
   endMeetingButton,
   closed,
+  agents,
 }: {
   meetingId: string;
   token: string;
@@ -35,6 +36,7 @@ export function MeetingRoom({
   synthesisForm: React.ReactNode;
   endMeetingButton?: React.ReactNode;
   closed?: boolean;
+  agents: readonly StripCounselor[];
 }) {
   // `useBoardStore` é um singleton global (fora da árvore React): sem isto,
   // trocar de reunião por navegação client-side (sem reload) deixava o
@@ -101,7 +103,8 @@ export function MeetingRoom({
           <span className="blueprint-index mr-2 text-white/50">01/</span>
           Sala do Conselho
           <span className="ml-2 text-xs font-normal tracking-wide text-emerald-200/70">
-            ● 9 conselheiros presentes
+            ● {agents.length} conselheiro{agents.length === 1 ? '' : 's'} presente
+            {agents.length === 1 ? '' : 's'}
           </span>
         </h2>
         <div className="flex items-center gap-3">
@@ -132,7 +135,7 @@ export function MeetingRoom({
       </div>
 
       {/* faixa hero — os médicos acompanham a reunião, grandes e presentes */}
-      <CounselorStrip closed={closed} />
+      <CounselorStrip agents={agents} closed={closed} />
 
       {/* a "mesa" da reunião: transcrição (documento iluminado) + feed */}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">

@@ -354,7 +354,7 @@ async function getMeetingCompanyId(db: SqlExecutor, meetingId: string): Promise<
  * (Etapa "Tipos de reunião") — `undefined` ⇒ reunião sem tipo (compat), todos
  * participam. Presidente nunca entra aqui, ele só sintetiza.
  */
-async function getMeetingActiveAgentIds(
+export async function getMeetingActiveAgentIds(
   db: SqlExecutor,
   meetingId: string,
 ): Promise<readonly AgentId[] | undefined> {

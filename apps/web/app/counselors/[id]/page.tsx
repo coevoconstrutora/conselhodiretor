@@ -7,19 +7,8 @@ import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listKbSources, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { deleteSourceAction } from '@/lib/counselor-actions';
+import { getAgentEmoji } from '@/lib/agent-display';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
-
-const AGENT_EMOJI: Record<string, string> = {
-  engenharia: '🏗️',
-  vendas: '📣',
-  mercado: '📊',
-  arquitetura: '📐',
-  legal: '⚖️',
-  cs: '🤝',
-  cfo: '💰',
-  futurista: '🔭',
-  presidente: '⭐',
-};
 
 const KIND_LABEL: Record<string, string> = {
   text: '📄 texto',
@@ -52,7 +41,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
         </Link>
         <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
           <span aria-hidden="true" className="mr-2">
-            {AGENT_EMOJI[agentId] ?? '🧑‍💼'}
+            {getAgentEmoji(agentId)}
           </span>
           {profile.displayName}
         </h1>

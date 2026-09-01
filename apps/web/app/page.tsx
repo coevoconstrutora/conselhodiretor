@@ -5,22 +5,11 @@ import { logoutAction } from '@/lib/auth-actions';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
-import { countKbSourcesByAgent, loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { formatMeetingDuration } from '@/lib/format';
+import { buildAgentRoster } from '@/lib/agent-display';
 import { CompanySwitcher } from '@/components/company-switcher';
 import { ConfigMenu } from '@/components/config-menu';
-
-const AGENT_EMOJI: Record<string, string> = {
-  engenharia: '🏗️',
-  vendas: '📣',
-  mercado: '📊',
-  arquitetura: '📐',
-  legal: '⚖️',
-  cs: '🤝',
-  cfo: '💰',
-  futurista: '🔭',
-  presidente: '⭐',
-};
 
 /** Home: reuniões do empresário + gestão dos conselheiros (NotebookLM por agente). */
 export default async function DashboardPage() {
@@ -29,15 +18,18 @@ export default async function DashboardPage() {
   const db = await getDb();
   const meetings = await listMeetings(db, user.companyId, getEncryptionKey());
   await loadAndApplyProfileOverrides(db, user.companyId); // nomes personalizados no grid
-  const sourceCounts = await countKbSourcesByAgent(db, user.companyId);
   const profiles = getAgentProfiles(user.companyId);
+  const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">
       <header className="flex items-center justify-between border-b border-ink/10 pb-5">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
-          <p className="text-sm text-ink-muted">Seu conselho de 9 especialistas em cada reunião</p>
+          <p className="text-sm text-ink-muted">
+            Seu conselho de {specialistCount} especialista{specialistCount === 1 ? '' : 's'} em cada
+            reunião
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
@@ -133,40 +125,29 @@ export default async function DashboardPage() {
         </div>
         <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {/* Padrão + CUSTOM desta empresa — o Presidente sempre por último. */}
-          {Object.values(profiles)
-            .sort((a, b) =>
-              a.agentId === 'presidente' ? 1 : b.agentId === 'presidente' ? -1 : 0,
-            )
-            .map((profile) => {
-            const agentId = profile.agentId;
-            const count = sourceCounts.get(agentId) ?? 0;
-            const isPresident = agentId === 'presidente';
-            return (
-              <li key={agentId}>
-                <Link
-                  href={`/counselors/${agentId}`}
-                  className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
-                >
-                  <span aria-hidden="true" className="text-2xl leading-none">
-                    {AGENT_EMOJI[agentId] ?? '🧑‍💼'}
+          {buildAgentRoster(profiles).map((agent) => (
+            <li key={agent.id}>
+              <Link
+                href={`/counselors/${agent.id}`}
+                className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
+              >
+                <span aria-hidden="true" className="text-2xl leading-none">
+                  {agent.emoji}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-ink">{agent.name}</span>
+                  {agent.area ? (
+                    <span className="block truncate text-xs font-medium text-brand/80">
+                      {agent.area}
+                    </span>
+                  ) : null}
+                  <span className="mt-1 line-clamp-3 block text-xs leading-snug text-ink-muted">
+                    {agent.briefing}
                   </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-ink">
-                      {profile.displayName}
-                    </span>
-                    <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-ink-muted">
-                      {profile.scope}
-                    </span>
-                    <span className="blueprint-index mt-1.5 block text-brand/70">
-                      {isPresident
-                        ? 'sintetizador — sem base própria'
-                        : `${count} fonte(s) própria(s) + base padrão`}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+                </span>
+              </Link>
+            </li>
+          ))}
         </ul>
       </section>
     </main>

@@ -4,26 +4,23 @@ import { useEffect, useReducer } from 'react';
 import { useBoardStore, type BoardContributionItem } from '@/lib/board-store';
 
 /**
- * Faixa dos 9 conselheiros no topo da sala. Quem contribui ganha SPOTLIGHT
- * (o quadro cresce), balão de fala com a contribuição e equalizador pulsando.
- * Em repouso a sala é 100% parada. Avatares tipográficos (iniciais + emoji) —
- * retratos/vídeo são iteração futura; o slot já tem a proporção.
+ * Faixa dos conselheiros no topo da sala (padrão + CUSTOM da empresa, e
+ * escopados pelo tipo de reunião — ver `agents` prop). Quem contribui ganha
+ * SPOTLIGHT (o quadro cresce), balão de fala com a contribuição e
+ * equalizador pulsando. Em repouso a sala é 100% parada. Avatares
+ * tipográficos (iniciais + emoji) — retratos/vídeo são iteração futura; o
+ * slot já tem a proporção.
  *
  * A11y: balão é aria-hidden (o feed anuncia via ARIA-live — sem duplicar);
  * reduced-motion desliga equalizador e a transição de tamanho (CSS).
  */
 
-const COUNSELORS = [
-  { id: 'engenharia', emoji: '🏗️', name: 'Engenharia', specialty: 'Lean Construction' },
-  { id: 'vendas', emoji: '📣', name: 'Vendas', specialty: 'Vendas & Marketing' },
-  { id: 'mercado', emoji: '📊', name: 'Mercado', specialty: 'Inteligência & Produto' },
-  { id: 'arquitetura', emoji: '📐', name: 'Arquitetura', specialty: 'Arquitetura & Urbanismo' },
-  { id: 'legal', emoji: '⚖️', name: 'Legal', specialty: 'Legal & Compliance' },
-  { id: 'cs', emoji: '🤝', name: 'CS', specialty: 'Customer Success' },
-  { id: 'cfo', emoji: '💰', name: 'CFO', specialty: 'Funding, Caixa & MCMV' },
-  { id: 'futurista', emoji: '🔭', name: 'Futurista', specialty: 'Tendências' },
-  { id: 'presidente', emoji: '⭐', name: 'Presidente', specialty: 'Síntese do Conselho' },
-] as const;
+export interface StripCounselor {
+  readonly id: string;
+  readonly emoji: string;
+  readonly name: string;
+  readonly area: string;
+}
 
 const SIGNAL_WINDOW_MS = 8000;
 const SPEAK_WINDOW_MS = 7000;
@@ -46,14 +43,20 @@ function latestBy(
   return null;
 }
 
-export function CounselorStrip({ closed = false }: { closed?: boolean }) {
+export function CounselorStrip({
+  agents,
+  closed = false,
+}: {
+  agents: readonly StripCounselor[];
+  closed?: boolean;
+}) {
   const contributions = useBoardStore((s) => s.contributions);
   const silenced = useBoardStore((s) => s.silenced);
   const toggleSilence = useBoardStore((s) => s.toggleSilence);
   const [, tick] = useReducer((x: number) => x + 1, 0);
   const now = Date.now();
 
-  const states = COUNSELORS.map((counselor) => {
+  const states = agents.map((counselor) => {
     const latest = latestBy(contributions, counselor.id);
     const isSilenced = silenced.has(counselor.id);
     const signaling =
@@ -116,7 +119,7 @@ export function CounselorStrip({ closed = false }: { closed?: boolean }) {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-9">
+      <div className="grid grid-cols-3 gap-2 sm:[grid-template-columns:repeat(auto-fit,minmax(72px,1fr))]">
         {states.map(({ counselor, isSilenced, signaling, speaking }, i) => {
           const inSpotlight = i === activeIdx;
           return (
@@ -149,7 +152,7 @@ export function CounselorStrip({ closed = false }: { closed?: boolean }) {
                 <p className="text-[11px] font-semibold leading-tight text-white">
                   {counselor.name}
                 </p>
-                <p className="text-[9px] leading-tight text-white/60">{counselor.specialty}</p>
+                <p className="text-[9px] leading-tight text-white/60">{counselor.area}</p>
                 <p className="mt-0.5 text-[9px] font-medium">
                   {isSilenced ? (
                     <span className="text-white/60">🔇</span>

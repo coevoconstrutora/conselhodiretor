@@ -11,8 +11,14 @@ import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-act
 import { startDemoBoardAction, requestSynthesisAction } from '@/lib/board-actions';
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
-import { getCompanyKnowledgeStore, getTelemetryReport, BOARD_WS_PORT } from '@/lib/board-runtime';
+import {
+  getCompanyKnowledgeStore,
+  getTelemetryReport,
+  getMeetingActiveAgentIds,
+  BOARD_WS_PORT,
+} from '@/lib/board-runtime';
 import { formatMeetingDuration } from '@/lib/format';
+import { buildAgentRoster } from '@/lib/agent-display';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
@@ -37,6 +43,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
     meeting.closedAt,
   );
   const profiles = getAgentProfiles(user.companyId);
+  const activeAgentIds = await getMeetingActiveAgentIds(db, id);
+  const roomAgents = buildAgentRoster(profiles).filter(
+    (a) => a.id === 'presidente' || !activeAgentIds || activeAgentIds.includes(a.id),
+  );
 
   await getCompanyKnowledgeStore(user.companyId);
   const sessionToken = (await cookies()).get(SESSION_COOKIE)?.value ?? '';
@@ -155,6 +165,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               token={sessionToken}
               wsBaseUrl={wsBaseUrl}
               closed={closed}
+              agents={roomAgents}
               endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
               startForm={
                 <form action={startDemoBoardAction}>
