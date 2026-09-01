@@ -29,7 +29,7 @@ import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
-import { createSpeakerNameTracker } from './speaker-names';
+import { createSpeakerNameTracker, type SpeakerNameTracker } from './speaker-names';
 import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
 /**
@@ -63,6 +63,8 @@ interface BoardRuntime {
   >;
   /** Último final por reunião (diagnóstico A5 — "recebendo há Xs"). */
   lastFinalAt: Map<string, number>;
+  /** Tier 2 — nomeação de locutor: 1 tracker vivo por reunião, pra correção manual alcançar a sessão certa. */
+  speakerNames: Map<string, SpeakerNameTracker>;
 }
 
 const globalForBoard = globalThis as unknown as {
@@ -107,6 +109,7 @@ async function init(): Promise<BoardRuntime> {
     telemetry: new TelemetryRegistry(),
     active: new Map(),
     lastFinalAt: new Map(),
+    speakerNames: new Map(),
   };
 }
 
@@ -322,6 +325,7 @@ function wireSessionBroadcast(
   // Nomeia quem fala por autoapresentação ("sou a Marina") — troca "Locutor N"
   // pelo nome dali em diante, só nesta sessão ao vivo (não é biometria).
   const speakerNames = createSpeakerNameTracker();
+  runtime.speakerNames.set(meetingId, speakerNames); // Tier 2: alcançável por renameSpeaker()
   // A4: cada final REAL é persistido cifrado no ato (fila encadeada preserva a
   // ordem) — a transcrição sobrevive a deploy/restart no meio da reunião
   // (incidente 23:52). A DEMO NÃO persiste (persistTranscript=false): o script
@@ -788,10 +792,25 @@ export async function stopLiveBoard(meetingId: string): Promise<void> {
     if (current && current.session.getSnapshot().status === 'ended') {
       runtime.active.delete(meetingId);
       runtime.lastFinalAt.delete(meetingId);
+      runtime.speakerNames.delete(meetingId);
     }
     runtime.telemetry.purgeExpired();
   }, ACTIVE_RETENTION_MS);
   timer.unref?.();
+}
+
+/**
+ * Tier 2 — correção manual do nome de um locutor ("Locutor N" → nome real),
+ * pra quando ninguém se apresentou ou a autoapresentação errou. Vale só a
+ * partir da próxima fala daquele número, na sessão ao vivo/demo ATUAL —
+ * `false` se a reunião não tem sessão ativa (encerrada ou nunca iniciada).
+ */
+export async function renameSpeaker(meetingId: string, speakerNum: string, name: string): Promise<boolean> {
+  const runtime = await getBoardRuntime();
+  const tracker = runtime.speakerNames.get(meetingId);
+  if (!tracker) return false;
+  tracker.override(speakerNum, name);
+  return true;
 }
 
 /** Relatório de telemetria da reunião + sumário da instância (E10). */

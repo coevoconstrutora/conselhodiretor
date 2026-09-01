@@ -10,6 +10,7 @@ import {
   startLiveBoard,
   stopLiveBoard,
   runMeetingImprovementAnalysis,
+  renameSpeaker,
 } from './board-runtime';
 import { toActionResult, type ActionResult } from './action-result';
 
@@ -25,6 +26,34 @@ export async function startDemoBoardAction(formData: FormData): Promise<void> {
     throw new Error('Reunião não encontrada.');
   }
   await startDemoBoard(meetingId);
+}
+
+export type RenameSpeakerState = { error?: string; ok?: string } | null;
+
+/**
+ * Server action: Tier 2 — corrige/nomeia "Locutor N" na hora (quando ninguém
+ * se apresentou, ou a autoapresentação errou o nome), sem precisar de
+ * biometria de voz. Vale a partir da próxima fala daquele número.
+ */
+export async function renameSpeakerAction(
+  _prev: RenameSpeakerState,
+  formData: FormData,
+): Promise<RenameSpeakerState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem renomear locutores.' };
+  const meetingId = String(formData.get('meetingId') ?? '');
+  const speakerNum = String(formData.get('speakerNum') ?? '').trim();
+  const name = String(formData.get('name') ?? '').trim();
+  if (!meetingId || !speakerNum) return { error: 'Dados incompletos.' };
+  if (!name) return { error: 'Informe um nome.' };
+  const db = await getDb();
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    return { error: 'Reunião não encontrada.' };
+  }
+  const applied = await renameSpeaker(meetingId, speakerNum, name);
+  if (!applied) return { error: 'Sem sessão ativa no momento — inicie o board antes de renomear.' };
+  return { ok: `Locutor ${speakerNum} agora aparece como "${name}".` };
 }
 
 /** Server action: síntese do Aurélio sob demanda (FR18). */

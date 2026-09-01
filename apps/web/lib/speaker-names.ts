@@ -13,6 +13,13 @@
 export interface SpeakerNameTracker {
   /** Aplica os nomes já conhecidos e aprende um nome novo se esta fala se autoapresentar. */
   apply(text: string): string;
+  /**
+   * Tier 2 — correção manual: o dono nomeia/corrige um "Locutor N" na hora,
+   * quando ninguém se apresentou (ou a autoapresentação errou o nome). Vale
+   * a partir da PRÓXIMA fala daquele número — não reescreve o que já foi
+   * transcrito (mesma regra da autoapresentação).
+   */
+  override(speakerNum: string, name: string): void;
 }
 
 const SPEAKER_PREFIX_RE = /^Locutor (\d+): /;
@@ -56,6 +63,10 @@ export function createSpeakerNameTracker(): SpeakerNameTracker {
 
       const known = names.get(speakerNum);
       return known ? `${known}: ${rest}` : text;
+    },
+    override(speakerNum: string, name: string): void {
+      const trimmed = name.trim();
+      if (trimmed) names.set(speakerNum, titleCase(trimmed));
     },
   };
 }

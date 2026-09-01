@@ -37,4 +37,27 @@ describe('createSpeakerNameTracker — nomeia quem fala por autoapresentação',
     const out = tracker.apply('e também precisamos revisar o cronograma.');
     expect(out).toBe('e também precisamos revisar o cronograma.');
   });
+
+  it('Tier 2 — override() nomeia manualmente um locutor sem autoapresentação', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: vamos revisar o orçamento da obra.'); // ninguém se apresentou
+    tracker.override('1', 'joão');
+    const out = tracker.apply('Locutor 1: seguimos com o próximo ponto.');
+    expect(out).toBe('João: seguimos com o próximo ponto.');
+  });
+
+  it('Tier 2 — override() corrige um nome que a autoapresentação errou', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: sou a Marina, da área Jurídica.');
+    tracker.override('1', 'Mariana');
+    const out = tracker.apply('Locutor 1: só uma correção no meu nome.');
+    expect(out).toBe('Mariana: só uma correção no meu nome.');
+  });
+
+  it('Tier 2 — override() com nome vazio/em branco não sobrescreve nada', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.override('1', '   ');
+    const out = tracker.apply('Locutor 1: vamos começar.');
+    expect(out).toBe('Locutor 1: vamos começar.');
+  });
 });
