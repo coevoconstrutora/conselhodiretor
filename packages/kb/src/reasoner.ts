@@ -15,6 +15,8 @@ import { companyProfileBlock } from './company-profile';
  * auditoria). Só conhece interfaces.
  */
 
+export type RiskPosture = 'conservative' | 'moderate' | 'aggressive';
+
 export interface AgentProfile {
   readonly agentId: AgentId;
   readonly displayName: string;
@@ -22,8 +24,13 @@ export interface AgentProfile {
   readonly scope: string;
   /** Ícone curado (Font Awesome, apps/web/lib/agent-icons.tsx) — null/ausente cai no emoji. */
   readonly iconKey?: string | null;
-  /** Formação/experiência do "persona" — contexto de quem ele É, não regra do que pode opinar. */
-  readonly bio?: string | null;
+  /** Formação, senioridade, anos de experiência, certificações — quem ele É, não regra do que pode opinar. */
+  readonly professionalProfile?: string | null;
+  /** O que ele pesa ao avaliar propostas/recomendações (custo, risco, qualidade, escalabilidade...). */
+  readonly decisionCriteria?: string | null;
+  /** Como ele tende a decidir sob incerteza — molda o tom das recomendações, não o escopo. */
+  readonly riskPosture?: RiskPosture | null;
+  readonly riskPostureNotes?: string | null;
 }
 
 /**
@@ -116,13 +123,38 @@ export function getAgentProfiles(companyId: string): Record<AgentId, AgentProfil
 }
 
 /** System prompt restrito por agente — anti-extrapolação, tom de sugestão. */
+const RISK_POSTURE_LABEL: Record<RiskPosture, string> = {
+  conservative: 'conservadora — prioriza previsibilidade e mitigação de risco sobre ganho potencial',
+  moderate: 'moderada — pondera risco e retorno caso a caso, sem viés fixo',
+  aggressive: 'agressiva — tolera mais risco em troca de retorno/velocidade maiores',
+};
+
+/**
+ * Bloco de CONTEXTO de quem o conselheiro é e como ele pensa (perfil
+ * profissional, critérios de decisão, postura de risco) — nunca instrução de
+ * FORMATO de resposta (isso é regra fixa, igual pra todos, mais abaixo).
+ */
+function buildDecisionContext(profile: AgentProfile): string {
+  const parts: string[] = [];
+  if (profile.professionalProfile?.trim()) {
+    parts.push(`Seu perfil profissional: ${profile.professionalProfile.trim()}.`);
+  }
+  if (profile.decisionCriteria?.trim()) {
+    parts.push(`Ao avaliar propostas, você prioriza: ${profile.decisionCriteria.trim()}.`);
+  }
+  if (profile.riskPosture) {
+    const notes = profile.riskPostureNotes?.trim() ? ` (${profile.riskPostureNotes.trim()})` : '';
+    parts.push(`Sua postura de risco é ${RISK_POSTURE_LABEL[profile.riskPosture]}${notes}.`);
+  }
+  return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+}
+
 export function buildAgentSystem(profile: AgentProfile, companyId: string): string {
-  const bioBlock = profile.bio?.trim() ? `Sua formação/experiência: ${profile.bio.trim()}. ` : '';
   return (
     `Você é ${profile.displayName}, membro do conselho consultivo de IA de uma incorporadora imobiliária, ` +
-    `assistindo a uma reunião de negócios ao vivo. ` +
-    bioBlock +
-    `Seu escopo é ESTRITAMENTE: ${profile.scope}. ` +
+    `assistindo a uma reunião de negócios ao vivo.` +
+    buildDecisionContext(profile) +
+    ` Seu escopo é ESTRITAMENTE: ${profile.scope}. ` +
     `REGRAS INEGOCIÁVEIS: (1) NUNCA opine fora do seu escopo — se o tema pertence a outro conselheiro, ` +
     `não contribua sobre ele; (2) ancore-se no contexto de conhecimento fornecido e no que foi dito na reunião — ` +
     `não invente números nem fatos; (3) responda em português do Brasil, em 1-3 frases, em tom de sugestão ` +
@@ -147,7 +179,10 @@ export function applyAgentProfileOverrides(
     displayName?: string;
     scope?: string;
     iconKey?: string | null;
-    bio?: string | null;
+    professionalProfile?: string | null;
+    decisionCriteria?: string | null;
+    riskPosture?: RiskPosture | null;
+    riskPostureNotes?: string | null;
   }>,
 ): void {
   const profiles = getAgentProfiles(companyId);
@@ -159,7 +194,10 @@ export function applyAgentProfileOverrides(
         displayName: o.displayName?.trim() || profile.displayName,
         scope: o.scope?.trim() || profile.scope,
         iconKey: o.iconKey !== undefined ? o.iconKey : profile.iconKey,
-        bio: o.bio !== undefined ? o.bio : profile.bio,
+        professionalProfile: o.professionalProfile !== undefined ? o.professionalProfile : profile.professionalProfile,
+        decisionCriteria: o.decisionCriteria !== undefined ? o.decisionCriteria : profile.decisionCriteria,
+        riskPosture: o.riskPosture !== undefined ? o.riskPosture : profile.riskPosture,
+        riskPostureNotes: o.riskPostureNotes !== undefined ? o.riskPostureNotes : profile.riskPostureNotes,
       };
     } else if (o.displayName?.trim() && o.scope?.trim()) {
       // conselheiro CUSTOM desta empresa — não estava no template padrão
@@ -169,7 +207,10 @@ export function applyAgentProfileOverrides(
         displayName: o.displayName.trim(),
         scope: o.scope.trim(),
         iconKey: o.iconKey ?? null,
-        bio: o.bio ?? null,
+        professionalProfile: o.professionalProfile ?? null,
+        decisionCriteria: o.decisionCriteria ?? null,
+        riskPosture: o.riskPosture ?? null,
+        riskPostureNotes: o.riskPostureNotes ?? null,
       };
     }
   }

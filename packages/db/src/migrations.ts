@@ -411,4 +411,19 @@ ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS icon_key text;
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS bio text;
 `,
   },
+  {
+    name: '0017_agent_profile_decision_context',
+    sql: `
+-- Estrutura completa do perfil profissional do conselheiro: formação
+-- (renomeado de "bio" — mesmo conceito, campo mais explícito), critérios de
+-- decisão (o que ele pesa ao avaliar propostas) e postura de risco. Todos
+-- entram no system prompt como CONTEXTO de quem o conselheiro é/como pensa —
+-- nunca como instrução de formatação de resposta (essa continua fixa no
+-- código, igual pra todos).
+ALTER TABLE agent_profile RENAME COLUMN bio TO professional_profile;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS decision_criteria text;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS risk_posture text;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS risk_posture_notes text;
+`,
+  },
 ];

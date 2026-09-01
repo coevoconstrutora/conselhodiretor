@@ -12,6 +12,7 @@ import {
   getAgentProfiles,
   DEFAULT_AGENT_PROFILES,
   type NamespacedKnowledgeStore,
+  type RiskPosture,
 } from '@conselho/kb';
 import type { AgentId, KbChunk } from '@conselho/providers';
 import { stripHtml, isBlockedUrl } from './text-extract';
@@ -49,6 +50,36 @@ const MAX_SOURCE_CHARS = 200_000; // ~200 KB de texto por fonte — suficiente p
 // ── Extração de texto ───────────────────────────────────────────────────────
 
 export { stripHtml, isBlockedUrl } from './text-extract';
+
+/**
+ * Decodifica o corpo HTTP respeitando o charset declarado (header ou
+ * `<meta charset>`); sem declaração, tenta UTF-8 e cai pra windows-1252 se o
+ * resultado vier cheio de "�" — sites antigos (ex.: planalto.gov.br) não
+ * declaram charset e usam Latin-1/windows-1252, não UTF-8.
+ */
+function decodeHttpBody(buffer: Buffer, contentTypeHeader: string): string {
+  const headerMatch = /charset=([^;]+)/i.exec(contentTypeHeader);
+  let charset = headerMatch?.[1]?.trim().toLowerCase();
+  if (!charset) {
+    // só precisa olhar os primeiros bytes pro <meta charset> — decodifica em
+    // ascii (seguro pra achar a tag, mesmo que o resto do arquivo não seja).
+    const head = buffer.subarray(0, 2048).toString('latin1');
+    const metaMatch = /<meta[^>]+charset=["']?\s*([a-z0-9_-]+)/i.exec(head);
+    charset = metaMatch?.[1]?.trim().toLowerCase();
+  }
+  const normalized = charset === 'iso-8859-1' ? 'windows-1252' : charset;
+  try {
+    const text = new TextDecoder(normalized || 'utf-8', { fatal: false }).decode(buffer);
+    if (!normalized && text.includes('�')) {
+      // UTF-8 "funcionou" mas produziu caracteres inválidos — provavelmente
+      // é Latin-1/windows-1252 sem declaração nenhuma.
+      return new TextDecoder('windows-1252').decode(buffer);
+    }
+    return text;
+  } catch {
+    return new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+  }
+}
 
 /** Baixa uma URL e devolve o texto extraído (HTML → texto; text/* direto). */
 export async function fetchUrlText(url: string): Promise<{ title: string; text: string }> {
@@ -89,7 +120,8 @@ export async function fetchUrlText(url: string): Promise<{ title: string; text: 
       `Conteúdo não suportado (${contentType.split(';')[0] || 'desconhecido'}) — use páginas de texto/HTML, ou converta para .txt/.md e envie como arquivo.`,
     );
   }
-  const rawBody = await response.text();
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const rawBody = decodeHttpBody(buffer, contentType);
   const raw = rawBody.slice(0, MAX_SOURCE_CHARS * 4);
   const text = /html/i.test(contentType) ? stripHtml(raw) : raw.trim();
   if (text.length < 40) throw new Error('A página não tem texto útil extraível.');
@@ -302,8 +334,40 @@ export async function loadScopeSplit(
   return { scopeCan: row.scope, scopeCannot: '' }; // linha antiga, de antes do split
 }
 
-/** Limite do campo "formação/experiência" — bem menor que o escopo, é um parágrafo de bio, não uma regra. */
-export const BIO_MAX = 1000;
+/** Limites dos campos de texto livre do perfil profissional (fora do escopo, que já tem os seus). */
+export const PROFESSIONAL_PROFILE_MAX = 2000;
+export const DECISION_CRITERIA_MAX = 2000;
+const RISK_POSTURE_VALUES = new Set<RiskPosture>(['conservative', 'moderate', 'aggressive']);
+
+export interface ProfileFieldsInput {
+  readonly iconKey?: string | null;
+  readonly professionalProfile?: string | null;
+  readonly decisionCriteria?: string | null;
+  readonly riskPosture?: string | null;
+  readonly riskPostureNotes?: string | null;
+}
+
+interface NormalizedProfileFields {
+  readonly iconKey: string | null;
+  readonly professionalProfile: string | null;
+  readonly decisionCriteria: string | null;
+  readonly riskPosture: RiskPosture | null;
+  readonly riskPostureNotes: string | null;
+}
+
+function normalizeProfileFields(fields: ProfileFieldsInput | undefined): NormalizedProfileFields {
+  const riskPosture =
+    fields?.riskPosture && RISK_POSTURE_VALUES.has(fields.riskPosture as RiskPosture)
+      ? (fields.riskPosture as RiskPosture)
+      : null;
+  return {
+    iconKey: fields?.iconKey?.trim() || null,
+    professionalProfile: fields?.professionalProfile?.trim().slice(0, PROFESSIONAL_PROFILE_MAX) || null,
+    decisionCriteria: fields?.decisionCriteria?.trim().slice(0, DECISION_CRITERIA_MAX) || null,
+    riskPosture,
+    riskPostureNotes: riskPosture ? fields?.riskPostureNotes?.trim().slice(0, 300) || null : null,
+  };
+}
 
 export async function saveAgentProfile(
   db: SqlExecutor,
@@ -312,31 +376,45 @@ export async function saveAgentProfile(
   displayName: string,
   scopeCan: string,
   scopeCannot: string,
-  iconKey?: string | null,
-  bio?: string | null,
+  profileFields?: ProfileFieldsInput,
 ): Promise<void> {
   const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
   const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
   const scope = buildCombinedScope(can, cannot);
-  const icon = iconKey?.trim() || null;
-  const bioText = bio?.trim().slice(0, BIO_MAX) || null;
+  const f = normalizeProfileFields(profileFields);
   await auditedClinicalWrite(
     db,
     { triggeredBy: `agent-profile-edit-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key, bio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO agent_profile
+           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key,
+            professional_profile, decision_criteria, risk_posture, risk_posture_notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (company_id, agent_id) DO UPDATE
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope,
                scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot,
-               icon_key = EXCLUDED.icon_key, bio = EXCLUDED.bio, updated_at = now()`,
-        [companyId, agentId, displayName.trim().slice(0, 80), scope, can, cannot, icon, bioText],
+               icon_key = EXCLUDED.icon_key, professional_profile = EXCLUDED.professional_profile,
+               decision_criteria = EXCLUDED.decision_criteria, risk_posture = EXCLUDED.risk_posture,
+               risk_posture_notes = EXCLUDED.risk_posture_notes, updated_at = now()`,
+        [
+          companyId,
+          agentId,
+          displayName.trim().slice(0, 80),
+          scope,
+          can,
+          cannot,
+          f.iconKey,
+          f.professionalProfile,
+          f.decisionCriteria,
+          f.riskPosture,
+          f.riskPostureNotes,
+        ],
       );
       return null; // agent_profile não tem id próprio (PK é company_id+agent_id, ambos não-uuid)
     },
   );
-  applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope, iconKey: icon, bio: bioText }]);
+  applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope, ...f }]);
 }
 
 function slugifyAgentId(displayName: string): string {
@@ -363,15 +441,13 @@ export async function createCustomCounselor(
   scopeCan: string,
   scopeCannot: string,
   triggerKeywords: readonly string[],
-  iconKey?: string | null,
-  bio?: string | null,
+  profileFields?: ProfileFieldsInput,
 ): Promise<AgentId> {
   const name = displayName.trim().slice(0, 80);
   const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
   const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
   const scope = buildCombinedScope(can, cannot);
-  const icon = iconKey?.trim() || null;
-  const bioText = bio?.trim().slice(0, BIO_MAX) || null;
+  const f = normalizeProfileFields(profileFields);
   if (name.length < 3) throw new Error('O nome precisa de pelo menos 3 caracteres.');
   if (can.length < 20) throw new Error('"O que pode" precisa ter pelo menos 20 caracteres.');
   const keywords = triggerKeywords.map((k) => k.trim()).filter(Boolean).slice(0, 30);
@@ -392,16 +468,29 @@ export async function createCustomCounselor(
     { triggeredBy: `agent-profile-create-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords, icon_key, bio)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [companyId, agentId, name, scope, can, cannot, keywords, icon, bioText],
+        `INSERT INTO agent_profile
+           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords, icon_key,
+            professional_profile, decision_criteria, risk_posture, risk_posture_notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          companyId,
+          agentId,
+          name,
+          scope,
+          can,
+          cannot,
+          keywords,
+          f.iconKey,
+          f.professionalProfile,
+          f.decisionCriteria,
+          f.riskPosture,
+          f.riskPostureNotes,
+        ],
       );
       return null;
     },
   );
-  applyAgentProfileOverrides(companyId, [
-    { agentId: agentId as AgentId, displayName: name, scope, iconKey: icon, bio: bioText },
-  ]);
+  applyAgentProfileOverrides(companyId, [{ agentId: agentId as AgentId, displayName: name, scope, ...f }]);
   return agentId as AgentId;
 }
 
@@ -434,8 +523,16 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
     display_name: string;
     scope: string;
     icon_key: string | null;
-    bio: string | null;
-  }>('SELECT agent_id, display_name, scope, icon_key, bio FROM agent_profile WHERE company_id = $1', [companyId]);
+    professional_profile: string | null;
+    decision_criteria: string | null;
+    risk_posture: string | null;
+    risk_posture_notes: string | null;
+  }>(
+    `SELECT agent_id, display_name, scope, icon_key, professional_profile, decision_criteria,
+            risk_posture, risk_posture_notes
+     FROM agent_profile WHERE company_id = $1`,
+    [companyId],
+  );
   applyAgentProfileOverrides(
     companyId,
     res.rows.map((r) => ({
@@ -443,7 +540,10 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
       displayName: r.display_name,
       scope: r.scope,
       iconKey: r.icon_key,
-      bio: r.bio,
+      professionalProfile: r.professional_profile,
+      decisionCriteria: r.decision_criteria,
+      riskPosture: r.risk_posture as RiskPosture | null,
+      riskPostureNotes: r.risk_posture_notes,
     })),
   );
 }

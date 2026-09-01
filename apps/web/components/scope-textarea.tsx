@@ -3,7 +3,8 @@
 import { useState } from 'react';
 
 export const SCOPE_FIELD_MAX = 2000;
-export const BIO_MAX = 1000;
+export const PROFESSIONAL_PROFILE_MAX = 2000;
+export const DECISION_CRITERIA_MAX = 2000;
 
 const inputCls =
   'w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3 py-2 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';

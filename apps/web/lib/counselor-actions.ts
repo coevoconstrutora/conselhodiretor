@@ -18,8 +18,21 @@ import {
   createCustomCounselor,
   deleteCustomCounselor,
   SCOPE_FIELD_MAX,
-  BIO_MAX,
+  PROFESSIONAL_PROFILE_MAX,
+  DECISION_CRITERIA_MAX,
+  type ProfileFieldsInput,
 } from './kb-sources';
+
+/** Lê os 4 campos do perfil profissional (ícone, formação, critérios, postura de risco) de um FormData. */
+function parseProfileFields(formData: FormData): ProfileFieldsInput {
+  return {
+    iconKey: String(formData.get('iconKey') ?? '').trim() || null,
+    professionalProfile: String(formData.get('professionalProfile') ?? '').trim() || null,
+    decisionCriteria: String(formData.get('decisionCriteria') ?? '').trim() || null,
+    riskPosture: String(formData.get('riskPosture') ?? '').trim() || null,
+    riskPostureNotes: String(formData.get('riskPostureNotes') ?? '').trim() || null,
+  };
+}
 
 /**
  * Actions do "NotebookLM por conselheiro". Padrão de erro: retornam
@@ -64,10 +77,14 @@ export async function updateCounselorProfileAction(
       return { error: '"O que pode" precisa descrever a especialidade (mínimo 20 caracteres).' };
     if (scopeCan.length > SCOPE_FIELD_MAX || scopeCannot.length > SCOPE_FIELD_MAX)
       return { error: `Cada campo de escopo tem no máximo ${SCOPE_FIELD_MAX} caracteres.` };
-    const iconKey = String(formData.get('iconKey') ?? '').trim() || null;
-    const bio = String(formData.get('bio') ?? '').trim() || null;
-    if (bio && bio.length > BIO_MAX) return { error: `Formação/experiência tem no máximo ${BIO_MAX} caracteres.` };
-    await saveAgentProfile(db, user.companyId, agentId, displayName, scopeCan, scopeCannot, iconKey, bio);
+    const profileFields = parseProfileFields(formData);
+    if (
+      (profileFields.professionalProfile?.length ?? 0) > PROFESSIONAL_PROFILE_MAX ||
+      (profileFields.decisionCriteria?.length ?? 0) > DECISION_CRITERIA_MAX
+    ) {
+      return { error: 'Perfil profissional ou critérios de decisão passaram do limite de caracteres.' };
+    }
+    await saveAgentProfile(db, user.companyId, agentId, displayName, scopeCan, scopeCannot, profileFields);
     revalidatePath(`/counselors/${agentId}`);
     revalidatePath('/');
     return { ok: 'Perfil atualizado — já vale para as próximas contribuições.' };
@@ -220,9 +237,13 @@ export async function createCounselorAction(
       .split(',')
       .map((k) => k.trim())
       .filter(Boolean);
-    const iconKey = String(formData.get('iconKey') ?? '').trim() || null;
-    const bio = String(formData.get('bio') ?? '').trim() || null;
-    if (bio && bio.length > BIO_MAX) return { error: `Formação/experiência tem no máximo ${BIO_MAX} caracteres.` };
+    const profileFields = parseProfileFields(formData);
+    if (
+      (profileFields.professionalProfile?.length ?? 0) > PROFESSIONAL_PROFILE_MAX ||
+      (profileFields.decisionCriteria?.length ?? 0) > DECISION_CRITERIA_MAX
+    ) {
+      return { error: 'Perfil profissional ou critérios de decisão passaram do limite de caracteres.' };
+    }
     const db = await getDb();
     const agentId = await createCustomCounselor(
       db,
@@ -231,8 +252,7 @@ export async function createCounselorAction(
       scopeCan,
       scopeCannot,
       triggerKeywords,
-      iconKey,
-      bio,
+      profileFields,
     );
     revalidatePath('/counselors');
     revalidatePath('/');

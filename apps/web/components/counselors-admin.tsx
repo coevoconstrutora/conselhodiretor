@@ -4,8 +4,9 @@ import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import type { AgentId } from '@conselho/providers';
 import { createCounselorAction, deleteCounselorAction, type CounselorActionState } from '@/lib/counselor-actions';
-import { ScopeTextarea, BIO_MAX } from './scope-textarea';
+import { ScopeTextarea, PROFESSIONAL_PROFILE_MAX, DECISION_CRITERIA_MAX } from './scope-textarea';
 import { IconPicker } from './icon-picker';
+import { RiskPostureField } from './risk-posture-field';
 import { AgentIcon } from '@/lib/agent-icons';
 import { getAgentEmoji } from '@/lib/agent-display';
 
@@ -46,6 +47,21 @@ export function CreateCounselorForm() {
         </div>
       </div>
       <ScopeTextarea
+        name="professionalProfile"
+        label="Perfil profissional (formação, senioridade, experiência, certificações)"
+        rows={2}
+        maxChars={PROFESSIONAL_PROFILE_MAX}
+        placeholder="ex.: 15 anos em sustentabilidade corporativa, certificação LEED, ex-consultor ESG"
+      />
+      <ScopeTextarea
+        name="decisionCriteria"
+        label="Critérios de decisão (o que ele prioriza ao avaliar propostas)"
+        rows={2}
+        maxChars={DECISION_CRITERIA_MAX}
+        placeholder="ex.: prioriza conformidade regulatória e reputação da marca sobre economia de curto prazo"
+      />
+      <RiskPostureField />
+      <ScopeTextarea
         name="scopeCan"
         label="O que pode opinar"
         rows={2}
@@ -57,13 +73,6 @@ export function CreateCounselorForm() {
         label="O que não pode opinar (opcional)"
         rows={2}
         placeholder="ex.: decisões financeiras, questões jurídicas fora do escopo ambiental"
-      />
-      <ScopeTextarea
-        name="bio"
-        label="Formação, experiência e outras informações (opcional)"
-        rows={2}
-        maxChars={BIO_MAX}
-        placeholder="ex.: 15 anos em sustentabilidade corporativa, certificação LEED, ex-consultor ESG"
       />
       <label className="block">
         <span className="text-xs font-semibold text-ink">

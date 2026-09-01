@@ -8,8 +8,9 @@ import {
   addFileSourceAction,
   type CounselorActionState,
 } from '@/lib/counselor-actions';
-import { ScopeTextarea, BIO_MAX } from './scope-textarea';
+import { ScopeTextarea, PROFESSIONAL_PROFILE_MAX, DECISION_CRITERIA_MAX } from './scope-textarea';
 import { IconPicker } from './icon-picker';
+import { RiskPostureField } from './risk-posture-field';
 import { getAgentEmoji } from '@/lib/agent-display';
 
 /**
@@ -47,14 +48,20 @@ export function ProfileForm({
   scopeCan,
   scopeCannot,
   iconKey,
-  bio,
+  professionalProfile,
+  decisionCriteria,
+  riskPosture,
+  riskPostureNotes,
 }: {
   agentId: string;
   displayName: string;
   scopeCan: string;
   scopeCannot: string;
   iconKey: string | null;
-  bio: string | null;
+  professionalProfile: string | null;
+  decisionCriteria: string | null;
+  riskPosture: string | null;
+  riskPostureNotes: string | null;
 }) {
   const [state, formAction, pending] = useActionState(updateCounselorProfileAction, null);
   return (
@@ -70,16 +77,25 @@ export function ProfileForm({
           <IconPicker name="iconKey" defaultValue={iconKey} emojiFallback={getAgentEmoji(agentId)} />
         </div>
       </div>
+      <ScopeTextarea
+        name="professionalProfile"
+        label="Perfil profissional (formação, senioridade, anos de experiência, certificações)"
+        defaultValue={professionalProfile ?? ''}
+        maxChars={PROFESSIONAL_PROFILE_MAX}
+        rows={2}
+        placeholder="ex.: 20 anos em gestão de obras, ex-diretor técnico em incorporadora de médio porte, formado em Engenharia Civil, MBA em Gestão de Projetos"
+      />
+      <ScopeTextarea
+        name="decisionCriteria"
+        label="Critérios de decisão (o que ele prioriza ao avaliar propostas)"
+        defaultValue={decisionCriteria ?? ''}
+        maxChars={DECISION_CRITERIA_MAX}
+        rows={2}
+        placeholder="ex.: prioriza custo e prazo sobre inovação; exige dados concretos antes de recomendar mudança de método construtivo"
+      />
+      <RiskPostureField defaultValue={riskPosture ?? ''} defaultNotes={riskPostureNotes ?? ''} />
       <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
       <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />
-      <ScopeTextarea
-        name="bio"
-        label="Formação, experiência e outras informações (opcional)"
-        defaultValue={bio ?? ''}
-        maxChars={BIO_MAX}
-        rows={2}
-        placeholder="ex.: 20 anos em gestão de obras, ex-diretor técnico em incorporadora de médio porte, formado em Engenharia Civil"
-      />
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />
         <button type="submit" disabled={pending} className={buttonCls}>

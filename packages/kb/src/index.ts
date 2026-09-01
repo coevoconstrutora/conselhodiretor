@@ -14,6 +14,7 @@ export {
   applyAgentProfileOverrides,
   removeAgentProfile,
   type AgentProfile,
+  type RiskPosture,
   type ReasonInput,
   type PriorContribution,
 } from './reasoner';

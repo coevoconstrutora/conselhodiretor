@@ -70,7 +70,9 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           <AgentIcon iconKey={profile.iconKey} emoji={getAgentEmoji(agentId)} className="mr-2" />
           {profile.displayName}
         </h1>
-        {profile.bio ? <p className="mt-2 text-sm italic text-ink-muted">{profile.bio}</p> : null}
+        {profile.professionalProfile ? (
+          <p className="mt-2 text-sm italic text-ink-muted">{profile.professionalProfile}</p>
+        ) : null}
       </header>
 
       {/* Perfil */}
@@ -89,7 +91,10 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           scopeCan={scopeCan}
           scopeCannot={scopeCannot}
           iconKey={profile.iconKey ?? null}
-          bio={profile.bio ?? null}
+          professionalProfile={profile.professionalProfile ?? null}
+          decisionCriteria={profile.decisionCriteria ?? null}
+          riskPosture={profile.riskPosture ?? null}
+          riskPostureNotes={profile.riskPostureNotes ?? null}
         />
       </section>
 
