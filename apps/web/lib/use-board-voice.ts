@@ -8,6 +8,11 @@ import { useBoardStore } from './board-store';
  * simulada — ambas passam pelo mesmo `useBoardStore`). Fila sequencial (uma
  * voz de cada vez, sem sobrepor) e HTML <audio> puro — sem lib extra.
  * Silencia conselheiros que o usuário silenciou (FR13) e é mutável (🔊/🔇).
+ *
+ * Barge-in: se ALGUÉM (humano) começa a falar — sinal mais cedo possível é
+ * o parcial do STT mudando — a voz do conselheiro que estiver tocando corta
+ * NA HORA. Reunião de verdade não tem o board atropelando quem chegou pra
+ * falar; a fila retoma no próximo item depois disso, normalmente.
  */
 export function useBoardVoice(meetingId: string, muted: boolean) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -16,6 +21,9 @@ export function useBoardVoice(meetingId: string, muted: boolean) {
   const playingRef = useRef(false);
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
+  /** Resolve o "aguarda o áudio acabar" do pump() ATUAL — usado pelo barge-in
+   * pra cortar sem esperar `onended` (pause() sozinho não dispara isso). */
+  const resolveCurrentRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     audioRef.current = new Audio();
@@ -51,6 +59,22 @@ export function useBoardVoice(meetingId: string, muted: boolean) {
     [],
   );
 
+  // barge-in: parcial do STT mudou (e não ficou vazio) = alguém começou a
+  // falar AGORA — corta o conselheiro na hora, sem esperar ele terminar.
+  useEffect(
+    () =>
+      useBoardStore.subscribe((state, prev) => {
+        if (state.transcript.partial === prev.transcript.partial) return;
+        if (!state.transcript.partial) return;
+        if (audioRef.current && !audioRef.current.paused) {
+          audioRef.current.pause();
+        }
+        resolveCurrentRef.current?.();
+        resolveCurrentRef.current = null;
+      }),
+    [],
+  );
+
   async function pump(): Promise<void> {
     if (playingRef.current) return;
     const next = queueRef.current.shift();
@@ -74,8 +98,15 @@ export function useBoardVoice(meetingId: string, muted: boolean) {
         await audioRef.current.play().catch(() => {});
         await new Promise<void>((resolve) => {
           if (!audioRef.current) return resolve();
-          audioRef.current.onended = () => resolve();
-          audioRef.current.onerror = () => resolve();
+          resolveCurrentRef.current = resolve;
+          audioRef.current.onended = () => {
+            resolveCurrentRef.current = null;
+            resolve();
+          };
+          audioRef.current.onerror = () => {
+            resolveCurrentRef.current = null;
+            resolve();
+          };
         });
         URL.revokeObjectURL(url);
       }

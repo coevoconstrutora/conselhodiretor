@@ -45,15 +45,16 @@ export async function renameSpeakerAction(
   const meetingId = String(formData.get('meetingId') ?? '');
   const speakerNum = String(formData.get('speakerNum') ?? '').trim();
   const name = String(formData.get('name') ?? '').trim();
+  const area = String(formData.get('area') ?? '').trim();
   if (!meetingId || !speakerNum) return { error: 'Dados incompletos.' };
   if (!name) return { error: 'Informe um nome.' };
   const db = await getDb();
   if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
     return { error: 'Reunião não encontrada.' };
   }
-  const applied = await renameSpeaker(meetingId, speakerNum, name);
+  const applied = await renameSpeaker(meetingId, speakerNum, name, area || null);
   if (!applied) return { error: 'Sem sessão ativa no momento — inicie o board antes de renomear.' };
-  return { ok: `Locutor ${speakerNum} agora aparece como "${name}".` };
+  return { ok: `Locutor ${speakerNum} agora aparece como "${name}"${area ? ` (${area})` : ''}.` };
 }
 
 /** Server action: síntese do Aurélio sob demanda (FR18). */

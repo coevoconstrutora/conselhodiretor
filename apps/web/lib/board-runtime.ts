@@ -29,7 +29,7 @@ import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
-import { createSpeakerNameTracker, type SpeakerNameTracker } from './speaker-names';
+import { createSpeakerNameTracker, type SpeakerNameTracker, type KnownSpeaker } from './speaker-names';
 import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
 /**
@@ -805,12 +805,24 @@ export async function stopLiveBoard(meetingId: string): Promise<void> {
  * partir da próxima fala daquele número, na sessão ao vivo/demo ATUAL —
  * `false` se a reunião não tem sessão ativa (encerrada ou nunca iniciada).
  */
-export async function renameSpeaker(meetingId: string, speakerNum: string, name: string): Promise<boolean> {
+export async function renameSpeaker(
+  meetingId: string,
+  speakerNum: string,
+  name: string,
+  area?: string | null,
+): Promise<boolean> {
   const runtime = await getBoardRuntime();
   const tracker = runtime.speakerNames.get(meetingId);
   if (!tracker) return false;
-  tracker.override(speakerNum, name);
+  tracker.override(speakerNum, name, area);
   return true;
+}
+
+/** Locutores já identificados na sessão ATIVA da reunião (nome + área, se souber) — roster visível. */
+export async function listKnownSpeakers(meetingId: string): Promise<readonly KnownSpeaker[]> {
+  const runtime = await getBoardRuntime();
+  const tracker = runtime.speakerNames.get(meetingId);
+  return tracker ? tracker.listKnown() : [];
 }
 
 /** Relatório de telemetria da reunião + sumário da instância (E10). */

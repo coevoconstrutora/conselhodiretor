@@ -60,4 +60,34 @@ describe('createSpeakerNameTracker — nomeia quem fala por autoapresentação',
     const out = tracker.apply('Locutor 1: vamos começar.');
     expect(out).toBe('Locutor 1: vamos começar.');
   });
+
+  it('listKnown() captura nome + área da autoapresentação', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: sou a Marina, da área Jurídica.');
+    tracker.apply('Locutor 2: sou o Carlos, do departamento Financeiro.');
+    expect(tracker.listKnown()).toEqual([
+      { speakerNum: '1', name: 'Marina', area: 'Jurídica' },
+      { speakerNum: '2', name: 'Carlos', area: 'Financeiro' },
+    ]);
+  });
+
+  it('listKnown() não inventa área quando a fala não menciona uma', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: sou a Marina, bom dia a todos.');
+    expect(tracker.listKnown()).toEqual([{ speakerNum: '1', name: 'Marina', area: null }]);
+  });
+
+  it('Tier 2 — override() aceita área e ela aparece em listKnown()', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: vamos revisar o orçamento da obra.'); // ninguém se apresentou
+    tracker.override('1', 'João', 'Engenharia');
+    expect(tracker.listKnown()).toEqual([{ speakerNum: '1', name: 'João', area: 'Engenharia' }]);
+  });
+
+  it('Tier 2 — override() sem área preserva a área já conhecida', () => {
+    const tracker = createSpeakerNameTracker();
+    tracker.apply('Locutor 1: sou a Marina, da área Jurídica.');
+    tracker.override('1', 'Mariana'); // corrige só o nome, sem passar área
+    expect(tracker.listKnown()).toEqual([{ speakerNum: '1', name: 'Mariana', area: 'Jurídica' }]);
+  });
 });

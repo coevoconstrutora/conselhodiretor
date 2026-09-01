@@ -9,7 +9,7 @@ import { useBoardStore } from '@/lib/board-store';
 import { TranscriptPanel, type TranscriptSource } from './transcript-panel';
 import { SuggestionFeed } from './suggestion-feed';
 import { CounselorStrip, type StripCounselor } from './counselor-strip';
-import { SpeakerRenamePanel } from './speaker-rename';
+import { SpeakerRenamePanel, SpeakerRosterPanel } from './speaker-rename';
 import { AlertVignette } from './alert-vignette';
 import { LiveMicButton } from './live-mic-button';
 import { PipelineStatusBadge } from './pipeline-status-badge';
@@ -138,6 +138,7 @@ export function MeetingRoom({
       {/* faixa hero — os médicos acompanham a reunião, grandes e presentes */}
       <CounselorStrip agents={agents} closed={closed} voiceEnabled={!(voiceMuted || focusMode)} />
 
+      {!closed ? <SpeakerRosterPanel meetingId={meetingId} /> : null}
       {!closed ? <SpeakerRenamePanel meetingId={meetingId} finals={transcript.finals} /> : null}
 
       {/* a "mesa" da reunião: transcrição (documento iluminado) + feed */}
