@@ -8,7 +8,7 @@ const STORAGE_KEY = 'conselho:conselheiros-view';
 
 /** Alterna entre cards (visual, ocupa mais espaço) e lista compacta (escaneia rápido com muitos conselheiros). */
 export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[] }) {
-  const [view, setView] = useState<'cards' | 'list'>('cards');
+  const [view, setView] = useState<'cards' | 'list'>('list');
 
   useEffect(() => {
     try {

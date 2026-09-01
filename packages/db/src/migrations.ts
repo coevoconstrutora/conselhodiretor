@@ -388,4 +388,15 @@ ALTER TABLE company_source ADD COLUMN IF NOT EXISTS rescan_days integer;
 ALTER TABLE company_source ADD COLUMN IF NOT EXISTS last_scanned_at timestamptz;
 `,
   },
+  {
+    name: '0015_agent_profile_scope_split',
+    sql: `
+-- "Escopo" vira 2 campos na autoria: "o que pode" e "o que não pode" opinar
+-- (menos ambíguo que 1 parágrafo livre misturando os dois). \`scope\` continua
+-- sendo o campo ÚNICO lido pelo prompt (compatibilidade com todo o resto do
+-- sistema) — é reconstruído a partir dos 2 campos toda vez que o dono salva.
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS scope_can text;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS scope_cannot text;
+`,
+  },
 ];

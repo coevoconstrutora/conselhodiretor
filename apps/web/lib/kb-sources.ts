@@ -254,22 +254,65 @@ export async function countKbSourcesByAgent(db: SqlExecutor, companyId: string):
 
 // ── Perfis personalizados ───────────────────────────────────────────────────
 
+/** Limite por campo na autoria (UI mostra contador) — "pode" + "não pode" juntos formam o prompt. */
+export const SCOPE_FIELD_MAX = 2000;
+
+/** Escopo autoral (2 campos) → 1 texto só, que é o que o prompt de fato lê. */
+function buildCombinedScope(scopeCan: string, scopeCannot: string): string {
+  const parts: string[] = [];
+  if (scopeCan.trim()) parts.push(`PODE opinar sobre: ${scopeCan.trim()}`);
+  if (scopeCannot.trim()) parts.push(`NÃO PODE opinar sobre: ${scopeCannot.trim()}`);
+  return parts.join('\n\n');
+}
+
+/**
+ * Escopo em 2 campos pra edição ("o que pode" / "o que não pode" — menos
+ * ambíguo que 1 parágrafo só). Sem linha própria ainda (conselheiro padrão
+ * nunca editado nesta empresa): cai no `scope` atual do registry em memória
+ * como "o que pode", campo "não pode" começa vazio.
+ */
+export async function loadScopeSplit(
+  db: SqlExecutor,
+  companyId: string,
+  agentId: AgentId,
+): Promise<{ scopeCan: string; scopeCannot: string }> {
+  const res = await db.query<{ scope: string; scope_can: string | null; scope_cannot: string | null }>(
+    'SELECT scope, scope_can, scope_cannot FROM agent_profile WHERE company_id = $1 AND agent_id = $2',
+    [companyId, agentId],
+  );
+  const row = res.rows[0];
+  if (!row) {
+    const profile = getAgentProfiles(companyId)[agentId];
+    return { scopeCan: profile?.scope ?? '', scopeCannot: '' };
+  }
+  if (row.scope_can !== null || row.scope_cannot !== null) {
+    return { scopeCan: row.scope_can ?? '', scopeCannot: row.scope_cannot ?? '' };
+  }
+  return { scopeCan: row.scope, scopeCannot: '' }; // linha antiga, de antes do split
+}
+
 export async function saveAgentProfile(
   db: SqlExecutor,
   companyId: string,
   agentId: AgentId,
   displayName: string,
-  scope: string,
+  scopeCan: string,
+  scopeCannot: string,
 ): Promise<void> {
+  const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
+  const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
+  const scope = buildCombinedScope(can, cannot);
   await auditedClinicalWrite(
     db,
     { triggeredBy: `agent-profile-edit-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope) VALUES ($1, $2, $3, $4)
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (company_id, agent_id) DO UPDATE
-           SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope, updated_at = now()`,
-        [companyId, agentId, displayName.trim().slice(0, 80), scope.trim().slice(0, 600)],
+           SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope,
+               scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot, updated_at = now()`,
+        [companyId, agentId, displayName.trim().slice(0, 80), scope, can, cannot],
       );
       return null; // agent_profile não tem id próprio (PK é company_id+agent_id, ambos não-uuid)
     },
@@ -298,13 +341,16 @@ export async function createCustomCounselor(
   db: SqlExecutor,
   companyId: string,
   displayName: string,
-  scope: string,
+  scopeCan: string,
+  scopeCannot: string,
   triggerKeywords: readonly string[],
 ): Promise<AgentId> {
   const name = displayName.trim().slice(0, 80);
-  const scopeText = scope.trim().slice(0, 600);
+  const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
+  const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
+  const scope = buildCombinedScope(can, cannot);
   if (name.length < 3) throw new Error('O nome precisa de pelo menos 3 caracteres.');
-  if (scopeText.length < 20) throw new Error('O escopo precisa ter pelo menos 20 caracteres.');
+  if (can.length < 20) throw new Error('"O que pode" precisa ter pelo menos 20 caracteres.');
   const keywords = triggerKeywords.map((k) => k.trim()).filter(Boolean).slice(0, 30);
   if (keywords.length === 0)
     throw new Error('Informe ao menos uma palavra-chave para o conselheiro reagir na reunião.');
@@ -323,14 +369,14 @@ export async function createCustomCounselor(
     { triggeredBy: `agent-profile-create-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, trigger_keywords)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [companyId, agentId, name, scopeText, keywords],
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [companyId, agentId, name, scope, can, cannot, keywords],
       );
       return null;
     },
   );
-  applyAgentProfileOverrides(companyId, [{ agentId: agentId as AgentId, displayName: name, scope: scopeText }]);
+  applyAgentProfileOverrides(companyId, [{ agentId: agentId as AgentId, displayName: name, scope }]);
   return agentId as AgentId;
 }
 

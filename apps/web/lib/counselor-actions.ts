@@ -17,6 +17,7 @@ import {
   loadAndApplyProfileOverrides,
   createCustomCounselor,
   deleteCustomCounselor,
+  SCOPE_FIELD_MAX,
 } from './kb-sources';
 
 /**
@@ -55,11 +56,14 @@ export async function updateCounselorProfileAction(
     const db = await getDb();
     const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     const displayName = String(formData.get('displayName') ?? '').trim();
-    const scope = String(formData.get('scope') ?? '').trim();
+    const scopeCan = String(formData.get('scopeCan') ?? '').trim();
+    const scopeCannot = String(formData.get('scopeCannot') ?? '').trim();
     if (displayName.length < 3) return { error: 'O nome precisa de pelo menos 3 caracteres.' };
-    if (scope.length < 20)
-      return { error: 'O escopo precisa descrever a especialidade (mínimo 20 caracteres).' };
-    await saveAgentProfile(db, user.companyId, agentId, displayName, scope);
+    if (scopeCan.length < 20)
+      return { error: '"O que pode" precisa descrever a especialidade (mínimo 20 caracteres).' };
+    if (scopeCan.length > SCOPE_FIELD_MAX || scopeCannot.length > SCOPE_FIELD_MAX)
+      return { error: `Cada campo de escopo tem no máximo ${SCOPE_FIELD_MAX} caracteres.` };
+    await saveAgentProfile(db, user.companyId, agentId, displayName, scopeCan, scopeCannot);
     revalidatePath(`/counselors/${agentId}`);
     revalidatePath('/');
     return { ok: 'Perfil atualizado — já vale para as próximas contribuições.' };
@@ -204,13 +208,23 @@ export async function createCounselorAction(
   if (!canWrite(user)) return { error: 'Convidados não podem criar conselheiros.' };
   try {
     const displayName = String(formData.get('displayName') ?? '').trim();
-    const scope = String(formData.get('scope') ?? '').trim();
+    const scopeCan = String(formData.get('scopeCan') ?? '').trim();
+    const scopeCannot = String(formData.get('scopeCannot') ?? '').trim();
+    if (scopeCan.length > SCOPE_FIELD_MAX || scopeCannot.length > SCOPE_FIELD_MAX)
+      return { error: `Cada campo de escopo tem no máximo ${SCOPE_FIELD_MAX} caracteres.` };
     const triggerKeywords = String(formData.get('triggerKeywords') ?? '')
       .split(',')
       .map((k) => k.trim())
       .filter(Boolean);
     const db = await getDb();
-    const agentId = await createCustomCounselor(db, user.companyId, displayName, scope, triggerKeywords);
+    const agentId = await createCustomCounselor(
+      db,
+      user.companyId,
+      displayName,
+      scopeCan,
+      scopeCannot,
+      triggerKeywords,
+    );
     revalidatePath('/counselors');
     revalidatePath('/');
     return { ok: `Conselheiro "${displayName}" criado — já pode alimentar a base dele em /counselors/${agentId}.` };

@@ -8,6 +8,7 @@ import {
   addFileSourceAction,
   type CounselorActionState,
 } from '@/lib/counselor-actions';
+import { ScopeTextarea } from './scope-textarea';
 
 /**
  * Gestão de um conselheiro ("NotebookLM do agente"): edição de perfil e as 3
@@ -41,11 +42,13 @@ const buttonCls =
 export function ProfileForm({
   agentId,
   displayName,
-  scope,
+  scopeCan,
+  scopeCannot,
 }: {
   agentId: string;
   displayName: string;
-  scope: string;
+  scopeCan: string;
+  scopeCannot: string;
 }) {
   const [state, formAction, pending] = useActionState(updateCounselorProfileAction, null);
   return (
@@ -55,12 +58,8 @@ export function ProfileForm({
         <span className="text-xs font-semibold text-ink">Nome exibido</span>
         <input name="displayName" defaultValue={displayName} required className={inputCls} />
       </label>
-      <label className="block">
-        <span className="text-xs font-semibold text-ink">
-          Escopo (o que ele pode — e não pode — opinar; entra no prompt como regra)
-        </span>
-        <textarea name="scope" defaultValue={scope} rows={3} required className={inputCls} />
-      </label>
+      <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
+      <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />
         <button type="submit" disabled={pending} className={buttonCls}>

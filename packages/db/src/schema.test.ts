@@ -58,6 +58,7 @@ describe('Migrations — schema base', () => {
       '0012_meeting_types',
       '0013_custom_counselors',
       '0014_kb_source_rescan',
+      '0015_agent_profile_scope_split',
     ]);
   });
 

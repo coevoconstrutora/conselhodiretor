@@ -10,6 +10,7 @@ import {
   loadAndApplyProfileOverrides,
   rescanDueUrlSources,
   rebuildAgentKnowledge,
+  loadScopeSplit,
 } from '@/lib/kb-sources';
 import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
@@ -38,6 +39,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   const isPresident = agentId === 'presidente';
   const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
+  const { scopeCan, scopeCannot } = await loadScopeSplit(db, user.companyId, agentId);
 
   // Revisão automática de fontes por LINK vencidas — não bloqueia o render
   // (best-effort; processo fica de pé no Fly Machine, então isso completa
@@ -81,7 +83,12 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           O nome aparece nos cards e relatórios; o escopo vira REGRA no prompt — fora dele, o
           conselheiro não opina. Mudanças valem imediatamente.
         </p>
-        <ProfileForm agentId={agentId} displayName={profile.displayName} scope={profile.scope} />
+        <ProfileForm
+          agentId={agentId}
+          displayName={profile.displayName}
+          scopeCan={scopeCan}
+          scopeCannot={scopeCannot}
+        />
       </section>
 
       {isPresident ? (

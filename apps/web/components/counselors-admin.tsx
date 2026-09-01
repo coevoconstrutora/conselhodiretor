@@ -4,6 +4,7 @@ import { useActionState, useState } from 'react';
 import Link from 'next/link';
 import type { AgentId } from '@conselho/providers';
 import { createCounselorAction, deleteCounselorAction, type CounselorActionState } from '@/lib/counselor-actions';
+import { ScopeTextarea } from './scope-textarea';
 
 const inputCls =
   'w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3 py-2 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
@@ -34,16 +35,19 @@ export function CreateCounselorForm() {
         <span className="text-xs font-semibold text-ink">Nome</span>
         <input name="displayName" placeholder="ex.: Sustentabilidade e ESG" required className={inputCls} />
       </label>
-      <label className="block">
-        <span className="text-xs font-semibold text-ink">Escopo (o que ele deve opinar — vira regra do prompt)</span>
-        <textarea
-          name="scope"
-          rows={2}
-          placeholder="ex.: certificações ambientais, compensação de carbono, eficiência energética de obra, relatórios ESG"
-          required
-          className={inputCls}
-        />
-      </label>
+      <ScopeTextarea
+        name="scopeCan"
+        label="O que pode opinar"
+        rows={2}
+        placeholder="ex.: certificações ambientais, compensação de carbono, eficiência energética de obra, relatórios ESG"
+        required
+      />
+      <ScopeTextarea
+        name="scopeCannot"
+        label="O que não pode opinar (opcional)"
+        rows={2}
+        placeholder="ex.: decisões financeiras, questões jurídicas fora do escopo ambiental"
+      />
       <label className="block">
         <span className="text-xs font-semibold text-ink">
           Palavras-chave que o fazem reagir na reunião (separadas por vírgula)
