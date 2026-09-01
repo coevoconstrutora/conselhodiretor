@@ -61,12 +61,23 @@ export async function fetchUrlText(url: string): Promise<{ title: string; text: 
   try {
     response = await fetch(url, {
       signal: controller.signal,
-      headers: { 'user-agent': 'ConselhoKB/1.0 (+ingestao-de-conhecimento)' },
+      headers: {
+        // Alguns sites (ex.: planalto.gov.br) derrubam a conexão (ECONNRESET)
+        // pra um user-agent não-browser — cabeçalhos de navegador de verdade
+        // resolvem sem precisar de proxy/headless. Legítimo: é o dono baixando
+        // uma página pública pra alimentar a PRÓPRIA base de conhecimento.
+        'user-agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'accept-language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
       redirect: 'follow',
     });
   } catch (err) {
+    const timedOut = err instanceof Error && err.name === 'AbortError';
     throw new Error(
-      `Não foi possível acessar a URL: ${err instanceof Error && err.name === 'AbortError' ? 'tempo esgotado (20s)' : 'falha de rede'}.`,
+      `Não foi possível acessar a URL: ${timedOut ? 'tempo esgotado (20s)' : 'falha de rede (o site pode estar bloqueando acesso automatizado)'}.` +
+        (timedOut ? '' : ' Se persistir, copie o texto da página e use "Colar texto".'),
     );
   } finally {
     clearTimeout(timer);
@@ -291,6 +302,9 @@ export async function loadScopeSplit(
   return { scopeCan: row.scope, scopeCannot: '' }; // linha antiga, de antes do split
 }
 
+/** Limite do campo "formação/experiência" — bem menor que o escopo, é um parágrafo de bio, não uma regra. */
+export const BIO_MAX = 1000;
+
 export async function saveAgentProfile(
   db: SqlExecutor,
   companyId: string,
@@ -298,26 +312,31 @@ export async function saveAgentProfile(
   displayName: string,
   scopeCan: string,
   scopeCannot: string,
+  iconKey?: string | null,
+  bio?: string | null,
 ): Promise<void> {
   const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
   const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
   const scope = buildCombinedScope(can, cannot);
+  const icon = iconKey?.trim() || null;
+  const bioText = bio?.trim().slice(0, BIO_MAX) || null;
   await auditedClinicalWrite(
     db,
     { triggeredBy: `agent-profile-edit-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key, bio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          ON CONFLICT (company_id, agent_id) DO UPDATE
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope,
-               scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot, updated_at = now()`,
-        [companyId, agentId, displayName.trim().slice(0, 80), scope, can, cannot],
+               scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot,
+               icon_key = EXCLUDED.icon_key, bio = EXCLUDED.bio, updated_at = now()`,
+        [companyId, agentId, displayName.trim().slice(0, 80), scope, can, cannot, icon, bioText],
       );
       return null; // agent_profile não tem id próprio (PK é company_id+agent_id, ambos não-uuid)
     },
   );
-  applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope }]);
+  applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope, iconKey: icon, bio: bioText }]);
 }
 
 function slugifyAgentId(displayName: string): string {
@@ -344,11 +363,15 @@ export async function createCustomCounselor(
   scopeCan: string,
   scopeCannot: string,
   triggerKeywords: readonly string[],
+  iconKey?: string | null,
+  bio?: string | null,
 ): Promise<AgentId> {
   const name = displayName.trim().slice(0, 80);
   const can = scopeCan.trim().slice(0, SCOPE_FIELD_MAX);
   const cannot = scopeCannot.trim().slice(0, SCOPE_FIELD_MAX);
   const scope = buildCombinedScope(can, cannot);
+  const icon = iconKey?.trim() || null;
+  const bioText = bio?.trim().slice(0, BIO_MAX) || null;
   if (name.length < 3) throw new Error('O nome precisa de pelo menos 3 caracteres.');
   if (can.length < 20) throw new Error('"O que pode" precisa ter pelo menos 20 caracteres.');
   const keywords = triggerKeywords.map((k) => k.trim()).filter(Boolean).slice(0, 30);
@@ -369,14 +392,16 @@ export async function createCustomCounselor(
     { triggeredBy: `agent-profile-create-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
     async (tx) => {
       await tx.query(
-        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [companyId, agentId, name, scope, can, cannot, keywords],
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, scope_can, scope_cannot, trigger_keywords, icon_key, bio)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [companyId, agentId, name, scope, can, cannot, keywords, icon, bioText],
       );
       return null;
     },
   );
-  applyAgentProfileOverrides(companyId, [{ agentId: agentId as AgentId, displayName: name, scope }]);
+  applyAgentProfileOverrides(companyId, [
+    { agentId: agentId as AgentId, displayName: name, scope, iconKey: icon, bio: bioText },
+  ]);
   return agentId as AgentId;
 }
 
@@ -404,16 +429,21 @@ export async function deleteCustomCounselor(db: SqlExecutor, companyId: string, 
 
 /** Carrega e APLICA os perfis personalizados da EMPRESA (boot/1º acesso + após edição). */
 export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: string): Promise<void> {
-  const res = await db.query<{ agent_id: string; display_name: string; scope: string }>(
-    'SELECT agent_id, display_name, scope FROM agent_profile WHERE company_id = $1',
-    [companyId],
-  );
+  const res = await db.query<{
+    agent_id: string;
+    display_name: string;
+    scope: string;
+    icon_key: string | null;
+    bio: string | null;
+  }>('SELECT agent_id, display_name, scope, icon_key, bio FROM agent_profile WHERE company_id = $1', [companyId]);
   applyAgentProfileOverrides(
     companyId,
     res.rows.map((r) => ({
       agentId: r.agent_id as AgentId,
       displayName: r.display_name,
       scope: r.scope,
+      iconKey: r.icon_key,
+      bio: r.bio,
     })),
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { AgentDisplayInfo } from '@/lib/agent-display';
+import { AgentIcon } from '@/lib/agent-icons';
 
 const STORAGE_KEY = 'conselho:conselheiros-view';
 
@@ -65,9 +66,7 @@ export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[]
                 href={`/counselors/${agent.id}`}
                 className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
               >
-                <span aria-hidden="true" className="text-2xl leading-none">
-                  {agent.emoji}
-                </span>
+                <AgentIcon iconKey={agent.iconKey} emoji={agent.emoji} className="text-2xl leading-none" />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-ink">{agent.name}</span>
                   {agent.area ? (
@@ -89,9 +88,7 @@ export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[]
                 href={`/counselors/${agent.id}`}
                 className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-muted"
               >
-                <span aria-hidden="true" className="text-lg leading-none">
-                  {agent.emoji}
-                </span>
+                <AgentIcon iconKey={agent.iconKey} emoji={agent.emoji} className="text-lg leading-none" />
                 <span className="w-40 shrink-0 truncate text-sm font-semibold text-ink">{agent.name}</span>
                 <span className="w-52 shrink-0 truncate text-xs font-medium text-brand/80">{agent.area}</span>
                 <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">{agent.briefing}</span>

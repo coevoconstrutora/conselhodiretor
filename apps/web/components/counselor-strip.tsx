@@ -2,6 +2,7 @@
 
 import { useEffect, useReducer } from 'react';
 import { useBoardStore, type BoardContributionItem } from '@/lib/board-store';
+import { AgentIcon } from '@/lib/agent-icons';
 
 /**
  * Faixa dos conselheiros no topo da sala (padrão + CUSTOM da empresa, e
@@ -18,6 +19,7 @@ import { useBoardStore, type BoardContributionItem } from '@/lib/board-store';
 export interface StripCounselor {
   readonly id: string;
   readonly emoji: string;
+  readonly iconKey?: string | null;
   readonly name: string;
   readonly area: string;
 }
@@ -111,7 +113,7 @@ export function CounselorStrip({
         >
           <p className="text-[12px] leading-snug text-white/95">
             <span className="mr-1 font-semibold">
-              {active.counselor.emoji} {active.counselor.name}:
+              <AgentIcon iconKey={active.counselor.iconKey} emoji={active.counselor.emoji} /> {active.counselor.name}:
             </span>
             <span className="mr-1">{TYPE_ICON[active.latest!.contribution.type] ?? '💡'}</span>
             {bubble}
@@ -145,9 +147,11 @@ export function CounselorStrip({
                     : 'ring-transparent'
               } ${isSilenced || closed ? 'opacity-50' : ''} ${inSpotlight ? 'bg-white/10' : ''}`}
             >
-              <span className={`text-2xl ${isSilenced ? 'grayscale' : ''}`} aria-hidden="true">
-                {counselor.emoji}
-              </span>
+              <AgentIcon
+                iconKey={counselor.iconKey}
+                emoji={counselor.emoji}
+                className={`text-2xl ${isSilenced ? 'grayscale' : ''}`}
+              />
               <figcaption className="mt-1 text-center">
                 <p className="text-[11px] font-semibold leading-tight text-white">
                   {counselor.name}

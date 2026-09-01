@@ -8,7 +8,9 @@ import {
   addFileSourceAction,
   type CounselorActionState,
 } from '@/lib/counselor-actions';
-import { ScopeTextarea } from './scope-textarea';
+import { ScopeTextarea, BIO_MAX } from './scope-textarea';
+import { IconPicker } from './icon-picker';
+import { getAgentEmoji } from '@/lib/agent-display';
 
 /**
  * Gestão de um conselheiro ("NotebookLM do agente"): edição de perfil e as 3
@@ -44,11 +46,15 @@ export function ProfileForm({
   displayName,
   scopeCan,
   scopeCannot,
+  iconKey,
+  bio,
 }: {
   agentId: string;
   displayName: string;
   scopeCan: string;
   scopeCannot: string;
+  iconKey: string | null;
+  bio: string | null;
 }) {
   const [state, formAction, pending] = useActionState(updateCounselorProfileAction, null);
   return (
@@ -58,8 +64,22 @@ export function ProfileForm({
         <span className="text-xs font-semibold text-ink">Nome exibido</span>
         <input name="displayName" defaultValue={displayName} required className={inputCls} />
       </label>
+      <div>
+        <span className="text-xs font-semibold text-ink">Ícone</span>
+        <div className="mt-1">
+          <IconPicker name="iconKey" defaultValue={iconKey} emojiFallback={getAgentEmoji(agentId)} />
+        </div>
+      </div>
       <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
       <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />
+      <ScopeTextarea
+        name="bio"
+        label="Formação, experiência e outras informações (opcional)"
+        defaultValue={bio ?? ''}
+        maxChars={BIO_MAX}
+        rows={2}
+        placeholder="ex.: 20 anos em gestão de obras, ex-diretor técnico em incorporadora de médio porte, formado em Engenharia Civil"
+      />
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />
         <button type="submit" disabled={pending} className={buttonCls}>

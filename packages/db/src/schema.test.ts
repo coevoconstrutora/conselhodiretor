@@ -59,6 +59,7 @@ describe('Migrations — schema base', () => {
       '0013_custom_counselors',
       '0014_kb_source_rescan',
       '0015_agent_profile_scope_split',
+      '0016_agent_profile_icon',
     ]);
   });
 

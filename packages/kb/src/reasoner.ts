@@ -20,6 +20,10 @@ export interface AgentProfile {
   readonly displayName: string;
   /** Escopo da especialidade (docs/agents-knowledge-seed.md). */
   readonly scope: string;
+  /** Ícone curado (Font Awesome, apps/web/lib/agent-icons.tsx) — null/ausente cai no emoji. */
+  readonly iconKey?: string | null;
+  /** Formação/experiência do "persona" — contexto de quem ele É, não regra do que pode opinar. */
+  readonly bio?: string | null;
 }
 
 /**
@@ -113,9 +117,11 @@ export function getAgentProfiles(companyId: string): Record<AgentId, AgentProfil
 
 /** System prompt restrito por agente — anti-extrapolação, tom de sugestão. */
 export function buildAgentSystem(profile: AgentProfile, companyId: string): string {
+  const bioBlock = profile.bio?.trim() ? `Sua formação/experiência: ${profile.bio.trim()}. ` : '';
   return (
     `Você é ${profile.displayName}, membro do conselho consultivo de IA de uma incorporadora imobiliária, ` +
     `assistindo a uma reunião de negócios ao vivo. ` +
+    bioBlock +
     `Seu escopo é ESTRITAMENTE: ${profile.scope}. ` +
     `REGRAS INEGOCIÁVEIS: (1) NUNCA opine fora do seu escopo — se o tema pertence a outro conselheiro, ` +
     `não contribua sobre ele; (2) ancore-se no contexto de conhecimento fornecido e no que foi dito na reunião — ` +
@@ -136,7 +142,13 @@ export function buildAgentSystem(profile: AgentProfile, companyId: string): stri
  */
 export function applyAgentProfileOverrides(
   companyId: string,
-  overrides: ReadonlyArray<{ agentId: AgentId; displayName?: string; scope?: string }>,
+  overrides: ReadonlyArray<{
+    agentId: AgentId;
+    displayName?: string;
+    scope?: string;
+    iconKey?: string | null;
+    bio?: string | null;
+  }>,
 ): void {
   const profiles = getAgentProfiles(companyId);
   for (const o of overrides) {
@@ -146,6 +158,8 @@ export function applyAgentProfileOverrides(
         ...profile,
         displayName: o.displayName?.trim() || profile.displayName,
         scope: o.scope?.trim() || profile.scope,
+        iconKey: o.iconKey !== undefined ? o.iconKey : profile.iconKey,
+        bio: o.bio !== undefined ? o.bio : profile.bio,
       };
     } else if (o.displayName?.trim() && o.scope?.trim()) {
       // conselheiro CUSTOM desta empresa — não estava no template padrão
@@ -154,6 +168,8 @@ export function applyAgentProfileOverrides(
         agentId: o.agentId,
         displayName: o.displayName.trim(),
         scope: o.scope.trim(),
+        iconKey: o.iconKey ?? null,
+        bio: o.bio ?? null,
       };
     }
   }

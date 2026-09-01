@@ -22,6 +22,7 @@ export default async function CounselorsPage() {
       displayName: p.displayName,
       scope: p.scope,
       isDefault: p.agentId in DEFAULT_AGENT_PROFILES,
+      iconKey: p.iconKey ?? null,
     }));
 
   return (

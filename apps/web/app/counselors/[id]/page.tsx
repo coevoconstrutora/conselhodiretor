@@ -15,6 +15,7 @@ import {
 import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
 import { getAgentEmoji } from '@/lib/agent-display';
+import { AgentIcon } from '@/lib/agent-icons';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
 
 const KIND_LABEL: Record<string, string> = {
@@ -66,11 +67,10 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           ← Painel
         </Link>
         <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-          <span aria-hidden="true" className="mr-2">
-            {getAgentEmoji(agentId)}
-          </span>
+          <AgentIcon iconKey={profile.iconKey} emoji={getAgentEmoji(agentId)} className="mr-2" />
           {profile.displayName}
         </h1>
+        {profile.bio ? <p className="mt-2 text-sm italic text-ink-muted">{profile.bio}</p> : null}
       </header>
 
       {/* Perfil */}
@@ -88,6 +88,8 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           displayName={profile.displayName}
           scopeCan={scopeCan}
           scopeCannot={scopeCannot}
+          iconKey={profile.iconKey ?? null}
+          bio={profile.bio ?? null}
         />
       </section>
 

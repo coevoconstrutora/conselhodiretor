@@ -399,4 +399,16 @@ ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS scope_can text;
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS scope_cannot text;
 `,
   },
+  {
+    name: '0016_agent_profile_icon',
+    sql: `
+-- Ícone por conselheiro (Font Awesome, conjunto curado em
+-- apps/web/lib/agent-icons.tsx) — null cai no emoji (comportamento atual).
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS icon_key text;
+-- Formação/experiência/bio do "persona" — diferente do escopo (que é REGRA
+-- do prompt): aqui é contexto de quem ele É, injetado como pano de fundo,
+-- não como restrição do que pode opinar.
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS bio text;
+`,
+  },
 ];

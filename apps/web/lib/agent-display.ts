@@ -53,6 +53,7 @@ export interface AgentDisplayInfo {
   readonly name: string;
   readonly area: string;
   readonly emoji: string;
+  readonly iconKey: string | null;
   readonly briefing: string;
 }
 
@@ -61,7 +62,7 @@ export interface AgentDisplayInfo {
  * nunca é "mais um especialista"), resto na ordem do registry.
  */
 export function buildAgentRoster(
-  profiles: Record<string, { agentId: string; displayName: string; scope: string }>,
+  profiles: Record<string, { agentId: string; displayName: string; scope: string; iconKey?: string | null }>,
 ): AgentDisplayInfo[] {
   return Object.values(profiles)
     .sort((a, b) => (a.agentId === 'presidente' ? 1 : b.agentId === 'presidente' ? -1 : 0))
@@ -72,6 +73,7 @@ export function buildAgentRoster(
         name,
         area,
         emoji: getAgentEmoji(p.agentId),
+        iconKey: p.iconKey ?? null,
         briefing: buildQuickBriefing(p.scope),
       };
     });

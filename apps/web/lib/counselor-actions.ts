@@ -18,6 +18,7 @@ import {
   createCustomCounselor,
   deleteCustomCounselor,
   SCOPE_FIELD_MAX,
+  BIO_MAX,
 } from './kb-sources';
 
 /**
@@ -63,7 +64,10 @@ export async function updateCounselorProfileAction(
       return { error: '"O que pode" precisa descrever a especialidade (mínimo 20 caracteres).' };
     if (scopeCan.length > SCOPE_FIELD_MAX || scopeCannot.length > SCOPE_FIELD_MAX)
       return { error: `Cada campo de escopo tem no máximo ${SCOPE_FIELD_MAX} caracteres.` };
-    await saveAgentProfile(db, user.companyId, agentId, displayName, scopeCan, scopeCannot);
+    const iconKey = String(formData.get('iconKey') ?? '').trim() || null;
+    const bio = String(formData.get('bio') ?? '').trim() || null;
+    if (bio && bio.length > BIO_MAX) return { error: `Formação/experiência tem no máximo ${BIO_MAX} caracteres.` };
+    await saveAgentProfile(db, user.companyId, agentId, displayName, scopeCan, scopeCannot, iconKey, bio);
     revalidatePath(`/counselors/${agentId}`);
     revalidatePath('/');
     return { ok: 'Perfil atualizado — já vale para as próximas contribuições.' };
@@ -216,6 +220,9 @@ export async function createCounselorAction(
       .split(',')
       .map((k) => k.trim())
       .filter(Boolean);
+    const iconKey = String(formData.get('iconKey') ?? '').trim() || null;
+    const bio = String(formData.get('bio') ?? '').trim() || null;
+    if (bio && bio.length > BIO_MAX) return { error: `Formação/experiência tem no máximo ${BIO_MAX} caracteres.` };
     const db = await getDb();
     const agentId = await createCustomCounselor(
       db,
@@ -224,6 +231,8 @@ export async function createCounselorAction(
       scopeCan,
       scopeCannot,
       triggerKeywords,
+      iconKey,
+      bio,
     );
     revalidatePath('/counselors');
     revalidatePath('/');
