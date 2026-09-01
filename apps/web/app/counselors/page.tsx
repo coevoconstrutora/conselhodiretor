@@ -7,7 +7,7 @@ import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
 
-/** Gestão de membros do conselho: os 9 padrão + os CUSTOM desta empresa. */
+/** Gestão de membros do conselho: os padrão do produto + os CUSTOM desta empresa. */
 export default async function CounselorsPage() {
   const user = await requireCurrentUser();
   if (!canWrite(user)) redirect('/');
@@ -32,7 +32,7 @@ export default async function CounselorsPage() {
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselheiros</h1>
           <p className="text-sm text-ink-muted">
-            Os 9 padrão nunca podem ser removidos. Conselheiros custom precisam de palavras-chave
+            Os conselheiros padrão do produto nunca podem ser removidos. Conselheiros custom precisam de palavras-chave
             para reagir na reunião — edite nome, escopo e alimente a base de cada um em{' '}
             <code className="rounded bg-surface-muted px-1">/counselors/[id]</code>.
           </p>

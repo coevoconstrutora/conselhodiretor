@@ -96,6 +96,14 @@ export function TranscriptPanel({ source }: { source: TranscriptSource }) {
         role="log"
         className="flex-1 space-y-2 overflow-y-auto p-5"
       >
+        {/* dica de identificação por voz: some assim que a 1ª fala chega — não é
+            instrução permanente, é só o empurrão certo na hora certa */}
+        {snapshot.finalSegments.length === 0 && !snapshot.partial ? (
+          <p className="rounded-[var(--radius)] border border-dashed border-ink/15 bg-surface-muted/60 p-3 text-xs text-ink-muted">
+            💡 Dica: peça para cada participante se apresentar no início (ex.: "sou a Marina", "aqui
+            é o Carlos") — a transcrição reconhece e passa a identificar quem fala pelo nome.
+          </p>
+        ) : null}
         {/* finais: imutáveis, anunciados ao leitor de tela */}
         <div aria-live="polite">
           {snapshot.finalSegments.map((segment, i) => (

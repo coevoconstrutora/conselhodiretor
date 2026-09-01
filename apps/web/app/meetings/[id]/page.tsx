@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { getMeeting } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
 import { getAgentProfiles } from '@conselho/kb';
+import { loadCompanyProfile } from '@/lib/company-profile';
 import { requireCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
@@ -35,6 +36,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const db = await getDb();
   const meeting = await getMeeting(db, id, user.companyId, getEncryptionKey());
   if (!meeting) notFound();
+  const companyProfile = await loadCompanyProfile(db, user.companyId, getEncryptionKey());
 
   const authorized = meeting.recordingConfirmed;
   const closed = meeting.status === 'closed';
@@ -76,10 +78,19 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
     <main className="min-h-screen">
       <header className="surface-deep-gradient sticky top-0 z-10 border-b border-white/10">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="flex flex-wrap items-baseline gap-3 sm:gap-4">
-            <h1 className="font-display text-xl font-semibold tracking-tight text-white sm:text-2xl">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            {companyProfile.logoDataUrl ? (
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-white p-1">
+                <img
+                  src={companyProfile.logoDataUrl}
+                  alt={companyProfile.name ?? 'Logo da empresa'}
+                  className="h-full w-full object-contain"
+                />
+              </span>
+            ) : null}
+            <h1 className="font-display flex items-baseline gap-3 text-xl font-semibold tracking-tight text-white sm:gap-4 sm:text-2xl">
               Conselho
-              <span className="ml-2 text-sm font-normal text-white/50">· {meeting.title}</span>
+              <span className="text-sm font-normal text-white/50">· {meeting.title}</span>
             </h1>
             <span
               className={`rounded-[var(--radius)] border px-3 py-1 text-[11px] font-medium tracking-wide ${

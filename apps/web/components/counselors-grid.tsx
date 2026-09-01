@@ -97,11 +97,22 @@ export function CounselorsGrid({ agents }: { agents: readonly AgentDisplayInfo[]
                   iconKey={agent.iconKey}
                   iconColor={agent.iconColor}
                   emoji={agent.emoji}
-                  className="text-lg leading-none"
+                  className="shrink-0 text-lg leading-none"
                 />
-                <span className="w-40 shrink-0 truncate text-sm font-semibold text-ink">{agent.name}</span>
-                <span className="w-52 shrink-0 truncate text-xs font-medium text-brand/80">{agent.area}</span>
-                <span className="min-w-0 flex-1 truncate text-xs text-ink-muted">{agent.briefing}</span>
+                <span className="min-w-0 flex-1 sm:w-40 sm:flex-none">
+                  <span className="block truncate text-sm font-semibold text-ink">{agent.name}</span>
+                  {agent.area ? (
+                    <span className="block truncate text-xs font-medium text-brand/80 sm:hidden">
+                      {agent.area}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="hidden shrink-0 truncate text-xs font-medium text-brand/80 sm:block sm:w-52">
+                  {agent.area}
+                </span>
+                <span className="hidden min-w-0 flex-1 truncate text-xs text-ink-muted md:block">
+                  {agent.briefing}
+                </span>
               </Link>
             </li>
           ))}
