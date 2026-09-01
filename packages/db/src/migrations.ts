@@ -453,4 +453,27 @@ CREATE INDEX IF NOT EXISTS idx_meeting_improvement_company ON meeting_improvemen
 CREATE INDEX IF NOT EXISTS idx_meeting_improvement_meeting ON meeting_improvement(meeting_id);
 `,
   },
+  {
+    name: '0020_voice_profile',
+    sql: `
+-- Reconhecimento de voz ENTRE reuniões (Tier 3 — dado biométrico, LGPD Art.
+-- 5º II). Opt-in por empresa (company_profile.voiceRecognitionEnabled, no
+-- blob cifrado — sem migration própria). 1 linha por PESSOA (não por
+-- reunião): o embedding (256 floats do Resemblyzer) fica cifrado como
+-- qualquer outro dado sensível deste produto (AES-256-GCM, packages/crypto).
+-- Poucas dezenas de linhas por empresa — comparar por similaridade de
+-- cosseno em JS puro é instantâneo, não precisa de pgvector.
+CREATE TABLE IF NOT EXISTS voice_profile (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id    uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  name          text NOT NULL,
+  area          text,
+  embedding_enc text NOT NULL,
+  sample_count  int NOT NULL DEFAULT 1,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_voice_profile_company ON voice_profile(company_id);
+`,
+  },
 ];

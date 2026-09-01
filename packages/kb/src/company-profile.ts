@@ -25,6 +25,8 @@ export interface CompanyProfile {
   readonly themeTextColor?: string | null;
   readonly themeTitleColor?: string | null;
   readonly themeBackground?: 'grid' | 'plain' | null;
+  /** Tier 3 — reconhecimento de voz ENTRE reuniões (dado biométrico, LGPD). Opt-in, default false. */
+  readonly voiceRecognitionEnabled?: boolean;
 }
 
 const profilesByCompany = new Map<string, CompanyProfile>();

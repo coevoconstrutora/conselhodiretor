@@ -132,6 +132,12 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               Sem a confirmação, nenhum áudio é capturado, transmitido ou persistido. Confirme que
               os participantes da reunião estão cientes e de acordo com a gravação.
             </p>
+            {companyProfile.voiceRecognitionEnabled ? (
+              <p className="mt-2 text-sm leading-relaxed text-attn-critical">
+                🎙️ Esta empresa também usa reconhecimento de voz entre reuniões (dado biométrico) —
+                avise os participantes antes de confirmar.
+              </p>
+            ) : null}
             <form action={confirmRecordingAction} className="mt-4 space-y-3">
               <input type="hidden" name="meetingId" value={id} />
               <label className="block space-y-1.5 text-left">
