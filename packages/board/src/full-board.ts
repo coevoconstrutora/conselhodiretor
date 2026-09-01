@@ -5,6 +5,7 @@ import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/provide
 import type { MeetingSession } from '@conselho/session';
 import {
   TriggerDetector,
+  ALL_TRIGGERS,
   scoreMatch,
   BoardGatekeeper,
   SemanticDeduplicator,
@@ -13,6 +14,7 @@ import {
   type Candidate,
   type GatekeeperConfig,
   type TriggerMatch,
+  type AgentTriggerDef,
 } from '@conselho/engines';
 import { AgentReasoner, getAgentProfiles, buildAgentSystem } from '@conselho/kb';
 import type { IKnowledgeRetriever } from '@conselho/providers';
@@ -90,6 +92,12 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * (compat: reunião sem tipo definido).
    */
   readonly activeAgentIds?: readonly AgentId[];
+  /**
+   * Gatilhos de conselheiros CUSTOM desta empresa (Etapa "Conselheiros
+   * dinâmicos") — somados aos gatilhos curados dos 9 padrão. Sem isso, um
+   * conselheiro custom nunca reagiria a nada (não há regex pra ele no código).
+   */
+  readonly extraTriggers?: readonly AgentTriggerDef[];
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -102,7 +110,7 @@ interface RoundEntry {
 
 export class FullBoardOrchestrator {
   private readonly listeners = new Set<FullBoardListener>();
-  private readonly detector = new TriggerDetector();
+  private readonly detector: TriggerDetector;
   private readonly gate: BoardGatekeeper;
   private readonly reasoner: AgentReasoner;
   private readonly recentFinals: string[] = [];
@@ -151,6 +159,9 @@ export class FullBoardOrchestrator {
     retriever: IKnowledgeRetriever,
     config: FullBoardConfig = {},
   ) {
+    this.detector = new TriggerDetector(
+      config.extraTriggers?.length ? [...ALL_TRIGGERS, ...config.extraTriggers] : undefined,
+    );
     this.gate = new BoardGatekeeper(config);
     this.reasoner = new AgentReasoner(companyId, retriever, llm);
     this.profiles = getAgentProfiles(companyId);
@@ -295,7 +306,7 @@ export class FullBoardOrchestrator {
         .join('\n');
       const said = this.history
         .slice(-20)
-        .map((h) => `- [${this.profiles[h.agentId].displayName}] ${h.text}`)
+        .map((h) => `- [${this.profiles[h.agentId]?.displayName ?? h.agentId}] ${h.text}`)
         .join('\n');
       const caseBlock = this.renderCaseState();
       const res = await this.llm.completeText!({
@@ -430,12 +441,14 @@ export class FullBoardOrchestrator {
     const entries = [...this.round];
     try {
       const caseBlock = this.renderCaseState(); // render 1× (era 2× na template)
+      const presidentProfile = this.profiles.presidente;
+      if (!presidentProfile) throw new Error(`Perfil do Presidente ausente (empresa ${this.companyId}).`);
       const summary = entries
-        .map((e) => `- ${this.profiles[e.contribution.agentId].displayName}: ${e.contribution.text}`)
+        .map((e) => `- ${this.profiles[e.contribution.agentId]?.displayName ?? e.contribution.agentId}: ${e.contribution.text}`)
         .join('\n');
       const synthesis = await this.llm.complete({
         system:
-          buildAgentSystem(this.profiles.presidente, this.companyId) +
+          buildAgentSystem(presidentProfile, this.companyId) +
           ' Agora seu papel é o de SÍNTESE: integre as contribuições do conselho abaixo numa recomendação única e curta. ' +
           'Se houver divergência entre os conselheiros, exponha-a com transparência e modere. ' +
           'Termine SEMPRE devolvendo a decisão ao empresário (ex.: "a decisão é sua").',
@@ -446,7 +459,7 @@ export class FullBoardOrchestrator {
         // síntese repetida e dá ao Presidente a progressão da reunião
         priorContributions: this.history
           .slice(-20)
-          .map((h) => `[${this.profiles[h.agentId].displayName}] ${h.text}`),
+          .map((h) => `[${this.profiles[h.agentId]?.displayName ?? h.agentId}] ${h.text}`),
       });
       if (synthesis.skip || !synthesis.text.trim()) {
         // síntese vazia NUNCA vira card/persistência — rodada permanece p/ nova tentativa

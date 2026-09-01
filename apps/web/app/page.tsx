@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
-import { ALL_AGENT_IDS } from '@conselho/providers';
 import { getCurrentUser, canWrite, isAdmin } from '@/lib/auth';
 import { logoutAction } from '@/lib/auth-actions';
 import { getDb } from '@/lib/db';
@@ -49,6 +48,7 @@ export default async function DashboardPage() {
           <ConfigMenu
             items={[
               { href: '/company', label: 'Empresa' },
+              ...(canWrite(user) ? [{ href: '/counselors', label: 'Conselheiros' }] : []),
               ...(canWrite(user) ? [{ href: '/meeting-types', label: 'Tipos de reunião' }] : []),
               ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),
               ...(user.isSuperAdmin ? [{ href: '/admin/companies', label: 'Empresas' }] : []),
@@ -136,8 +136,13 @@ export default async function DashboardPage() {
           </p>
         </div>
         <ul className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {ALL_AGENT_IDS.map((agentId) => {
-            const profile = profiles[agentId];
+          {/* Padrão + CUSTOM desta empresa — o Presidente sempre por último. */}
+          {Object.values(profiles)
+            .sort((a, b) =>
+              a.agentId === 'presidente' ? 1 : b.agentId === 'presidente' ? -1 : 0,
+            )
+            .map((profile) => {
+            const agentId = profile.agentId;
             const count = sourceCounts.get(agentId) ?? 0;
             const isPresident = agentId === 'presidente';
             return (
@@ -147,7 +152,7 @@ export default async function DashboardPage() {
                   className="card-premium flex h-full items-start gap-3 p-4 transition-shadow hover:shadow-md"
                 >
                   <span aria-hidden="true" className="text-2xl leading-none">
-                    {AGENT_EMOJI[agentId]}
+                    {AGENT_EMOJI[agentId] ?? '🧑‍💼'}
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold text-ink">

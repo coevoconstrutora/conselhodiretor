@@ -289,6 +289,28 @@ export const ALL_TRIGGERS: readonly AgentTriggerDef[] = [
   ...FUTURISTA_TRIGGERS,
 ];
 
+/**
+ * Gatilho de um conselheiro CUSTOM (criado pelo dono, não um dos 9 padrão):
+ * como não há como curar um escopo desconhecido de antemão, o gatilho vem
+ * das palavras-chave que o próprio dono escreveu ao criar o conselheiro —
+ * qualquer uma delas na fala já dispara (severidade normal, peso moderado).
+ */
+export function buildKeywordTrigger(agentId: AgentId, keywords: readonly string[]): AgentTriggerDef | null {
+  const escaped = keywords
+    .map((k) => k.trim())
+    .filter(Boolean)
+    .map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (escaped.length === 0) return null;
+  return {
+    id: `custom-${agentId}`,
+    agentId,
+    pattern: new RegExp(`\\b(${escaped.join('|')})\\b`, 'i'),
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.5,
+  };
+}
+
 export class TriggerDetector {
   constructor(private readonly triggers: readonly AgentTriggerDef[] = ALL_TRIGGERS) {}
 

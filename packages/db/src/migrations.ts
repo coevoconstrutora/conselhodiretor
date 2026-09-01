@@ -365,4 +365,15 @@ ON CONFLICT (company_id, name) DO NOTHING;
 ALTER TABLE meeting ADD COLUMN IF NOT EXISTS meeting_type_id uuid REFERENCES meeting_type(id);
 `,
   },
+  {
+    name: '0013_custom_counselors',
+    sql: `
+-- Conselheiros CUSTOM: cada empresa pode criar conselheiros além dos 9
+-- padrão. Um agent_profile sem trigger_keywords é um dos padrão (usa os
+-- gatilhos curados no código, packages/engines/src/triggers.ts); COM
+-- trigger_keywords é custom (o dono escreveu as palavras que o disparam,
+-- não dá pra curar automaticamente um escopo desconhecido).
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS trigger_keywords text[];
+`,
+  },
 ];

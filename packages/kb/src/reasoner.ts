@@ -86,9 +86,9 @@ export const DEFAULT_AGENT_PROFILES: Record<AgentId, AgentProfile> = {
 };
 
 function cloneDefaultProfiles(): Record<AgentId, AgentProfile> {
-  const clone = {} as Record<AgentId, AgentProfile>;
-  for (const key of Object.keys(DEFAULT_AGENT_PROFILES) as AgentId[]) {
-    clone[key] = { ...DEFAULT_AGENT_PROFILES[key] };
+  const clone: Record<AgentId, AgentProfile> = {};
+  for (const [key, value] of Object.entries(DEFAULT_AGENT_PROFILES)) {
+    clone[key] = { ...value };
   }
   return clone;
 }
@@ -140,11 +140,30 @@ export function applyAgentProfileOverrides(
 ): void {
   const profiles = getAgentProfiles(companyId);
   for (const o of overrides) {
-    const profile = profiles[o.agentId] as { displayName: string; scope: string } | undefined;
-    if (!profile) continue;
-    if (o.displayName?.trim()) profile.displayName = o.displayName.trim();
-    if (o.scope?.trim()) profile.scope = o.scope.trim();
+    const profile = profiles[o.agentId];
+    if (profile) {
+      profiles[o.agentId] = {
+        ...profile,
+        displayName: o.displayName?.trim() || profile.displayName,
+        scope: o.scope?.trim() || profile.scope,
+      };
+    } else if (o.displayName?.trim() && o.scope?.trim()) {
+      // conselheiro CUSTOM desta empresa — não estava no template padrão
+      // (DEFAULT_AGENT_PROFILES), `agent_profile` no banco é a fonte de verdade.
+      profiles[o.agentId] = {
+        agentId: o.agentId,
+        displayName: o.displayName.trim(),
+        scope: o.scope.trim(),
+      };
+    }
   }
+}
+
+/** Remove um conselheiro CUSTOM da memória desta empresa (nunca os padrão). */
+export function removeAgentProfile(companyId: string, agentId: AgentId): void {
+  const profiles = getAgentProfiles(companyId);
+  if (agentId in DEFAULT_AGENT_PROFILES) return; // nunca remove um dos 9 padrão
+  delete profiles[agentId];
 }
 
 /** Contribuição anterior do board (B1 — memória anti-repetição). */
@@ -177,10 +196,11 @@ export class AgentReasoner {
   async reason(input: ReasonInput): Promise<AgentContribution> {
     const profiles = getAgentProfiles(this.companyId);
     const profile = profiles[input.agentId];
+    if (!profile) throw new Error(`Conselheiro desconhecido: ${input.agentId} (empresa ${this.companyId}).`);
     // FR21: recuperação SÓ no namespace da persona
     const context = await this.retriever.retrieve(input.agentId, input.query, input.k ?? 3);
     const priors = (input.previousContributions ?? []).map(
-      (c) => `[${profiles[c.agentId].displayName}] ${c.text}`,
+      (c) => `[${profiles[c.agentId]?.displayName ?? c.agentId}] ${c.text}`,
     );
     const contribution = await this.llm.complete({
       system: buildAgentSystem(profile, this.companyId),

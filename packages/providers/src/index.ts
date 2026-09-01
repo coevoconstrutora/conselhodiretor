@@ -1,5 +1,11 @@
 // Tipos de domínio dos contratos
-export { ALL_AGENT_IDS, COUNSELOR_AGENT_IDS } from './types';
+export {
+  ALL_AGENT_IDS,
+  COUNSELOR_AGENT_IDS,
+  DEFAULT_AGENT_IDS,
+  DEFAULT_COUNSELOR_AGENT_IDS,
+  PRESIDENT_AGENT_ID,
+} from './types';
 export type {
   AgentId,
   ContributionType,

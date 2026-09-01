@@ -1,10 +1,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { COUNSELOR_AGENT_IDS, type AgentId } from '@conselho/providers';
+import { PRESIDENT_AGENT_ID, type AgentId } from '@conselho/providers';
+import { getAgentProfiles } from '@conselho/kb';
 import type { MeetingTypeRow } from '@conselho/db';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
+import { loadAndApplyProfileOverrides } from './kb-sources';
 
 /**
  * Tipos de reunião ("Comitê Geral", "Comitê de Engenharia", ...) — escopam
@@ -38,12 +40,12 @@ export async function listMeetingTypes(companyId: string): Promise<MeetingTypeSu
   return res.rows.map(toSummary);
 }
 
-function parseAgentIds(formData: FormData): AgentId[] {
+/** Valida contra o roster REAL da empresa (padrão + custom) — nunca uma lista fixa no código. */
+async function parseAgentIds(db: Awaited<ReturnType<typeof getDb>>, companyId: string, formData: FormData): Promise<AgentId[]> {
+  await loadAndApplyProfileOverrides(db, companyId);
+  const roster = new Set(Object.keys(getAgentProfiles(companyId)));
   const selected = formData.getAll('agentIds').map(String);
-  const valid = selected.filter((id): id is AgentId =>
-    (COUNSELOR_AGENT_IDS as readonly string[]).includes(id),
-  );
-  return valid;
+  return selected.filter((id): id is AgentId => id !== PRESIDENT_AGENT_ID && roster.has(id));
 }
 
 export type MeetingTypeActionState = { error?: string; ok?: string } | null;
@@ -58,10 +60,11 @@ export async function createMeetingTypeAction(
 
   const name = String(formData.get('name') ?? '').trim();
   if (name.length < 2) return { error: 'Informe um nome para o tipo de reunião.' };
-  const agentIds = parseAgentIds(formData);
-  if (agentIds.length === 0) return { error: 'Escolha pelo menos um conselheiro.' };
 
   const db = await getDb();
+  const agentIds = await parseAgentIds(db, user.companyId, formData);
+  if (agentIds.length === 0) return { error: 'Escolha pelo menos um conselheiro.' };
+
   const exists = await db.query<{ id: string }>(
     'SELECT id FROM meeting_type WHERE company_id = $1 AND name = $2',
     [user.companyId, name],
@@ -88,10 +91,11 @@ export async function updateMeetingTypeAction(
   const name = String(formData.get('name') ?? '').trim();
   if (!id) return { error: 'Tipo inválido.' };
   if (name.length < 2) return { error: 'Informe um nome para o tipo de reunião.' };
-  const agentIds = parseAgentIds(formData);
-  if (agentIds.length === 0) return { error: 'Escolha pelo menos um conselheiro.' };
 
   const db = await getDb();
+  const agentIds = await parseAgentIds(db, user.companyId, formData);
+  if (agentIds.length === 0) return { error: 'Escolha pelo menos um conselheiro.' };
+
   const res = await db.query<{ id: string }>(
     `UPDATE meeting_type SET name = $3, agent_ids = $4, updated_at = now()
      WHERE id = $1 AND company_id = $2 RETURNING id`,

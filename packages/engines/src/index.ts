@@ -9,6 +9,7 @@ export {
   CFO_TRIGGERS,
   FUTURISTA_TRIGGERS,
   ALL_TRIGGERS,
+  buildKeywordTrigger,
   type AgentTriggerDef,
   type TriggerMatch,
 } from './triggers';

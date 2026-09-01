@@ -149,8 +149,8 @@ describe('AgentReasoner + prompts restritos', () => {
 
   it('system prompt contém escopo do agente + regras anti-extrapolação', () => {
     for (const agentId of ['cfo', 'legal', 'engenharia', 'futurista'] as const) {
-      const system = buildAgentSystem(DEFAULT_AGENT_PROFILES[agentId], TEST_COMPANY);
-      expect(system).toContain(DEFAULT_AGENT_PROFILES[agentId].scope);
+      const system = buildAgentSystem(DEFAULT_AGENT_PROFILES[agentId]!, TEST_COMPANY);
+      expect(system).toContain(DEFAULT_AGENT_PROFILES[agentId]!.scope);
       expect(system).toContain('NUNCA opine fora do seu escopo');
       expect(system).toContain('não invente números nem fatos');
       expect(system).toContain('tom de sugestão');

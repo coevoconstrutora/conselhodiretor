@@ -23,8 +23,14 @@ export interface AgentReport {
   readonly updatedAt: Date;
 }
 
-function counselorReportSystem(agentId: AgentId, companyId: string): string {
+function requireProfile(companyId: string, agentId: AgentId) {
   const profile = getAgentProfiles(companyId)[agentId];
+  if (!profile) throw new Error(`Conselheiro desconhecido: ${agentId} (empresa ${companyId}).`);
+  return profile;
+}
+
+function counselorReportSystem(agentId: AgentId, companyId: string): string {
+  const profile = requireProfile(companyId, agentId);
   return (
     `Você é ${profile.displayName}, conselheiro de IA de uma incorporadora imobiliária. ` +
     `A reunião terminou. Escreva o SEU RELATÓRIO da reunião para o empresário, ESTRITAMENTE ` +
@@ -42,7 +48,7 @@ function counselorReportSystem(agentId: AgentId, companyId: string): string {
 
 function presidentSystem(companyId: string): string {
   return (
-    `Você é ${getAgentProfiles(companyId).presidente.displayName} de uma incorporadora imobiliária. ` +
+    `Você é ${requireProfile(companyId, 'presidente').displayName} de uma incorporadora imobiliária. ` +
     'A reunião terminou e cada conselheiro entregou seu relatório. Escreva a SÍNTESE EXECUTIVA ' +
     'em português do Brasil, markdown leve, com as seções: ' +
     '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
@@ -79,7 +85,7 @@ export async function generateCounselorReport(
   });
   if (result.skip || !result.text.trim()) {
     throw new Error(
-      `O modelo não gerou conteúdo para o relatório de ${getAgentProfiles(companyId)[agentId].displayName} — tente novamente.`,
+      `O modelo não gerou conteúdo para o relatório de ${requireProfile(companyId, agentId).displayName} — tente novamente.`,
     );
   }
   return result.text;
@@ -91,9 +97,8 @@ export async function generatePresidentSynthesis(
   companyId: string,
   counselorReports: ReadonlyArray<{ agentId: AgentId; content: string }>,
 ): Promise<string> {
-  const profiles = getAgentProfiles(companyId);
   const blocks = counselorReports
-    .map((r) => `### Relatório — ${profiles[r.agentId].displayName}\n${r.content}`)
+    .map((r) => `### Relatório — ${requireProfile(companyId, r.agentId).displayName}\n${r.content}`)
     .join('\n\n');
   const result = await llm.complete({
     system: presidentSystem(companyId),

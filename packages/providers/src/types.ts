@@ -6,35 +6,41 @@
  * (Article IV — No Invention): nada de TTS/streaming de vídeo/batch aqui.
  */
 
-/** Os 9 agentes do Conselho (docs/agents-knowledge-seed.md). */
-export type AgentId =
-  | 'engenharia' // Engenharia e Lean Construction
-  | 'vendas' // Vendas e Marketing
-  | 'mercado' // Inteligência de Mercado e Produto
-  | 'arquitetura' // Arquitetura e Urbanismo
-  | 'legal' // Legal e Compliance
-  | 'cs' // Customer Success e Pós-venda
-  | 'cfo' // CFO, Funding, Caixa e MCMV
-  | 'futurista' // Futurista
-  | 'presidente'; // Presidente do Conselho (sintetizador)
+/**
+ * Slug de um conselheiro. Toda empresa começa com os 9 padrão
+ * (docs/agents-knowledge-seed.md), mas pode CRIAR conselheiros próprios
+ * além desses — por isso `string`, não um union fechado. O universo real
+ * por empresa vive em `agent_profile` (banco), nunca só no código.
+ * `DEFAULT_AGENT_IDS`/`DEFAULT_COUNSELOR_AGENT_IDS` abaixo são só os 9
+ * padrão, usados pra semear empresa nova — não são "os únicos válidos".
+ */
+export type AgentId = string;
 
-/** Lista canônica de todos os agentes, na ordem de exibição. */
-export const ALL_AGENT_IDS: readonly AgentId[] = [
-  'engenharia',
-  'vendas',
-  'mercado',
-  'arquitetura',
-  'legal',
-  'cs',
-  'cfo',
-  'futurista',
-  'presidente',
+/** Id reservado do sintetizador — nunca é um "participante" comum. */
+export const PRESIDENT_AGENT_ID = 'presidente';
+
+/** Os 9 conselheiros padrão, na ordem de exibição — semente de empresa nova. */
+export const DEFAULT_AGENT_IDS: readonly AgentId[] = [
+  'engenharia', // Engenharia e Lean Construction
+  'vendas', // Vendas e Marketing
+  'mercado', // Inteligência de Mercado e Produto
+  'arquitetura', // Arquitetura e Urbanismo
+  'legal', // Legal e Compliance
+  'cs', // Customer Success e Pós-venda
+  'cfo', // CFO, Funding, Caixa e MCMV
+  'futurista', // Futurista
+  PRESIDENT_AGENT_ID, // Presidente do Conselho (sintetizador)
 ];
 
-/** Conselheiros que CONTRIBUEM durante a reunião (o presidente só sintetiza). */
-export const COUNSELOR_AGENT_IDS: readonly AgentId[] = ALL_AGENT_IDS.filter(
-  (id) => id !== 'presidente',
+/** Os 8 conselheiros padrão que CONTRIBUEM (o presidente só sintetiza). */
+export const DEFAULT_COUNSELOR_AGENT_IDS: readonly AgentId[] = DEFAULT_AGENT_IDS.filter(
+  (id) => id !== PRESIDENT_AGENT_ID,
 );
+
+/** @deprecated use `DEFAULT_AGENT_IDS` — nome antigo sugeria ser a lista COMPLETA (não é mais). */
+export const ALL_AGENT_IDS = DEFAULT_AGENT_IDS;
+/** @deprecated use `DEFAULT_COUNSELOR_AGENT_IDS`. */
+export const COUNSELOR_AGENT_IDS = DEFAULT_COUNSELOR_AGENT_IDS;
 
 /** Tipo de contribuição da persona (CONTRIBUTION.type — §8). */
 export type ContributionType = 'atencao' | 'sugestao' | 'hipotese' | 'sintese';

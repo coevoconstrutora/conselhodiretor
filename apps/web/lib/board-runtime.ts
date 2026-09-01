@@ -29,6 +29,7 @@ import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
 import { createSpeakerNameTracker } from './speaker-names';
+import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
 /**
  * Runtime do board no processo do Next (demo do walking skeleton — E3).
@@ -367,6 +368,17 @@ async function getMeetingActiveAgentIds(
   return agentIds ? (agentIds as AgentId[]) : undefined;
 }
 
+/** Gatilhos dos conselheiros CUSTOM desta empresa (só eles têm trigger_keywords). */
+async function getCompanyExtraTriggers(db: SqlExecutor, companyId: string): Promise<AgentTriggerDef[]> {
+  const res = await db.query<{ agent_id: string; trigger_keywords: string[] | null }>(
+    'SELECT agent_id, trigger_keywords FROM agent_profile WHERE company_id = $1 AND trigger_keywords IS NOT NULL',
+    [companyId],
+  );
+  return res.rows
+    .map((r) => buildKeywordTrigger(r.agent_id as AgentId, r.trigger_keywords ?? []))
+    .filter((t): t is AgentTriggerDef => t !== null);
+}
+
 export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: string }> {
   const db = await getDb();
   const runtime = await getBoardRuntime();
@@ -389,6 +401,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   const { llm, label } = makeLlm(hooks.onUsage);
   const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
   const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
+  const extraTriggers = await getCompanyExtraTriggers(db, companyId);
   const orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
     pauseMs: 2500,
     tickMs: 1000,
@@ -402,6 +415,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     onCaseReview: hooks.onCaseReview,
     priorMeetingsContext,
     activeAgentIds,
+    extraTriggers,
   });
   runtime.gateway.bind(meetingId, orchestrator);
   // transcrição ao vivo p/ o painel (texto via WS — áudio nunca passa aqui, §7).
@@ -601,6 +615,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const { llm } = makeLlm(hooks.onUsage);
     const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
     const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
+    const extraTriggers = await getCompanyExtraTriggers(db, companyId);
     orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
       pauseMs: 2500,
       tickMs: 1000,
@@ -614,6 +629,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       onCaseStateUpdate: hooks.onCaseStateUpdate,
       onCaseReview: hooks.onCaseReview,
       activeAgentIds,
+      extraTriggers,
       priorMeetingsContext,
     });
     runtime.gateway.bind(meetingId, orchestrator);

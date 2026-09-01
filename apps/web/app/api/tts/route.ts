@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser } from '@/lib/auth';
-import { ALL_AGENT_IDS, type AgentId } from '@conselho/providers';
-import { AGENT_VOICE } from '@/lib/tts-voices';
+import { getDb } from '@/lib/db';
+import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
+import { resolveAgentVoice } from '@/lib/tts-voices';
 
 /**
  * Voz dos conselheiros (OpenAI TTS) — texto de uma contribuição → áudio.
@@ -28,12 +30,16 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
 
   const agentId = body.agentId;
   const text = (body.text ?? '').trim();
-  if (!agentId || !(ALL_AGENT_IDS as readonly string[]).includes(agentId)) {
+  if (!agentId) return NextResponse.json({ error: 'invalid-agent' }, { status: 400 });
+  // roster REAL da empresa (padrão + conselheiros CUSTOM), nunca uma lista fixa no código
+  const db = await getDb();
+  await loadAndApplyProfileOverrides(db, user.companyId);
+  if (!getAgentProfiles(user.companyId)[agentId]) {
     return NextResponse.json({ error: 'invalid-agent' }, { status: 400 });
   }
   if (!text) return NextResponse.json({ error: 'empty-text' }, { status: 400 });
 
-  const voice = AGENT_VOICE[agentId as AgentId];
+  const voice = resolveAgentVoice(agentId);
   const response = await fetch(OPENAI_TTS_ENDPOINT, {
     method: 'POST',
     headers: {

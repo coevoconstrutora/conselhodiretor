@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { COUNSELOR_AGENT_IDS, ALL_AGENT_IDS, type AgentId } from '@conselho/providers';
+import { type AgentId } from '@conselho/providers';
+import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
@@ -12,6 +13,9 @@ import {
   fetchUrlText,
   saveAgentProfile,
   rebuildAgentKnowledge,
+  loadAndApplyProfileOverrides,
+  createCustomCounselor,
+  deleteCustomCounselor,
 } from './kb-sources';
 
 /**
@@ -24,9 +28,11 @@ import {
 
 export type CounselorActionState = { error?: string; ok?: string } | null;
 
-function parseAgentId(value: unknown): AgentId {
+/** Valida contra o roster REAL da empresa (padrão + CUSTOM) — nunca uma lista fixa. */
+async function parseAgentId(db: Awaited<ReturnType<typeof getDb>>, companyId: string, value: unknown): Promise<AgentId> {
   const id = String(value ?? '');
-  if (!(ALL_AGENT_IDS as readonly string[]).includes(id)) throw new Error('Agente inválido.');
+  await loadAndApplyProfileOverrides(db, companyId);
+  if (!getAgentProfiles(companyId)[id]) throw new Error('Agente inválido.');
   return id as AgentId;
 }
 
@@ -45,13 +51,13 @@ export async function updateCounselorProfileAction(
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
   if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
-    const agentId = parseAgentId(formData.get('agentId'));
+    const db = await getDb();
+    const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     const displayName = String(formData.get('displayName') ?? '').trim();
     const scope = String(formData.get('scope') ?? '').trim();
     if (displayName.length < 3) return { error: 'O nome precisa de pelo menos 3 caracteres.' };
     if (scope.length < 20)
       return { error: 'O escopo precisa descrever a especialidade (mínimo 20 caracteres).' };
-    const db = await getDb();
     await saveAgentProfile(db, user.companyId, agentId, displayName, scope);
     revalidatePath(`/counselors/${agentId}`);
     revalidatePath('/');
@@ -71,14 +77,14 @@ export async function addTextSourceAction(
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
   if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
-    const agentId = parseAgentId(formData.get('agentId'));
+    const db = await getDb();
+    const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
     const title = String(formData.get('title') ?? '').trim();
     const content = String(formData.get('content') ?? '').trim();
     if (!title) return { error: 'Dê um título à fonte (ex.: "Política de contingência 2026").' };
     if (content.length < 20) return { error: 'O texto é curto demais (mínimo 20 caracteres).' };
-    const db = await getDb();
     await addKbSource(db, user.companyId, agentId, { kind: 'text', title, content }, getEncryptionKey());
     await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
@@ -98,13 +104,13 @@ export async function addUrlSourceAction(
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
   if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
-    const agentId = parseAgentId(formData.get('agentId'));
+    const db = await getDb();
+    const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
     const url = String(formData.get('url') ?? '').trim();
     if (!url) return { error: 'Informe a URL.' };
     const { title, text } = await fetchUrlText(url);
-    const db = await getDb();
     await addKbSource(db, user.companyId, agentId, { kind: 'url', title, ref: url, content: text }, getEncryptionKey());
     await rebuild(user.companyId, agentId);
     revalidatePath(`/counselors/${agentId}`);
@@ -127,7 +133,8 @@ export async function addFileSourceAction(
   if (!user) return { error: 'Sessão expirada — faça login novamente.' };
   if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
   try {
-    const agentId = parseAgentId(formData.get('agentId'));
+    const db = await getDb();
+    const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
     const file = formData.get('file');
@@ -141,7 +148,6 @@ export async function addFileSourceAction(
     if (file.size > MAX_FILE_BYTES) return { error: 'Arquivo grande demais (máx. 2 MB de texto).' };
     const content = (await file.text()).trim();
     if (content.length < 20) return { error: 'O arquivo não tem texto útil.' };
-    const db = await getDb();
     await addKbSource(
       db,
       user.companyId,
@@ -163,16 +169,60 @@ export async function deleteSourceAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
   if (!canWrite(user)) throw new Error('Convidados não podem remover fontes.');
-  const agentId = parseAgentId(formData.get('agentId'));
+  const db = await getDb();
+  const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
   const sourceId = String(formData.get('sourceId') ?? '');
   if (!sourceId) throw new Error('Fonte inválida.');
-  const db = await getDb();
   await deleteKbSource(db, user.companyId, sourceId, agentId);
   await rebuild(user.companyId, agentId);
   revalidatePath(`/counselors/${agentId}`);
 }
 
-/** Garante que só os 8 conselheiros com KB aceitam fontes. */
+/** Garante que só conselheiros com KB (todos exceto o Presidente) aceitam fontes. */
 export async function isCounselorWithKb(agentId: AgentId): Promise<boolean> {
-  return (COUNSELOR_AGENT_IDS as readonly string[]).includes(agentId);
+  return agentId !== 'presidente';
+}
+
+/**
+ * Cria um conselheiro CUSTOM da empresa (gestão de membros do conselho —
+ * "Configuração" → "Conselheiros"). Sem gatilho ele nunca reagiria a nada na
+ * reunião, então as palavras-chave são obrigatórias aqui (não dá pra curar um
+ * regex automático para um escopo desconhecido).
+ */
+export async function createCounselorAction(
+  _prev: CounselorActionState,
+  formData: FormData,
+): Promise<CounselorActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem criar conselheiros.' };
+  try {
+    const displayName = String(formData.get('displayName') ?? '').trim();
+    const scope = String(formData.get('scope') ?? '').trim();
+    const triggerKeywords = String(formData.get('triggerKeywords') ?? '')
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const db = await getDb();
+    const agentId = await createCustomCounselor(db, user.companyId, displayName, scope, triggerKeywords);
+    revalidatePath('/counselors');
+    revalidatePath('/');
+    return { ok: `Conselheiro "${displayName}" criado — já pode alimentar a base dele em /counselors/${agentId}.` };
+  } catch (err) {
+    console.error('[conselheiros] criar conselheiro custom falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao criar o conselheiro.' };
+  }
+}
+
+/** Remove um conselheiro CUSTOM (nunca um dos 9 padrão) e reconstrói o namespace dele (vazio). */
+export async function deleteCounselorAction(formData: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Não autenticado.');
+  if (!canWrite(user)) throw new Error('Convidados não podem remover conselheiros.');
+  const agentId = String(formData.get('agentId') ?? '') as AgentId;
+  if (!agentId) throw new Error('Conselheiro inválido.');
+  const db = await getDb();
+  await deleteCustomCounselor(db, user.companyId, agentId);
+  revalidatePath('/counselors');
+  revalidatePath('/');
 }

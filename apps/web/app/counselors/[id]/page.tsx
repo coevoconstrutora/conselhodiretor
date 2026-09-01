@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
-import { ALL_AGENT_IDS, type AgentId } from '@conselho/providers';
+import type { AgentId } from '@conselho/providers';
 import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
@@ -33,13 +33,14 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   if (!user) redirect('/login');
 
   const { id } = await params;
-  if (!(ALL_AGENT_IDS as readonly string[]).includes(id)) notFound();
-  const agentId = id as AgentId;
-
   const db = await getDb();
-  // perfis personalizados aplicados antes de ler (boot pode ter sido de outro processo)
+  // perfis personalizados (incl. conselheiros CUSTOM) aplicados antes de ler
+  // (boot pode ter sido de outro processo) — a lista real é o banco, não um
+  // array fixo no código: um conselheiro custom não está em ALL_AGENT_IDS.
   await loadAndApplyProfileOverrides(db, user.companyId);
-  const profile = getAgentProfiles(user.companyId)[agentId];
+  const profile = getAgentProfiles(user.companyId)[id];
+  if (!profile) notFound();
+  const agentId = id as AgentId;
   const isPresident = agentId === 'presidente';
   const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
@@ -52,7 +53,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
         </Link>
         <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
           <span aria-hidden="true" className="mr-2">
-            {AGENT_EMOJI[agentId]}
+            {AGENT_EMOJI[agentId] ?? '🧑‍💼'}
           </span>
           {profile.displayName}
         </h1>

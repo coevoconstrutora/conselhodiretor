@@ -1,16 +1,14 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { getAgentProfiles } from '@conselho/kb';
+import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
 import { getCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
-import { listMeetingTypes } from '@/lib/meeting-type-actions';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
-import { CreateMeetingTypeForm, MeetingTypesList } from '@/components/meeting-types-admin';
+import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
 
-/** Tipos de reunião ("Comitê Geral", "Comitê de Engenharia", ...) — escopam
- * quais conselheiros participam. "Comitê Geral" é o padrão, não pode ser removido. */
-export default async function MeetingTypesPage() {
+/** Gestão de membros do conselho: os 9 padrão + os CUSTOM desta empresa. */
+export default async function CounselorsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
   if (!canWrite(user)) redirect('/');
@@ -18,20 +16,24 @@ export default async function MeetingTypesPage() {
   const db = await getDb();
   await loadAndApplyProfileOverrides(db, user.companyId);
   const profiles = getAgentProfiles(user.companyId);
-  // Todo conselheiro DESTA empresa — padrão + custom — exceto o Presidente
-  // (ele nunca "participa" no sentido de tipo de reunião, só sintetiza).
-  const agentOptions = Object.values(profiles)
+  const counselors: CounselorSummary[] = Object.values(profiles)
     .filter((p) => p.agentId !== PRESIDENT_AGENT_ID)
-    .map((p) => ({ id: p.agentId, displayName: p.displayName }));
-  const types = await listMeetingTypes(user.companyId);
+    .map((p) => ({
+      agentId: p.agentId,
+      displayName: p.displayName,
+      scope: p.scope,
+      isDefault: p.agentId in DEFAULT_AGENT_PROFILES,
+    }));
 
   return (
     <main className="mx-auto min-h-screen max-w-3xl p-8">
       <header className="flex items-center justify-between border-b border-ink/10 pb-5">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Tipos de reunião</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselheiros</h1>
           <p className="text-sm text-ink-muted">
-            Escolha quais conselheiros participam de cada tipo — o Presidente sintetiza sempre, não precisa marcar.
+            Os 9 padrão nunca podem ser removidos. Conselheiros custom precisam de palavras-chave
+            para reagir na reunião — edite nome, escopo e alimente a base de cada um em{' '}
+            <code className="rounded bg-surface-muted px-1">/counselors/[id]</code>.
           </p>
         </div>
         <Link
@@ -43,14 +45,14 @@ export default async function MeetingTypesPage() {
       </header>
 
       <section className="mt-8">
-        <CreateMeetingTypeForm agentOptions={agentOptions} />
+        <CreateCounselorForm />
       </section>
 
       <section className="mt-8">
         <h2 className="font-display text-lg font-semibold text-ink">
-          {types.length} tipo{types.length === 1 ? '' : 's'}
+          {counselors.length} conselheiro{counselors.length === 1 ? '' : 's'}
         </h2>
-        <MeetingTypesList types={types} agentOptions={agentOptions} />
+        <CounselorsList counselors={counselors} />
       </section>
     </main>
   );

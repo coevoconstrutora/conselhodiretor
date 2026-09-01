@@ -12,6 +12,7 @@ export {
   getAgentProfiles,
   buildAgentSystem,
   applyAgentProfileOverrides,
+  removeAgentProfile,
   type AgentProfile,
   type ReasonInput,
   type PriorContribution,

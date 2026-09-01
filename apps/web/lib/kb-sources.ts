@@ -8,6 +8,9 @@ import {
   chunkContent,
   seedSources,
   applyAgentProfileOverrides,
+  removeAgentProfile,
+  getAgentProfiles,
+  DEFAULT_AGENT_PROFILES,
   type NamespacedKnowledgeStore,
 } from '@conselho/kb';
 import type { AgentId, KbChunk } from '@conselho/providers';
@@ -202,6 +205,85 @@ export async function saveAgentProfile(
     },
   );
   applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope }]);
+}
+
+function slugifyAgentId(displayName: string): string {
+  const base = displayName
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // remove acentos (NFD)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40);
+  return base || 'conselheiro';
+}
+
+/**
+ * Cria um conselheiro CUSTOM da empresa (além dos 9 padrão). Gera um
+ * `agent_id` (slug) único dentro da empresa, insere o perfil + gatilhos
+ * (palavras-chave — não dá pra curar regex automático p/ um escopo
+ * desconhecido) e aplica no registry em memória imediatamente.
+ */
+export async function createCustomCounselor(
+  db: SqlExecutor,
+  companyId: string,
+  displayName: string,
+  scope: string,
+  triggerKeywords: readonly string[],
+): Promise<AgentId> {
+  const name = displayName.trim().slice(0, 80);
+  const scopeText = scope.trim().slice(0, 600);
+  if (name.length < 3) throw new Error('O nome precisa de pelo menos 3 caracteres.');
+  if (scopeText.length < 20) throw new Error('O escopo precisa ter pelo menos 20 caracteres.');
+  const keywords = triggerKeywords.map((k) => k.trim()).filter(Boolean).slice(0, 30);
+  if (keywords.length === 0)
+    throw new Error('Informe ao menos uma palavra-chave para o conselheiro reagir na reunião.');
+
+  const existing = new Set(Object.keys(getAgentProfiles(companyId)));
+  const base = slugifyAgentId(name);
+  let agentId = base;
+  let suffix = 2;
+  while (existing.has(agentId)) {
+    agentId = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: `agent-profile-create-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query(
+        `INSERT INTO agent_profile (company_id, agent_id, display_name, scope, trigger_keywords)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [companyId, agentId, name, scopeText, keywords],
+      );
+      return null;
+    },
+  );
+  applyAgentProfileOverrides(companyId, [{ agentId: agentId as AgentId, displayName: name, scope: scopeText }]);
+  return agentId as AgentId;
+}
+
+/** Remove um conselheiro CUSTOM (nunca um dos 9 padrão) e todo resíduo associado. */
+export async function deleteCustomCounselor(db: SqlExecutor, companyId: string, agentId: AgentId): Promise<void> {
+  if (agentId in DEFAULT_AGENT_PROFILES) {
+    throw new Error('Os 9 conselheiros padrão não podem ser removidos.');
+  }
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: `agent-profile-delete-${agentId}`, kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query('DELETE FROM kb_source WHERE company_id = $1 AND agent_id = $2', [companyId, agentId]);
+      await tx.query('DELETE FROM agent_profile WHERE company_id = $1 AND agent_id = $2', [companyId, agentId]);
+      // remove o id de qualquer tipo de reunião que o incluía — referência órfã quebraria o combobox
+      await tx.query(
+        'UPDATE meeting_type SET agent_ids = array_remove(agent_ids, $2) WHERE company_id = $1',
+        [companyId, agentId],
+      );
+      return null;
+    },
+  );
+  removeAgentProfile(companyId, agentId);
 }
 
 /** Carrega e APLICA os perfis personalizados da EMPRESA (boot/1º acesso + após edição). */

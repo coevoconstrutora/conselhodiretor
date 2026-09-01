@@ -23,17 +23,13 @@ export interface HealthReport {
 
 export const BOARD_PROTOCOL_VERSION = 1 as const;
 
-/** Slugs dos 9 agentes do Conselho (espelho de AgentId em @conselho/providers). */
-export type WireAgentId =
-  | 'engenharia'
-  | 'vendas'
-  | 'mercado'
-  | 'arquitetura'
-  | 'legal'
-  | 'cs'
-  | 'cfo'
-  | 'futurista'
-  | 'presidente';
+/**
+ * Slug do agente (espelho de AgentId em @conselho/providers). Cada empresa
+ * pode ter conselheiros CUSTOM além dos 9 padrão — por isso é `string`, não
+ * um union fechado; o id em si vem sempre do banco (agent_profile), nunca
+ * inventado no cliente.
+ */
+export type WireAgentId = string;
 
 /** Contribuição como trafega no fio (espelho serializável de AgentContribution). */
 export interface WireContribution {

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { setActiveCompany } from '@conselho/auth';
 import { getAgentProfiles } from '@conselho/kb';
-import { ALL_AGENT_IDS, COUNSELOR_AGENT_IDS } from '@conselho/providers';
+import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 import type { CompanyRow } from '@conselho/db';
 import { getCurrentUser, SESSION_COOKIE } from './auth';
 import { getDb } from './db';
@@ -102,19 +102,19 @@ export async function createCompanyAction(
   );
   const companyId = created.rows[0]!.id;
 
-  // Clona os 9 papéis a partir da Coevo (default) — nome/escopo ATUAIS dela
-  // (incluindo customizações já feitas), NUNCA conhecimento (kb_source).
+  // Clona TODOS os papéis a partir da Coevo (default) — os 9 padrão +
+  // conselheiros CUSTOM que a Coevo já tenha criado — nome/escopo ATUAIS
+  // dela, NUNCA conhecimento (kb_source).
   const coevo = await db.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
   const templateCompanyId = coevo.rows[0]?.id;
   if (templateCompanyId) {
     await loadAndApplyProfileOverrides(db, templateCompanyId); // hidrata em memória com o que está no banco
     const templateProfiles = getAgentProfiles(templateCompanyId);
-    for (const agentId of ALL_AGENT_IDS) {
-      const p = templateProfiles[agentId];
+    for (const p of Object.values(templateProfiles)) {
       await db.query(
         `INSERT INTO agent_profile (company_id, agent_id, display_name, scope) VALUES ($1, $2, $3, $4)
          ON CONFLICT (company_id, agent_id) DO NOTHING`,
-        [companyId, agentId, p.displayName, p.scope],
+        [companyId, p.agentId, p.displayName, p.scope],
       );
     }
   }
