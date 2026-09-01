@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
@@ -18,6 +17,7 @@ import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
 import { formatDateBR } from '@/lib/format';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
+import { DashboardShell } from '@/components/dashboard-shell';
 
 const KIND_LABEL: Record<string, string> = {
   text: '📄 texto',
@@ -62,24 +62,18 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
-      <header className="border-b border-ink/10 pb-5">
-        <Link href="/" className="text-sm text-ink-muted hover:text-ink hover:underline">
-          ← Painel
-        </Link>
-        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-          <AgentIcon
-            iconKey={profile.iconKey}
-            iconColor={profile.iconColor}
-            emoji={getAgentEmoji(agentId)}
-            className="mr-2"
-          />
-          {profile.displayName}
-        </h1>
+    <DashboardShell pageTitle={profile.displayName}>
+      <div className="mt-2 flex items-center gap-2">
+        <AgentIcon
+          iconKey={profile.iconKey}
+          iconColor={profile.iconColor}
+          emoji={getAgentEmoji(agentId)}
+          className="text-2xl"
+        />
         {profile.professionalProfile ? (
-          <p className="mt-2 text-sm italic text-ink-muted">{profile.professionalProfile}</p>
+          <p className="text-sm italic text-ink-muted">{profile.professionalProfile}</p>
         ) : null}
-      </header>
+      </div>
 
       {/* Perfil */}
       <section aria-label="Perfil do conselheiro" className="card-premium mt-8 p-6">
@@ -213,6 +207,6 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           </section>
         </>
       )}
-    </main>
+    </DashboardShell>
   );
 }

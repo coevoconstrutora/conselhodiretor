@@ -14,6 +14,9 @@
  *             é o bootstrap do dono; usuários adicionais normalmente entram
  *             pela tela de gestão de usuários, não por aqui)
  *   --empresa opcional — slug da empresa (default: coevo — cria se não existir)
+ *   --super-admin opcional — marca `is_super_admin` (acesso a TODAS as
+ *             empresas, ex.: /admin/companies) — normalmente só concedido
+ *             pela tela de gestão de super-admins; este flag é atalho de dev.
  *
  * Banco: usa DATABASE_URL se definido (produção/Postgres), senão o PGlite local
  * de desenvolvimento (apps/web/.pgdata) — o MESMO banco que o `pnpm dev` usa.
@@ -66,6 +69,7 @@ async function main(): Promise<void> {
   const nome = argValue('--nome')?.trim();
   const senha = argValue('--senha');
   const desativarDemo = process.argv.includes('--desativar-demo');
+  const superAdmin = process.argv.includes('--super-admin');
   const role = argValue('--role') ?? 'admin';
   const empresaSlug = argValue('--empresa')?.trim().toLowerCase() || 'coevo';
 
@@ -99,17 +103,18 @@ async function main(): Promise<void> {
     ]);
     if (existing.rows.length > 0) {
       await db.query(
-        'UPDATE app_user SET display_name = $2, password_hash = $3, role = $4, updated_at = now() WHERE email = $1',
-        [email, nome, passwordHash, role],
+        'UPDATE app_user SET display_name = $2, password_hash = $3, role = $4, is_super_admin = is_super_admin OR $5, updated_at = now() WHERE email = $1',
+        [email, nome, passwordHash, role, superAdmin],
       );
       console.log(`✅ Usuário ${email} já existia — nome, senha e papel (${role}) ATUALIZADOS.`);
     } else {
       await db.query(
-        'INSERT INTO app_user (email, display_name, password_hash, role, company_id) VALUES ($1, $2, $3, $4, $5)',
-        [email, nome, passwordHash, role, companyId],
+        'INSERT INTO app_user (email, display_name, password_hash, role, company_id, is_super_admin) VALUES ($1, $2, $3, $4, $5, $6)',
+        [email, nome, passwordHash, role, companyId, superAdmin],
       );
       console.log(`✅ Usuário ${email} criado (papel: ${role}, empresa: ${empresaSlug}).`);
     }
+    if (superAdmin) console.log('👑 Super-admin concedido (acesso a todas as empresas).');
 
     if (desativarDemo) {
       const randomPass = hashPassword(randomBytes(24).toString('base64url'));

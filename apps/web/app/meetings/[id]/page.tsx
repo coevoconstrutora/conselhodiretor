@@ -80,7 +80,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {companyProfile.logoDataUrl ? (
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius)] bg-white p-1">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[var(--radius)] bg-white p-1.5">
                 <img
                   src={companyProfile.logoDataUrl}
                   alt={companyProfile.name ?? 'Logo da empresa'}

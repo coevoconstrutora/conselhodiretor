@@ -1,10 +1,10 @@
-import Link from 'next/link';
 import { requireCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { loadCompanyProfile, listCompanySources, rescanDueCompanySources } from '@/lib/company-profile';
 import { CompanyProfileForm } from '@/components/company-profile-form';
 import { CompanyAppearanceForm } from '@/components/company-appearance-form';
+import { DashboardShell } from '@/components/dashboard-shell';
 import {
   CompanySourcesList,
   AddCompanyTextForm,
@@ -31,30 +31,16 @@ export default async function CompanyPage() {
   });
 
   return (
-    <main className="mx-auto min-h-screen max-w-5xl p-6 sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">
-            Perfil da empresa
-          </h1>
-          <p className="text-sm text-ink-muted">
-            Contexto compartilhado por todos os conselheiros — sem precisar repetir em cada um.
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-        >
-          ← Voltar
-        </Link>
-      </header>
-
-      <section className="mt-8 max-w-2xl">
+    <DashboardShell
+      pageTitle="Perfil da empresa"
+      subtitle="Contexto compartilhado por todos os conselheiros — sem precisar repetir em cada um."
+    >
+      <section className="mt-8">
         <CompanyProfileForm profile={profile} />
       </section>
 
       {/* Aparência: logo + tema visual — separado do perfil de negócio de propósito. */}
-      <section className="mt-6 max-w-2xl">
+      <section className="mt-6">
         <h2 className="font-display text-base font-semibold text-ink">Aparência</h2>
         <p className="mt-1 text-xs text-ink-muted">
           Logo e cores aparecem só na tela — nunca entram no contexto dos conselheiros.
@@ -91,6 +77,6 @@ export default async function CompanyPage() {
           </div>
         </div>
       </section>
-    </main>
+    </DashboardShell>
   );
 }

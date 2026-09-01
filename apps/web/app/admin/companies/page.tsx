@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { requireCurrentUser } from '@/lib/auth';
 import { listCompanies } from '@/lib/company-actions';
@@ -7,6 +6,7 @@ import { CreateCompanyForm } from '@/components/create-company-form';
 import { RenameCompanyForm } from '@/components/rename-company-form';
 import { ResetCompanyHistoryForm } from '@/components/reset-counselors-form';
 import { SuperAdminManager } from '@/components/super-admin-manager';
+import { DashboardShell } from '@/components/dashboard-shell';
 import { formatDateBR } from '@/lib/format';
 
 /** Gestão de empresas — só super-admin. Toda empresa nasce isolada: só os 9
@@ -22,22 +22,10 @@ export default async function CompaniesAdminPage() {
   ]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl p-6 sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Empresas</h1>
-          <p className="text-sm text-ink-muted">
-            Cada empresa tem seus próprios conselheiros, usuários e reuniões — isolados.
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-        >
-          ← Voltar
-        </Link>
-      </header>
-
+    <DashboardShell
+      pageTitle="Empresas"
+      subtitle="Cada empresa tem seus próprios conselheiros, usuários e reuniões — isolados."
+    >
       <section className="mt-8">
         <CreateCompanyForm />
       </section>
@@ -71,6 +59,6 @@ export default async function CompaniesAdminPage() {
         </p>
         <SuperAdminManager candidates={superAdminCandidates} />
       </section>
-    </main>
+    </DashboardShell>
   );
 }

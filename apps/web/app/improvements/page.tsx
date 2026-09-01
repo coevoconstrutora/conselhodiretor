@@ -5,6 +5,7 @@ import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { formatDateTimeBR } from '@/lib/format';
+import { DashboardShell } from '@/components/dashboard-shell';
 
 /**
  * Aprendizado do produto: o que a análise automática pós-reunião apontou que
@@ -19,22 +20,10 @@ export default async function ImprovementsPage() {
   const improvements = await listMeetingImprovements(db, user.companyId, getEncryptionKey());
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
-      <header className="border-b border-ink/10 pb-5">
-        <Link href="/" className="text-sm text-ink-muted hover:text-ink hover:underline">
-          ← Painel
-        </Link>
-        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-          🧠 Melhorias sugeridas
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          A cada reunião encerrada, uma análise automática aponta o que daria pra melhorar no
-          Conselho em si (gatilhos, repetição de fórmula, tom, lacuna de base de conhecimento) —
-          nunca conselho de negócio. Isto é só um registro para aprendizado: nada aqui é aplicado
-          sozinho no sistema.
-        </p>
-      </header>
-
+    <DashboardShell
+      pageTitle="🧠 Melhorias sugeridas"
+      subtitle="A cada reunião encerrada, uma análise automática aponta o que daria pra melhorar no Conselho em si (gatilhos, repetição de fórmula, tom, lacuna de base de conhecimento) — nunca conselho de negócio. Isto é só um registro para aprendizado: nada aqui é aplicado sozinho no sistema."
+    >
       {improvements.length === 0 ? (
         <p className="mt-8 rounded-[var(--radius)] border border-dashed border-ink/15 p-6 text-sm text-ink-muted">
           Nenhuma análise ainda — encerre uma reunião para gerar a primeira.
@@ -62,6 +51,6 @@ export default async function ImprovementsPage() {
           ))}
         </ul>
       )}
-    </main>
+    </DashboardShell>
   );
 }

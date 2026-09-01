@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAgentProfiles } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
@@ -7,6 +6,7 @@ import { getDb } from '@/lib/db';
 import { listMeetingTypes } from '@/lib/meeting-type-actions';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateMeetingTypeForm, MeetingTypesList } from '@/components/meeting-types-admin';
+import { DashboardShell } from '@/components/dashboard-shell';
 
 /** Tipos de reunião ("Comitê Geral", "Comitê de Engenharia", ...) — escopam
  * quais conselheiros participam. "Comitê Geral" é o padrão, não pode ser removido. */
@@ -25,22 +25,10 @@ export default async function MeetingTypesPage() {
   const types = await listMeetingTypes(user.companyId);
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Tipos de reunião</h1>
-          <p className="text-sm text-ink-muted">
-            Escolha quais conselheiros participam de cada tipo — o Presidente sintetiza sempre, não precisa marcar.
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-        >
-          ← Voltar
-        </Link>
-      </header>
-
+    <DashboardShell
+      pageTitle="Tipos de reunião"
+      subtitle="Escolha quais conselheiros participam de cada tipo — o Presidente sintetiza sempre, não precisa marcar."
+    >
       <section className="mt-8">
         <CreateMeetingTypeForm agentOptions={agentOptions} />
       </section>
@@ -51,6 +39,6 @@ export default async function MeetingTypesPage() {
         </h2>
         <MeetingTypesList types={types} agentOptions={agentOptions} />
       </section>
-    </main>
+    </DashboardShell>
   );
 }

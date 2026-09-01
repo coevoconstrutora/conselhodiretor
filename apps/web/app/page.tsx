@@ -1,17 +1,14 @@
 import Link from 'next/link';
 import { getAgentProfiles } from '@conselho/kb';
-import { requireCurrentUser, canWrite, isAdmin } from '@/lib/auth';
-import { logoutAction } from '@/lib/auth-actions';
+import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
-import { loadCompanyProfile } from '@/lib/company-profile';
 import { formatMeetingDuration, formatDateTimeBR, formatTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
-import { CompanySwitcher } from '@/components/company-switcher';
-import { ConfigMenu } from '@/components/config-menu';
 import { CounselorsGrid } from '@/components/counselors-grid';
+import { DashboardShell } from '@/components/dashboard-shell';
 
 /** Home: reuniões do empresário + gestão dos conselheiros (NotebookLM por agente). */
 export default async function DashboardPage() {
@@ -23,50 +20,11 @@ export default async function DashboardPage() {
   await loadAndApplyProfileOverrides(db, user.companyId); // nomes personalizados no grid
   const profiles = getAgentProfiles(user.companyId);
   const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
-  const companyProfile = await loadCompanyProfile(db, user.companyId, key);
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl p-6 sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div className="flex items-center gap-3">
-          {companyProfile.logoDataUrl ? (
-            <img
-              src={companyProfile.logoDataUrl}
-              alt={companyProfile.name ?? 'Logo da empresa'}
-              className="h-14 w-14 shrink-0 object-contain mix-blend-multiply"
-            />
-          ) : null}
-          <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselho</h1>
-            <p className="text-sm text-ink-muted">
-              Seu conselho de {specialistCount} especialista{specialistCount === 1 ? '' : 's'} em cada
-              reunião
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
-          <ConfigMenu
-            items={[
-              { href: '/company', label: 'Empresa' },
-              ...(canWrite(user) ? [{ href: '/counselors', label: 'Conselheiros' }] : []),
-              ...(canWrite(user) ? [{ href: '/meeting-types', label: 'Tipos de reunião' }] : []),
-              ...(canWrite(user) ? [{ href: '/improvements', label: '🧠 Melhorias' }] : []),
-              ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),
-              ...(user.isSuperAdmin ? [{ href: '/admin/companies', label: 'Empresas' }] : []),
-            ]}
-          />
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-            >
-              Sair
-            </button>
-          </form>
-        </div>
-      </header>
-
+    <DashboardShell
+      subtitle={`Seu conselho de ${specialistCount} especialista${specialistCount === 1 ? '' : 's'} em cada reunião`}
+    >
       <section className="mt-10 flex items-end justify-between gap-4">
         <div className="space-y-1">
           <h2 className="font-display text-xl font-semibold text-ink">
@@ -140,6 +98,6 @@ export default async function DashboardPage() {
         {/* Padrão + CUSTOM desta empresa — o Presidente sempre por último. */}
         <CounselorsGrid agents={buildAgentRoster(profiles)} />
       </section>
-    </main>
+    </DashboardShell>
   );
 }

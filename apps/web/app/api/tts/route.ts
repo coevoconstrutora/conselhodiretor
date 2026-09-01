@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { resolveAgentVoice, buildVoiceInstructions } from '@/lib/tts-voices';
+import { expandForSpeech } from '@/lib/tts-glossary';
 
 /**
  * Voz dos conselheiros (OpenAI TTS) — texto de uma contribuição → áudio.
@@ -51,7 +52,7 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
     body: JSON.stringify({
       model: TTS_MODEL,
       voice,
-      input: text.slice(0, MAX_CHARS),
+      input: expandForSpeech(text).slice(0, MAX_CHARS),
       instructions,
       response_format: 'mp3',
     }),

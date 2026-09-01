@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
@@ -6,6 +5,7 @@ import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
+import { DashboardShell } from '@/components/dashboard-shell';
 
 /** Gestão de membros do conselho: os padrão do produto + os CUSTOM desta empresa. */
 export default async function CounselorsPage() {
@@ -27,25 +27,17 @@ export default async function CounselorsPage() {
     }));
 
   return (
-    <main className="mx-auto min-h-screen max-w-4xl p-6 sm:p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-ink/10 pb-5">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">Conselheiros</h1>
-          <p className="text-sm text-ink-muted">
-            Os conselheiros padrão do produto nunca podem ser removidos. Conselheiros custom precisam de palavras-chave
-            para reagir na reunião — edite nome, escopo e alimente a base de cada um em{' '}
-            <code className="rounded bg-surface-muted px-1">/counselors/[id]</code>.
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
-        >
-          ← Voltar
-        </Link>
-      </header>
-
-      <section className="mt-8 max-w-2xl">
+    <DashboardShell
+      pageTitle="Conselheiros"
+      subtitle={
+        <>
+          Os conselheiros padrão do produto nunca podem ser removidos. Conselheiros custom
+          precisam de palavras-chave para reagir na reunião — edite nome, escopo e alimente a base
+          de cada um em <code className="rounded bg-surface-muted px-1">/counselors/[id]</code>.
+        </>
+      }
+    >
+      <section className="mt-8">
         <CreateCounselorForm />
       </section>
 
@@ -55,6 +47,6 @@ export default async function CounselorsPage() {
         </h2>
         <CounselorsList counselors={counselors} />
       </section>
-    </main>
+    </DashboardShell>
   );
 }
