@@ -124,13 +124,16 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
             <form action={confirmRecordingAction} className="mt-4 space-y-3">
               <input type="hidden" name="meetingId" value={id} />
               <label className="block space-y-1.5 text-left">
-                <span className="text-sm font-medium text-ink">Quantas pessoas estão presentes?</span>
+                <span className="text-sm font-medium text-ink">
+                  Quantas pessoas estão presentes?{' '}
+                  <span className="font-normal text-ink-muted">(opcional)</span>
+                </span>
                 <input
                   name="participantCount"
                   type="number"
                   min={1}
                   max={100}
-                  placeholder="ex.: 5"
+                  placeholder="deixe em branco se preferir não informar"
                   className="w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                 />
               </label>
