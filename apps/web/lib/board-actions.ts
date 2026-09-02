@@ -9,7 +9,6 @@ import {
   requestSynthesis,
   startLiveBoard,
   stopLiveBoard,
-  runMeetingImprovementAnalysis,
   renameSpeaker,
   setSilentMode,
 } from './board-runtime';
@@ -159,10 +158,6 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
     await stopLiveBoard(meetingId);
     await closeMeeting(db, meetingId, user.companyId);
     revalidatePath(`/meetings/${meetingId}`);
-    // aprendizado do produto: nunca bloqueia nem falha o encerramento (fire-and-forget)
-    void runMeetingImprovementAnalysis(meetingId, user.companyId).catch((error) => {
-      console.error('[melhorias] análise pós-reunião falhou:', error);
-    });
     return { ok: true };
   } catch (err) {
     console.error('[board] endMeeting falhou:', err);

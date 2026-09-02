@@ -15,7 +15,7 @@ import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
-import { getNoteInputs } from './board-runtime';
+import { getNoteInputs, runMeetingImprovementAnalysis } from './board-runtime';
 import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
 import { loadAndApplyProfileOverrides } from './kb-sources';
@@ -105,6 +105,13 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
         console.error('[relatorios] salvar decisões/ações falhou:', error),
       );
     }
+
+    // Auto-análise (Etapa "Auto-análise e melhoria contínua") — só AGORA
+    // decisões/ações/síntese final existem (Seção 1 do pedido). Nunca
+    // bloqueia nem falha a geração dos relatórios.
+    void runMeetingImprovementAnalysis(meetingId, user.companyId).catch((error) => {
+      console.error('[melhorias] análise pós-reunião falhou:', error);
+    });
 
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };

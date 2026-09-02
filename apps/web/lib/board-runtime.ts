@@ -10,7 +10,12 @@ import {
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
 import { getMeetingGuidance } from '@conselho/meetings';
 import { NamespacedKnowledgeStore, getCompanyProfile, getPresidentConfig } from '@conselho/kb';
-import { analyzeMeetingForImprovements, saveMeetingImprovement } from '@conselho/meeting-report';
+import {
+  generateMeetingAnalysis,
+  saveMeetingAnalysis,
+  listMeetingDecisions,
+  listMeetingActionItems,
+} from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
 import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
 import { TelemetryRegistry, type GateDecisionKind, type UiEventKind, type CaseReviewOutcome } from '@conselho/telemetry';
@@ -77,6 +82,15 @@ const globalForBoard = globalThis as unknown as {
   /** A6: handshake com o server.mjs (fora do bundle) — roteia upgrades /board e /audio. */
   __conselhoBoardUpgrade?: (request: unknown, socket: unknown, head: unknown) => void;
 };
+
+/**
+ * Configuração CENTRALIZADA do modelo de auto-análise (Etapa "Auto-análise",
+ * Seção 32) — nunca hardcoded em múltiplos serviços. É majoritariamente
+ * classificação/pontuação estruturada, não precisa do modelo mais caro por
+ * padrão.
+ */
+const AUTO_ANALYSIS_MODEL = process.env.AUTO_ANALYSIS_MODEL || 'gpt-5.6-luna';
+const AUTO_ANALYSIS_REASONING_EFFORT = process.env.AUTO_ANALYSIS_REASONING_EFFORT || 'medium';
 
 export const BOARD_WS_PORT = Number(process.env.BOARD_WS_PORT ?? 3001);
 /** A6: 'attached' = WS na MESMA porta do HTTP (custom server, 443 no Fly);
@@ -666,20 +680,51 @@ export async function getNoteInputs(meetingId: string): Promise<{
 }
 
 /**
- * Aprendizado do PRODUTO: roda uma análise (LLM) do que dava pra melhorar no
- * PRÓPRIO Conselho nesta reunião — nunca do negócio da empresa — e guarda só
- * pra leitura (tela /melhorias). Best-effort: chamado fire-and-forget ao
- * encerrar a reunião; falha aqui NUNCA derruba o "Encerrar reunião".
+ * Aprendizado do PRODUTO (Etapa "Auto-análise e melhoria contínua") — roda a
+ * avaliação ESTRUTURADA do PRÓPRIO Conselho nesta reunião (nunca do negócio
+ * da empresa) e guarda pra leitura (tela /improvements + aba "Análise" da
+ * reunião histórica). Disparada quando os RELATÓRIOS são gerados (não no
+ * encerramento cru) — só ali decisões/ações/síntese final já existem
+ * (pipeline da Seção 1 do pedido). Best-effort: nunca bloqueia nem falha a
+ * geração dos relatórios.
  */
 export async function runMeetingImprovementAnalysis(meetingId: string, companyId: string): Promise<void> {
   try {
     const inputs = await getNoteInputs(meetingId);
     if (!inputs) return;
-    const { llm, label } = createLlm({ maxTokens: 1200 });
-    const content = await analyzeMeetingForImprovements(llm, inputs.finals, inputs.contributions);
-    if (!content) return;
     const db = await getDb();
-    await saveMeetingImprovement(db, meetingId, companyId, content, getEncryptionKey(), label);
+    const key = getEncryptionKey();
+
+    const contributionsByAgent = new Map<AgentId, number>();
+    for (const c of inputs.contributions) {
+      contributionsByAgent.set(c.agentId, (contributionsByAgent.get(c.agentId) ?? 0) + 1);
+    }
+    const decisions = await listMeetingDecisions(db, meetingId, key).catch(() => []);
+    const actionItems = await listMeetingActionItems(db, meetingId, key).catch(() => []);
+    const previousMeetingSummary = await loadPriorMeetingsContext(db, companyId, meetingId);
+    const report = (await getTelemetryReport(meetingId)).report;
+    const totalGateCandidates = Object.values(report.gate).reduce((a, b) => a + b, 0);
+
+    const { llm, label } = createLlm({ maxTokens: 1200 });
+    const analysis = await generateMeetingAnalysis(
+      llm,
+      {
+        transcriptFinals: inputs.finals,
+        contributions: inputs.contributions,
+        contributionsByAgent,
+        decisions,
+        actionItems,
+        previousMeetingSummary: previousMeetingSummary ?? null,
+        totalGateCandidates,
+        semanticDuplicates: report.gate['semantic-duplicate'],
+        costUsd: report.cost.totalUsd,
+        latencyP50Ms: report.latency.p50Ms,
+      },
+      AUTO_ANALYSIS_MODEL,
+      AUTO_ANALYSIS_REASONING_EFFORT,
+    );
+    if (!analysis) return;
+    await saveMeetingAnalysis(db, meetingId, companyId, analysis, key, label);
   } catch (error) {
     console.error('[melhorias] análise pós-reunião falhou:', error);
   }

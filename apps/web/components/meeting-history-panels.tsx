@@ -1,4 +1,10 @@
-import type { MeetingContributionRecord, MeetingDecisionRecord, MeetingActionItemRecord } from '@conselho/meeting-report';
+import Link from 'next/link';
+import type {
+  MeetingContributionRecord,
+  MeetingDecisionRecord,
+  MeetingActionItemRecord,
+  MeetingImprovement,
+} from '@conselho/meeting-report';
 import type { AgentProfile } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
 import { formatDateBR, formatTimeBR } from '@/lib/format';
@@ -90,6 +96,34 @@ export function DecisionsPanel({ decisions }: { decisions: readonly MeetingDecis
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** "Análise do Conselho" (Etapa "Auto-análise", Seção 30) — resumo compacto + link pro Aprendizado do Conselho. */
+export function AnalysisSummaryCard({ analysis }: { analysis: MeetingImprovement | null }) {
+  if (!analysis?.analysis) return null;
+  const a = analysis.analysis;
+  return (
+    <section aria-label="Análise do Conselho" className="card-premium mt-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-display text-base font-semibold text-ink">🧠 Análise do Conselho</h2>
+        {a.overallScore !== null ? (
+          <span className="rounded-full bg-brand/10 px-3 py-1 text-sm font-semibold text-brand">
+            Score: {a.overallScore}/100
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">{analysis.narrative}</p>
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted">
+        {a.scores.redundancyControl !== null ? <span>Redundância: {100 - a.scores.redundancyControl}%</span> : null}
+        {a.scores.decisionClarity !== null ? <span>Clareza das decisões: {a.scores.decisionClarity}/100</span> : null}
+        {a.scores.actionItemQuality !== null ? <span>Qualidade das ações: {a.scores.actionItemQuality}/100</span> : null}
+        {a.costAnalysis.estimatedCostUsd !== null ? <span>Custo IA: US$ {a.costAnalysis.estimatedCostUsd.toFixed(2)}</span> : null}
+      </div>
+      <Link href="/improvements" className="mt-3 inline-block text-xs font-semibold text-brand hover:underline">
+        Ver análise completa →
+      </Link>
+    </section>
   );
 }
 

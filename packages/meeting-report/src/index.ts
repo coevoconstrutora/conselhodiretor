@@ -26,11 +26,25 @@ export {
   type PreviousMeetingPreview,
 } from './previous-context';
 export {
-  analyzeMeetingForImprovements,
-  saveMeetingImprovement,
+  generateMeetingAnalysis,
+  saveMeetingAnalysis,
   listMeetingImprovements,
+  loadLatestMeetingAnalysis,
+  listMeetingAnalysisVersions,
   type MeetingImprovement,
+  type MeetingAnalysis,
+  type MeetingAnalysisScores,
+  type MeetingAnalysisInput,
+  type CounselorAnalysisEntry,
 } from './improvements';
+export {
+  scoreDecisionClarity,
+  scoreActionItemQuality,
+  scoreRedundancyControl,
+  computeOverallScore,
+  SCORE_WEIGHTS,
+  type ScoreDimensions,
+} from './analysis-scoring';
 export {
   saveMeetingContribution,
   listMeetingContributions,

@@ -17,6 +17,7 @@ import {
   loadMeetingContributionCounts,
   loadMeetingDecisions,
   loadMeetingActionItems,
+  loadMeetingAnalysis,
 } from '@/lib/meeting-history';
 import {
   getCompanyKnowledgeStore,
@@ -33,7 +34,7 @@ import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
 import { HistoricalMeetingTabs } from '@/components/historical-meeting-tabs';
-import { ContributionsPanel, DecisionsPanel, ActionsPanel } from '@/components/meeting-history-panels';
+import { ContributionsPanel, DecisionsPanel, ActionsPanel, AnalysisSummaryCard } from '@/components/meeting-history-panels';
 
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
@@ -89,6 +90,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const contributionCounts = closed && authorized ? await loadMeetingContributionCounts(id) : new Map<string, number>();
   const decisions = closed && authorized ? await loadMeetingDecisions(id) : [];
   const actionItems = closed && authorized ? await loadMeetingActionItems(id) : [];
+  const meetingAnalysis = closed && authorized ? await loadMeetingAnalysis(id) : null;
   const presidentReport = reports.find((r) => r.agentId === 'presidente') ?? null;
   const counselorReports = reports.filter((r) => r.agentId !== 'presidente');
   const historicalCounts = closed
@@ -292,6 +294,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 </p>
               </details>
             ) : null}
+
+            {closed ? <AnalysisSummaryCard analysis={meetingAnalysis} /> : null}
 
             {closed ? (
               <HistoricalMeetingTabs

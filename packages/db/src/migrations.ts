@@ -691,4 +691,18 @@ CREATE INDEX IF NOT EXISTS idx_meeting_action_item_meeting ON meeting_action_ite
 ALTER TABLE meeting ADD COLUMN IF NOT EXISTS previous_context_meeting_id uuid REFERENCES meeting(id) ON DELETE SET NULL;
 `,
   },
+  {
+    name: '0027_meeting_analysis',
+    sql: `
+-- Auto-análise ESTRUTURADA (Etapa "Auto-análise e melhoria contínua") —
+-- meeting_improvement (migration 0019) guardava só texto livre; agora
+-- guarda TAMBÉM o JSON estruturado completo (scores, forças, problemas,
+-- recomendações, análise por conselheiro/Presidente/continuidade/custo).
+-- content_enc continua sendo o "Resumo da análise" (narrativa), agora
+-- GERADA a partir do estruturado, não o contrário. Nunca sobrescreve:
+-- reanalisar insere uma linha nova (histórico de versões via created_at).
+ALTER TABLE meeting_improvement ADD COLUMN IF NOT EXISTS structured_enc text;
+ALTER TABLE meeting_improvement ADD COLUMN IF NOT EXISTS overall_score int;
+`,
+  },
 ];

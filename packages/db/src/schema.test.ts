@@ -70,6 +70,7 @@ describe('Migrations — schema base', () => {
       '0024_president_config',
       '0025_participants_biometrics',
       '0026_meeting_history',
+      '0027_meeting_analysis',
     ]);
   });
 
@@ -289,6 +290,28 @@ describe('Histórico de reuniões (migration 0026)', () => {
       [newMeetingId],
     );
     expect(res.rows[0]!.previous_context_meeting_id).toBe(previousMeetingId);
+  });
+});
+
+describe('meeting_improvement — auto-análise estruturada (migration 0027)', () => {
+  it('aceita structured_enc + overall_score, sem quebrar linhas antigas (colunas nullable)', async () => {
+    const userId = await insertUser('analise@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const withStructured = await exec.query<{ overall_score: number }>(
+      `INSERT INTO meeting_improvement (meeting_id, company_id, content_enc, structured_enc, overall_score)
+       VALUES ($1, $2, $3, $4, $5) RETURNING overall_score`,
+      [meetingId, companyId, encryptField('resumo', key), encryptField('{}', key), 84],
+    );
+    expect(withStructured.rows[0]!.overall_score).toBe(84);
+
+    // linha "antiga" (pré-estruturação) — sem structured_enc/overall_score, ainda válida
+    const legacy = await exec.query<{ structured_enc: string | null; overall_score: number | null }>(
+      `INSERT INTO meeting_improvement (meeting_id, company_id, content_enc)
+       VALUES ($1, $2, $3) RETURNING structured_enc, overall_score`,
+      [meetingId, companyId, encryptField('resumo antigo', key)],
+    );
+    expect(legacy.rows[0]!.structured_enc).toBeNull();
+    expect(legacy.rows[0]!.overall_score).toBeNull();
   });
 });
 

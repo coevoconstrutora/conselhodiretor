@@ -4,9 +4,11 @@ import {
   countMeetingContributionsByAgent,
   listMeetingDecisions,
   listMeetingActionItems,
+  loadLatestMeetingAnalysis,
   type MeetingContributionRecord,
   type MeetingDecisionRecord,
   type MeetingActionItemRecord,
+  type MeetingImprovement,
 } from '@conselho/meeting-report';
 import type { AgentId } from '@conselho/providers';
 import { getDb } from './db';
@@ -49,5 +51,14 @@ export async function loadMeetingActionItems(meetingId: string): Promise<Meeting
   return listMeetingActionItems(db, meetingId, getEncryptionKey()).catch((error) => {
     console.error('[historico] carregar ações falhou:', error);
     return [];
+  });
+}
+
+/** Análise do Conselho (Seção 30) — carrega a VERSÃO MAIS RECENTE já salva, nunca regenera na abertura da página. */
+export async function loadMeetingAnalysis(meetingId: string): Promise<MeetingImprovement | null> {
+  const db = await getDb();
+  return loadLatestMeetingAnalysis(db, meetingId, getEncryptionKey()).catch((error) => {
+    console.error('[historico] carregar análise do conselho falhou:', error);
+    return null;
   });
 }
