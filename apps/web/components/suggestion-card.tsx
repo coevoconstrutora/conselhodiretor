@@ -141,6 +141,10 @@ export function SuggestionCard({
         </p>
       ) : null}
 
+      {contribution.headline ? (
+        <p className="mt-2 text-sm font-semibold text-ink">{contribution.headline}</p>
+      ) : null}
+
       <p className="mt-2 text-[15px] leading-relaxed text-ink">
         {expanded || contribution.text.length <= 180
           ? contribution.text

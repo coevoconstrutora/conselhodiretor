@@ -10,6 +10,7 @@ export type {
   AgentId,
   ContributionType,
   ContributionSeverity,
+  ContributionUrgency,
   VideoState,
   TranscriptSegment,
   KbChunk,

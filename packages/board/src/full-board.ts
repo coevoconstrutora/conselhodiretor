@@ -20,6 +20,7 @@ import { AgentReasoner, getAgentProfiles, buildAgentSystem } from '@conselho/kb'
 import type { IKnowledgeRetriever } from '@conselho/providers';
 import { CaseStateTracker } from './case-state';
 import { CASE_REVIEW_SYSTEM, parseCaseReview } from './case-review';
+import { RelevanceRouter, type CounselorRelevanceInput } from './relevance-router';
 
 /**
  * Conselho COMPLETO: os 8 conselheiros simultâneos integrando motores de
@@ -104,6 +105,13 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * contexto: o board não é obrigado a seguir a ordem sugerida.
    */
   readonly meetingGuidance?: string;
+  /**
+   * Roteador de relevância por IA (Etapa "Orquestração" — Meeting
+   * Orchestrator). `undefined` ⇒ comportamento de sempre, só triggers regex
+   * (compat total). Quando presente, roda ADITIVO ao lado do TriggerDetector
+   * — só cobre agentes que os triggers NÃO pegaram no mesmo segmento.
+   */
+  readonly relevanceRouter?: RelevanceRouter;
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -166,6 +174,8 @@ export class FullBoardOrchestrator {
   private readonly profiles: Record<AgentId, { agentId: AgentId; displayName: string; scope: string }>;
   /** `undefined` ⇒ todos participam (compat: reunião sem tipo definido). */
   private readonly activeAgentIds: ReadonlySet<AgentId> | undefined;
+  /** Roteador de relevância (Etapa "Orquestração") — `undefined` ⇒ só triggers regex, como sempre. */
+  private readonly relevanceRouter: RelevanceRouter | undefined;
 
   constructor(
     private readonly companyId: string,
@@ -182,6 +192,7 @@ export class FullBoardOrchestrator {
     this.reasoner = new AgentReasoner(companyId, retriever, llm);
     this.profiles = getAgentProfiles(companyId);
     this.activeAgentIds = config.activeAgentIds ? new Set(config.activeAgentIds) : undefined;
+    this.relevanceRouter = config.relevanceRouter;
     this.semanticDedupThreshold = config.semanticDedupThreshold ?? DEFAULT_SEMANTIC_DEDUP_THRESHOLD;
     this.semanticDedup = new SemanticDeduplicator({ threshold: this.semanticDedupThreshold });
     this.caseState = new CaseStateTracker(llm, {
@@ -276,14 +287,34 @@ export class FullBoardOrchestrator {
     if (this.silentMode) return;
 
     // 3 personas monitoram o MESMO segmento — sem invocação (FR2)
+    const triggeredAgents = new Set<AgentId>();
     for (const match of this.detector.detect(text, at)) {
       // Tipo de reunião: agente fora do escopo do tipo nunca reage (Presidente
       // sempre sintetiza no final, independente disso).
       if (this.activeAgentIds && !this.activeAgentIds.has(match.trigger.agentId)) continue;
+      triggeredAgents.add(match.trigger.agentId);
       const candidate = toCandidate(match);
       const decision = this.gate.submit(candidate, at);
       this.config2.onDecision?.(decision.kind);
       if (decision.kind === 'deliver') await this.produce(decision.candidate);
+    }
+
+    // Roteador de relevância (Etapa "Orquestração") — ADITIVO: só cobre
+    // agentes que os triggers regex NÃO pegaram neste segmento, e só quando
+    // o segmento parece valer a pena (proteção de custo — Seção 16 do
+    // pedido). Presidente nunca entra aqui, ele só sintetiza.
+    if (this.relevanceRouter && isRouterEligible(text, triggeredAgents.size > 0)) {
+      const roster: CounselorRelevanceInput[] = Object.values(this.profiles)
+        .filter((p) => p.agentId !== 'presidente' && !triggeredAgents.has(p.agentId))
+        .filter((p) => !this.activeAgentIds || this.activeAgentIds.has(p.agentId))
+        .map((p) => ({ agentId: p.agentId, displayName: p.displayName, scope: p.scope }));
+      const scores = await this.relevanceRouter.route(text, roster);
+      for (const s of scores) {
+        const candidate = toRouterCandidate(s.agentId, text, at);
+        const decision = this.gate.submit(candidate, at);
+        this.config2.onDecision?.(decision.kind);
+        if (decision.kind === 'deliver') await this.produce(decision.candidate);
+      }
     }
   }
 
@@ -530,6 +561,51 @@ export class FullBoardOrchestrator {
     this.semanticDedup.register(event.contribution.text);
     for (const listener of this.listeners) listener(event);
   }
+}
+
+/** Sinal barato pra evitar rotear todo fragmento pelo LLM (Seção 16 — custo): já teve trigger, ou tem substância. */
+const ROUTER_MIN_WORDS = 6;
+const ROUTER_SIGNAL_RE = /\d|%|\?|R\$|decis[ãa]o|risco|urgente|cr[íi]tico|problema/i;
+function isRouterEligible(text: string, hadTriggerMatch: boolean): boolean {
+  if (hadTriggerMatch) return true; // já vale a pena aprofundar — outros agentes podem ser relevantes também
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length < ROUTER_MIN_WORDS) return false;
+  return ROUTER_SIGNAL_RE.test(text);
+}
+
+function slugify(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40);
+}
+
+/**
+ * Candidato a partir do roteador de relevância — `topicKey` inclui o
+ * agentId (diferente do trigger, cujo topicKey é só o tópico) porque aqui
+ * vários agentes podem ser selecionados pro MESMO segmento e cada um deve
+ * virar uma contribuição INDEPENDENTE (Seção 7 — nunca consolidar análises
+ * de agentes distintos como se fossem a mesma). `score: 1` porque o
+ * roteador JÁ fez sua própria filtragem de relevância — reaplicar o
+ * threshold do RelevanceGate (calibrado pro score determinístico dos
+ * triggers) seria uma segunda filtragem com semântica diferente.
+ */
+function toRouterCandidate(agentId: AgentId, discussionUnit: string, at: number): Candidate {
+  return {
+    id: randomUUID(),
+    agentId,
+    agentIds: [agentId],
+    triggerId: 'relevance-router',
+    topicKey: `router-${agentId}-${slugify(discussionUnit)}`,
+    type: 'sugestao',
+    severity: 'normal',
+    score: 1,
+    segmentText: discussionUnit,
+    at,
+  };
 }
 
 function toCandidate(match: TriggerMatch): Candidate {

@@ -18,3 +18,10 @@ export {
   type CaseReviewResult,
   type CaseReviewContribution,
 } from './case-review';
+export {
+  RelevanceRouter,
+  RELEVANCE_ROUTER_SYSTEM,
+  type CounselorRelevanceInput,
+  type RelevanceScore,
+  type RelevanceRouterConfig,
+} from './relevance-router';

@@ -7,6 +7,7 @@ import type {
   AgentId,
   ContributionType,
   ContributionSeverity,
+  ContributionUrgency,
 } from '@conselho/providers';
 
 /**
@@ -73,7 +74,11 @@ export function geminiConfigFromEnv(
 function outputInstructions(longForm: boolean, allowSkip: boolean): string {
   return (
     'Responda APENAS com um objeto JSON válido (sem cercas de código), no formato: ' +
-    '{"type":"atencao|sugestao|hipotese|sintese","severity":"normal|critical","text":"...","relevanceScore":0.0}. ' +
+    '{"type":"atencao|sugestao|hipotese|sintese","severity":"normal|critical","text":"...","relevanceScore":0.0,' +
+    '"urgency":"low|medium|high|critical","category":"...","headline":"...","recommendation":"...","question":"..."}. ' +
+    'Os campos urgency/category/headline/recommendation/question são OPCIONAIS — preencha só quando fizer sentido: ' +
+    'headline é um título curto (até 8 palavras) pro card; recommendation é UMA ação concreta sugerida; question é ' +
+    'uma pergunta direta ao empresário, só se houver uma pendente. ' +
     (longForm
       ? 'O campo text deve conter o DOCUMENTO COMPLETO em markdown, com todas as seções e quebras de linha escapadas no JSON, em português do Brasil.'
       : 'O campo text deve ser curto (1-3 frases), em português do Brasil, em tom de sugestão.') +
@@ -231,6 +236,11 @@ export class GeminiLlmProvider implements ILlmProvider {
       severity: parsed.severity,
       text: parsed.text,
       relevanceScore: parsed.relevanceScore,
+      urgency: parsed.urgency,
+      category: parsed.category,
+      headline: parsed.headline,
+      recommendation: parsed.recommendation,
+      question: parsed.question,
       triggeredBy: undefined, // o orchestrator conhece o gatilho, não o modelo
       kbSources: req.context.map((c) => c.id),
       modelVersion: data.modelVersion,
@@ -265,7 +275,14 @@ interface ParsedContribution {
   text: string;
   relevanceScore?: number;
   skip?: true;
+  urgency?: ContributionUrgency;
+  category?: string;
+  headline?: string;
+  recommendation?: string;
+  question?: string;
 }
+
+const VALID_URGENCIES = new Set<ContributionUrgency>(['low', 'medium', 'high', 'critical']);
 
 /** Parse tolerante do JSON do modelo (aceita cercas de código por robustez). */
 export function parseContribution(raw: string): ParsedContribution {
@@ -288,5 +305,13 @@ export function parseContribution(raw: string): ParsedContribution {
     ? (obj.severity as ContributionSeverity)
     : 'normal';
   const relevanceScore = typeof obj.relevanceScore === 'number' ? obj.relevanceScore : undefined;
-  return { type, severity, text, relevanceScore };
+  const urgency = VALID_URGENCIES.has(obj.urgency as ContributionUrgency)
+    ? (obj.urgency as ContributionUrgency)
+    : undefined;
+  const category = typeof obj.category === 'string' && obj.category.trim() ? obj.category.trim() : undefined;
+  const headline = typeof obj.headline === 'string' && obj.headline.trim() ? obj.headline.trim() : undefined;
+  const recommendation =
+    typeof obj.recommendation === 'string' && obj.recommendation.trim() ? obj.recommendation.trim() : undefined;
+  const question = typeof obj.question === 'string' && obj.question.trim() ? obj.question.trim() : undefined;
+  return { type, severity, text, relevanceScore, urgency, category, headline, recommendation, question };
 }

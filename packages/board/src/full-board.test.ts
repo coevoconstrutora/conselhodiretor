@@ -17,6 +17,7 @@ import { FakeTextCompleter } from '@conselho/providers';
 import { startMeetingSession } from '@conselho/session';
 import { NamespacedKnowledgeStore, ingest } from '@conselho/kb';
 import { FullBoardOrchestrator, type FullBoardEvent } from './full-board';
+import { RelevanceRouter } from './relevance-router';
 
 class PushSttProvider implements ISttProvider {
   private queue: Array<TranscriptSegment | null> = [];
@@ -146,6 +147,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       onCaseReview?: (outcome: 'skip' | 'contribution' | 'discarded') => void;
       activeAgentIds?: readonly AgentId[];
       meetingGuidance?: string;
+      relevanceRouter?: RelevanceRouter;
     } = {},
   ) {
     const stt = new PushSttProvider();
@@ -167,6 +169,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       onCaseReview: opts.onCaseReview,
       activeAgentIds: opts.activeAgentIds,
       meetingGuidance: opts.meetingGuidance,
+      relevanceRouter: opts.relevanceRouter,
     });
     const events: FullBoardEvent[] = [];
     board.subscribe((e) => events.push(e));
@@ -639,6 +642,40 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     await board.flush();
     const contributionCall = llm.calls.find((c) => !c.system.includes('SÍNTESE'));
     expect(contributionCall!.transcript).toContain('PAUTA DESTA REUNIÃO');
+    board.stop();
+    await session.stop();
+  });
+
+  it('roteador de relevância (Etapa "Orquestração"): cobre um agente que os triggers regex não pegam', async () => {
+    let t = 0;
+    const router = new RelevanceRouter({
+      complete: async () => {
+        throw new Error('RelevanceRouter não deveria chamar complete()');
+      },
+      completeText: async () => ({ text: JSON.stringify([{ agentId: 'futurista', relevance: 0.9 }]) }),
+    });
+    // só futurista participa — mesmo que outro trigger disparasse, seria filtrado (comportamento de sempre)
+    const { stt, session, board, events } = await setup({
+      now: () => (t += 3000),
+      activeAgentIds: ['futurista'],
+      relevanceRouter: router,
+    });
+    // frase deliberadamente sem NENHUMA palavra-chave do trigger de futurista, mas com sinal (?) pra passar o filtro de custo
+    stt.push('Será que isso muda alguma coisa daqui a 10 anos?');
+    await flush();
+    await board.flush();
+    expect(events.some((e) => e.contribution.agentId === 'futurista')).toBe(true);
+    board.stop();
+    await session.stop();
+  });
+
+  it('roteador de relevância: sem configurar, comportamento idêntico a hoje (nenhuma chamada extra)', async () => {
+    let t = 0;
+    const { stt, session, board, events } = await setup({ now: () => (t += 3000) }); // sem relevanceRouter
+    stt.push('Será que isso muda alguma coisa daqui a 10 anos?'); // mesma frase — não bate trigger nenhum
+    await flush();
+    await board.flush();
+    expect(events).toHaveLength(0); // sem roteador, nada cobre esse segmento — igual ao comportamento pré-Etapa 2
     board.stop();
     await session.stop();
   });

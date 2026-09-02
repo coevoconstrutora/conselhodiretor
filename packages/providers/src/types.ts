@@ -81,6 +81,9 @@ export interface KbChunk {
  * Contribuição de uma persona, produzida pelo LLM (alinha com CONTRIBUTION §8).
  * Campos de proveniência (`triggeredBy`, `kbSources`) alimentam a auditoria.
  */
+/** Urgência da contribuição (Etapa "Orquestração" — schema estruturado, aditivo). */
+export type ContributionUrgency = 'low' | 'medium' | 'high' | 'critical';
+
 export interface AgentContribution {
   readonly agentId: AgentId;
   readonly type: ContributionType;
@@ -97,6 +100,19 @@ export interface AgentContribution {
    * true, os demais campos são placeholder — o orchestrator descarta sem exibir.
    */
   readonly skip?: true;
+  /**
+   * Schema estruturado (Etapa "Orquestração") — todos ADITIVOS/opcionais,
+   * ausência nunca quebra o parsing de uma resposta no formato antigo.
+   */
+  readonly urgency?: ContributionUrgency;
+  /** Categoria curta e livre (ex.: "financial_risk") — curadoria futura, não é enum fechado ainda. */
+  readonly category?: string;
+  /** Título curto do card — a UI usa como manchete, caindo no início de `text` quando ausente. */
+  readonly headline?: string;
+  readonly recommendation?: string;
+  readonly question?: string;
+  /** Sinaliza um evento crítico configurado para interromper a reunião (Etapa "voz sob demanda", ainda não ligada na UI). */
+  readonly requiresImmediateInterruption?: boolean;
 }
 
 /** Referência a um clipe pré-renderizado do catálogo de vídeo (ADR-007). */

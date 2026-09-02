@@ -38,6 +38,13 @@ export interface WireContribution {
   readonly severity: 'normal' | 'critical';
   readonly text: string;
   readonly relevanceScore?: number;
+  /** Schema estruturado (Etapa "Orquestração") — todos ADITIVOS, espelho de AgentContribution. */
+  readonly urgency?: 'low' | 'medium' | 'high' | 'critical';
+  readonly category?: string;
+  readonly headline?: string;
+  readonly recommendation?: string;
+  readonly question?: string;
+  readonly requiresImmediateInterruption?: boolean;
 }
 
 export type BoardServerMessage =

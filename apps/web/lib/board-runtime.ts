@@ -3,6 +3,7 @@ import { BoardGateway } from '@conselho/board-gateway';
 import {
   FullBoardOrchestrator,
   DEFAULT_SEMANTIC_DEDUP_THRESHOLD,
+  RelevanceRouter,
   type FullBoardEvent,
   type FullBoardConfig,
 } from '@conselho/board';
@@ -398,6 +399,19 @@ function boardTuningFromEnv(): Pick<FullBoardConfig, 'caseReviewMs' | 'semanticD
   };
 }
 
+/**
+ * Roteador de relevância por IA (Etapa "Orquestração" — Meeting
+ * Orchestrator), atrás de env flag — OFF por default (piloto controlado por
+ * empresa/reunião antes de virar padrão). Usa o MESMO provedor/modelo
+ * default da empresa (createLlm) — não força um modelo "rápido" à parte,
+ * já que gpt-5.6-luna (default de produção) já é o tier rápido/barato.
+ */
+function createRelevanceRouter(): RelevanceRouter | undefined {
+  if (process.env.BOARD_RELEVANCE_ROUTER !== 'on') return undefined;
+  const { llm } = createLlm({ maxTokens: 300 });
+  return new RelevanceRouter(llm);
+}
+
 /** Wiring comum de telemetria por reunião. */
 function telemetryHooks(runtime: BoardRuntime, meetingId: string) {
   const t = runtime.telemetry;
@@ -540,6 +554,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     meetingGuidance,
     activeAgentIds,
     extraTriggers,
+    relevanceRouter: createRelevanceRouter(),
   });
   runtime.gateway.bind(meetingId, orchestrator);
   // transcrição ao vivo p/ o painel (texto via WS — áudio nunca passa aqui, §7).
@@ -782,6 +797,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       extraTriggers,
       priorMeetingsContext,
       meetingGuidance,
+      relevanceRouter: createRelevanceRouter(),
     });
     runtime.gateway.bind(meetingId, orchestrator);
     const wired = wireSessionBroadcast(runtime, meetingId, session, db, { persistTranscript: true });
