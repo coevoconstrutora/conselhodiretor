@@ -38,7 +38,10 @@ export const BUSINESS_VOCABULARY: readonly string[] = [
   'fundação',
   'contenção',
   'alvenaria estrutural',
-  'parede de concreto',
+  // 'parede de concreto' foi removido: é vocabulário comum (não jargão),
+  // e o boost estava puxando falso-positivo em cima de palavras parecidas
+  // ("pessoal" → "parede") — boost deve ser reservado a termos que um STT
+  // genérico realmente erraria sem ajuda.
   'pré-moldado',
   'lean construction',
   'retrabalho',
