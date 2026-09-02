@@ -6,6 +6,7 @@ import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
+import { BoardAutoConfigurator } from '@/components/board-auto-configurator';
 import { DashboardShell } from '@/components/dashboard-shell';
 
 /** Gestão de membros do conselho: os padrão do produto + os CUSTOM desta empresa. */
@@ -53,6 +54,10 @@ export default async function CounselorsPage() {
 
       <section className="mt-6">
         <CreateCounselorForm />
+      </section>
+
+      <section className="mt-6">
+        <BoardAutoConfigurator counselors={counselors.map((c) => ({ agentId: c.agentId, displayName: c.displayName }))} />
       </section>
 
       <section className="mt-8">

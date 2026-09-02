@@ -15,6 +15,7 @@ import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
 import { loadAndApplyPresidentConfig, getPresidentConfig } from '@/lib/president-config-store';
 import { PresidentConfigFields } from '@/components/president-config-fields';
+import { AutoConfiguratorPanel } from '@/components/auto-configurator';
 import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
 import { formatDateBR } from '@/lib/format';
@@ -84,14 +85,19 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
 
       {/* Perfil */}
       <section aria-label="Perfil do conselheiro" className="card-premium mt-8 p-6">
-        <h2 className="font-display text-base font-semibold text-ink">
-          <span className="blueprint-index mr-2 text-brand/70">01/</span>
-          Perfil
-        </h2>
-        <p className="mb-4 text-xs text-ink-muted">
-          O nome aparece nos cards e relatórios; o escopo vira REGRA no prompt — fora dele, o
-          conselheiro não opina. Mudanças valem imediatamente.
-        </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-base font-semibold text-ink">
+              <span className="blueprint-index mr-2 text-brand/70">01/</span>
+              Perfil
+            </h2>
+            <p className="text-xs text-ink-muted">
+              O nome aparece nos cards e relatórios; o escopo vira REGRA no prompt — fora dele, o
+              conselheiro não opina. Mudanças valem imediatamente.
+            </p>
+          </div>
+          {!isPresident ? <AutoConfiguratorPanel agentId={agentId} /> : null}
+        </div>
         <ProfileForm
           agentId={agentId}
           displayName={profile.displayName}
