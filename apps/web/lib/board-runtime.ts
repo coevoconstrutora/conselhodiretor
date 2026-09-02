@@ -748,7 +748,10 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     // O gate de gravação roda AQUI — antes de qualquer sink existir.
     // O client só conecta o WS /audio depois que esta action retorna, então
     // registrar o sink após a sessão não perde áudio e elimina o sink órfão.
-    const stt = new DeepgramSttProvider({ apiKey: process.env.DEEPGRAM_API_KEY });
+    const stt = new DeepgramSttProvider({
+      apiKey: process.env.DEEPGRAM_API_KEY,
+      model: process.env.DEEPGRAM_MODEL || undefined, // default do adapter: nova-2
+    });
     session = await startMeetingSession(db, meetingId, companyId, stt, {
       audio: audio.iterable,
       vocabularyBoost: BUSINESS_VOCABULARY,

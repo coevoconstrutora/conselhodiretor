@@ -55,7 +55,7 @@ describe('OpenAiLlmProvider (Chat Completions — adapter NFR8)', () => {
     const [url, init] = doFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://api.openai.com/v1/chat/completions');
     const body = JSON.parse(init.body as string);
-    expect(body.model).toBe('gpt-5-mini');
+    expect(body.model).toBe('gpt-5.6-luna');
     expect(body.max_completion_tokens).toBe(300);
     expect(body.max_tokens).toBeUndefined();
     expect(body.reasoning_effort).toBe('minimal'); // gpt-5.x: sem isto o raciocínio come o teto de tokens curto

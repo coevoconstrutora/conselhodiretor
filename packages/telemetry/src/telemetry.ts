@@ -25,9 +25,9 @@ export type UiEventKind = 'focus-on' | 'focus-off' | 'silence' | 'unsilence' | '
 
 /** Preços de referência (USD) — atualizar junto com a POC 3.4/2.5. */
 export const PRICING = {
-  llmInputPerMTok: 3.0, // claude-sonnet-5 (piso 5.x do produto — NUNCA modelo abaixo disso)
-  llmOutputPerMTok: 15.0,
-  sttPerMinute: 0.0059, // deepgram nova-2 streaming
+  llmInputPerMTok: 0.2, // gpt-5.6-luna (default de produção — apps/web/lib/llm.ts)
+  llmOutputPerMTok: 1.2,
+  sttPerMinute: 0.0077, // deepgram nova-3 streaming (fly.toml: DEEPGRAM_MODEL)
   videoPerConsultation: 0, // catálogo pré-renderizado (ADR-007)
 } as const;
 

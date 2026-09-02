@@ -12,6 +12,11 @@ primary_region = "gru"
 [env]
   PORT = "3000"
   TZ = "America/Sao_Paulo"
+  # nova-3: keyterm boost (mais preciso que o keywords legado do nova-2) +
+  # multilíngue. Reverter pra "nova-2" (ou remover a linha) se a POC não for
+  # melhor pro PT-BR — packages/stt-deepgram/src/deepgram.ts escolhe o
+  # parâmetro de boost certo sozinho, pelo prefixo do nome do modelo.
+  DEEPGRAM_MODEL = "nova-3"
 
 [http_service]
   internal_port = 3000

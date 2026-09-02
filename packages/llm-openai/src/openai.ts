@@ -16,9 +16,10 @@ import type {
  * (a instrução textual de formato continua indo no `system`, pois a API exige
  * a palavra "JSON" no prompt quando esse modo é usado).
  *
- * Default: **gpt-5-mini** — custo/latência equivalentes ao Haiku para as
- * contribuições curtas do board; o modelo pode subir por persona trocando
- * só `OPENAI_MODEL`. Modelos gpt-5.x exigem `max_completion_tokens` (a API
+ * Default: **gpt-5.6-luna** — tier mais rápido/barato da família GPT-5.6
+ * (sucessora do gpt-5-mini), custo/latência adequados às contribuições
+ * curtas do board; o modelo pode subir por persona trocando só
+ * `OPENAI_MODEL`. Modelos gpt-5.x exigem `max_completion_tokens` (a API
  * rejeita `max_tokens` neles) e "pensam" por default como o Gemini 3 — sem
  * `reasoning_effort: 'minimal'` o raciocínio interno consome o teto de
  * tokens de saídas curtas e a resposta some (mesma lição do Gemini, CLAUDE.md).
@@ -80,7 +81,7 @@ async function fetchWithTimeout(
 }
 
 const DEFAULT_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
-const DEFAULT_MODEL = 'gpt-5-mini';
+const DEFAULT_MODEL = 'gpt-5.6-luna';
 
 /** gpt-5.x "pensa" por default — reasoning mínimo pra não estourar tokens curtos. */
 function isReasoningModel(model: string): boolean {

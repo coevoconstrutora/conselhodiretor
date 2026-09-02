@@ -13,7 +13,7 @@ import { FakeLlmProvider, type ILlmProvider } from '@conselho/providers';
  * - sem LLM_PROVIDER: OPENAI_API_KEY > GEMINI_API_KEY > ANTHROPIC_API_KEY > fake (dev).
  * Modelo do Gemini: `GEMINI_MODEL` (default gemini-flash-latest, com
  * fallback automático de modelo em 503/404 dentro do adapter). Modelo da
- * OpenAI: `OPENAI_MODEL` (default gpt-5-mini). Modelo da Anthropic:
+ * OpenAI: `OPENAI_MODEL` (default gpt-5.6-luna). Modelo da Anthropic:
  * `ANTHROPIC_MODEL` (default claude-sonnet-5). Piso do produto: nenhum
  * provedor usa modelo abaixo da geração 5.x (Gemini escapa dessa régua —
  * o Google não versiona por "5.x").
@@ -42,7 +42,7 @@ export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: st
         ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
         ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
       }),
-      label: `${model ?? 'gpt-5-mini'} (OpenAI)`,
+      label: `${model ?? 'gpt-5.6-luna'} (OpenAI)`,
     };
   }
 
