@@ -13,6 +13,7 @@ import { SpeakerRenamePanel, SpeakerRosterPanel } from './speaker-rename';
 import { AlertVignette } from './alert-vignette';
 import { LiveMicButton } from './live-mic-button';
 import { PipelineStatusBadge } from './pipeline-status-badge';
+import { SilentModeToggle } from './silent-mode-toggle';
 
 /**
  * Tela de Consulta (E7 — frontend-spec §4): grid 2 colunas — área principal
@@ -126,6 +127,7 @@ export function MeetingRoom({
             {voiceMuted || focusMode ? '🔇 voz' : '🔊 voz'}
           </button>
           <PipelineStatusBadge />
+          {!closed ? <SilentModeToggle meetingId={meetingId} /> : null}
           <span
             title="⚠️ atenção · 💡 sugestão · 🔍 hipótese · 📋 síntese"
             className="cursor-help text-xs text-white/50"

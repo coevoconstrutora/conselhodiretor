@@ -98,6 +98,12 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * conselheiro custom nunca reagiria a nada (não há regex pra ele no código).
    */
   readonly extraTriggers?: readonly AgentTriggerDef[];
+  /**
+   * Pauta/roteiro anexado na criação da reunião (Etapa "guia de reunião") —
+   * prefixa o CaseState em toda chamada, igual `priorMeetingsContext`. Só
+   * contexto: o board não é obrigado a seguir a ordem sugerida.
+   */
+  readonly meetingGuidance?: string;
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -130,6 +136,16 @@ export class FullBoardOrchestrator {
   private readonly caseState: CaseStateTracker;
   /** Memória entre reuniões (síntese das últimas reuniões encerradas). */
   private readonly priorMeetingsContext: string | undefined;
+  /** Pauta/roteiro desta reunião (Etapa "guia de reunião"). */
+  private readonly meetingGuidance: string | undefined;
+  /**
+   * Modo silencioso (Etapa "board silencioso"): grava e atualiza o CaseState
+   * normalmente, mas não gera contribuições/sínteses/case-review AO VIVO —
+   * útil em reuniões tumultuadas onde ninguém ouviria os áudios mesmo assim.
+   * Os conselheiros voltam a opinar só nos relatórios finais (gerados depois,
+   * sobre o CaseState acumulado). Alternável em tempo real (board-runtime).
+   */
+  private silentMode = false;
   /** Tipos por tópico p/ detecção de divergência (FR7). */
   private readonly topicTypes = new Map<string, Map<AgentId, string>>();
   private unsubscribe: (() => void) | null = null;
@@ -173,6 +189,7 @@ export class FullBoardOrchestrator {
       onUpdate: config.onCaseStateUpdate,
     });
     this.priorMeetingsContext = config.priorMeetingsContext;
+    this.meetingGuidance = config.meetingGuidance;
     this.now = config.now ?? Date.now;
     this.config = {
       tickMs: config.tickMs ?? 1000,
@@ -223,11 +240,23 @@ export class FullBoardOrchestrator {
     return this.pending;
   }
 
-  /** CaseState da reunião ATUAL prefixado pela memória de reuniões ANTERIORES. */
+  /** Liga/desliga o modo silencioso — vale a partir do próximo segmento/tick. */
+  setSilentMode(enabled: boolean): void {
+    this.silentMode = enabled;
+  }
+
+  isSilentMode(): boolean {
+    return this.silentMode;
+  }
+
+  /**
+   * CaseState da reunião ATUAL prefixado pela memória de reuniões ANTERIORES
+   * e pela pauta desta reunião (nesta ordem: histórico → pauta → caso vivo).
+   */
   private renderCaseState(): string {
-    const current = this.caseState.renderForPrompt();
-    if (!this.priorMeetingsContext) return current;
-    return current ? `${this.priorMeetingsContext}\n\n${current}` : this.priorMeetingsContext;
+    return [this.priorMeetingsContext, this.meetingGuidance, this.caseState.renderForPrompt()]
+      .filter((block): block is string => Boolean(block && block.trim()))
+      .join('\n\n');
   }
 
   /** Síntese SOB DEMANDA (FR18) — além da automática. */
@@ -243,6 +272,9 @@ export class FullBoardOrchestrator {
     // fire-and-forget: o update roda em paralelo à fala (o tracker impede 2 em voo)
     void this.caseState.maybeUpdate();
 
+    // Modo silencioso: grava e atualiza o caso, mas não dispara nada AO VIVO.
+    if (this.silentMode) return;
+
     // 3 personas monitoram o MESMO segmento — sem invocação (FR2)
     for (const match of this.detector.detect(text, at)) {
       // Tipo de reunião: agente fora do escopo do tipo nunca reage (Presidente
@@ -257,6 +289,9 @@ export class FullBoardOrchestrator {
 
   private async tick(): Promise<void> {
     await this.caseState.maybeUpdate(); // B3: no-op se <N finais ou update em voo
+    // Modo silencioso: sem release de fila, síntese automática ou case review.
+    // `synthesizeNow()` (sob demanda) NÃO passa por aqui — continua funcionando.
+    if (this.silentMode) return;
     const now = this.now();
     for (const candidate of this.gate.release(now)) {
       this.config2.onDecision?.('deliver'); // liberado da pausa/fila (E10)

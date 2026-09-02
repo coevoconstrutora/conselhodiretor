@@ -2,21 +2,50 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { createMeeting, confirmRecording, revokeRecording } from '@conselho/meetings';
+import { createMeeting, confirmRecording, revokeRecording, type MeetingGuidanceInput } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
+import { extractUploadedFileText } from './text-extract';
 
-/** Cria uma reunião (gravação NÃO confirmada — default NEGA) e navega para a sala. */
-export async function startMeetingAction(formData: FormData): Promise<void> {
+export type StartMeetingState = { error?: string } | null;
+
+/**
+ * Cria uma reunião (gravação NÃO confirmada — default NEGA) e navega para a
+ * sala. Aceita opcionalmente um arquivo de pauta/roteiro (Etapa "guia de
+ * reunião") — vira contexto extra para os conselheiros, cifrado como o título.
+ */
+export async function startMeetingAction(
+  _prev: StartMeetingState,
+  formData: FormData,
+): Promise<StartMeetingState> {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
-  if (!canWrite(user)) throw new Error('Convidados não podem criar reuniões.');
+  if (!canWrite(user)) return { error: 'Convidados não podem criar reuniões.' };
   const title = String(formData.get('title') ?? '').trim();
-  if (!title) throw new Error('Informe o título da reunião.');
+  if (!title) return { error: 'Informe o título da reunião.' };
   const meetingTypeId = String(formData.get('meetingTypeId') ?? '').trim() || null;
+
+  let guidance: MeetingGuidanceInput | null = null;
+  const file = formData.get('guidanceFile');
+  if (file instanceof File && file.size > 0) {
+    try {
+      guidance = { content: await extractUploadedFileText(file), filename: file.name };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : 'Falha ao ler o arquivo de pauta.' };
+    }
+  }
+
   const db = await getDb();
-  const meetingId = await createMeeting(db, user.id, user.companyId, title, getEncryptionKey(), meetingTypeId);
+  const meetingId = await createMeeting(
+    db,
+    user.id,
+    user.companyId,
+    title,
+    getEncryptionKey(),
+    meetingTypeId,
+    guidance,
+  );
   redirect(`/meetings/${meetingId}`);
 }
 

@@ -1,9 +1,8 @@
-import Link from 'next/link';
 import { requireCurrentUser } from '@/lib/auth';
-import { startMeetingAction } from '@/lib/meeting-actions';
 import { listMeetingTypes } from '@/lib/meeting-type-actions';
+import { NewMeetingForm } from '@/components/new-meeting-form';
 
-/** Nova reunião: título + tipo (escopa quais conselheiros participam). */
+/** Nova reunião: título + tipo (escopa quais conselheiros participam) + pauta opcional. */
 export default async function NewMeetingPage() {
   const user = await requireCurrentUser();
 
@@ -21,53 +20,7 @@ export default async function NewMeetingPage() {
         </p>
       </header>
 
-      <form action={startMeetingAction} className="card-premium mt-8 space-y-4 p-6">
-        <label className="block">
-          <span className="text-sm font-medium text-ink">Título da reunião</span>
-          <input
-            name="title"
-            required
-            placeholder="Ex.: Diretoria — aprovação do terreno da zona norte"
-            className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          />
-        </label>
-        <label className="block">
-          <span className="text-sm font-medium text-ink">Tipo de reunião</span>
-          <select
-            name="meetingTypeId"
-            defaultValue={defaultType?.id}
-            className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-          >
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-xs text-ink-muted">
-            Define quais conselheiros participam —{' '}
-            <Link href="/meeting-types" className="underline hover:text-ink">
-              gerenciar tipos
-            </Link>
-            .
-          </span>
-        </label>
-        <p className="text-xs text-ink-muted">
-          O título é cifrado em repouso. A gravação só liga depois que você confirmar que os
-          participantes estão de acordo.
-        </p>
-        <div className="flex items-center justify-between pt-2">
-          <Link href="/" className="text-sm text-ink-muted hover:text-ink hover:underline">
-            ← Voltar
-          </Link>
-          <button
-            type="submit"
-            className="rounded-[var(--radius)] bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-          >
-            Criar e abrir a sala
-          </button>
-        </div>
-      </form>
+      <NewMeetingForm types={types} defaultTypeId={defaultType?.id} />
     </main>
   );
 }

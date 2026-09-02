@@ -43,6 +43,10 @@ export interface MeetingRow {
   closed_at: Date | null;
   participant_count: number | null;
   meeting_type_id: string | null;
+  /** Pauta/roteiro opcional anexado na criação (Etapa "guia de reunião") — cifrado como o título. */
+  guidance_enc: string | null;
+  /** Nome do arquivo original (não cifrado — só um rótulo, não é conteúdo). */
+  guidance_filename: string | null;
   created_at: Date;
   updated_at: Date;
 }

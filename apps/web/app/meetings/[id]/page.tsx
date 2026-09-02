@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { getMeeting } from '@conselho/meetings';
+import { getMeeting, getMeetingGuidance } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
 import { getAgentProfiles } from '@conselho/kb';
 import { loadCompanyProfile } from '@/lib/company-profile';
@@ -70,6 +70,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   }
   const transcriptText = transcriptReview?.content ?? transcriptFinals.join('\n');
   const hasTranscript = transcriptText.trim().length > 0;
+  const guidance = await getMeetingGuidance(db, id, user.companyId, getEncryptionKey());
   const syntheses = authorized ? await listSyntheses(db, id, getEncryptionKey()) : [];
   const reports = authorized ? await loadReports(id).catch(() => []) : [];
   const telemetry = authorized ? await getTelemetryReport(id) : null;
@@ -210,6 +211,21 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 </form>
               }
             />
+
+            {/* Pauta/roteiro anexado na criação (Etapa "guia de reunião") — só
+                referência para quem conduz a reunião; os conselheiros já a
+                recebem como contexto extra (board-runtime). */}
+            {guidance ? (
+              <details className="card-premium mt-6 p-6" open>
+                <summary className="cursor-pointer font-display text-base font-semibold text-ink">
+                  📋 Pauta/roteiro da reunião{' '}
+                  <span className="text-xs font-normal text-ink-muted">· {guidance.filename}</span>
+                </summary>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-ink-muted">
+                  {guidance.content}
+                </p>
+              </details>
+            ) : null}
 
             {/* Revisão do transcript: o empresário corrige o que o STT ouviu ANTES
                 de gerar os relatórios — a versão revisada vira a fonte. */}

@@ -145,6 +145,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       caseReviewMs?: number;
       onCaseReview?: (outcome: 'skip' | 'contribution' | 'discarded') => void;
       activeAgentIds?: readonly AgentId[];
+      meetingGuidance?: string;
     } = {},
   ) {
     const stt = new PushSttProvider();
@@ -165,6 +166,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       caseReviewMs: opts.caseReviewMs,
       onCaseReview: opts.onCaseReview,
       activeAgentIds: opts.activeAgentIds,
+      meetingGuidance: opts.meetingGuidance,
     });
     const events: FullBoardEvent[] = [];
     board.subscribe((e) => events.push(e));
@@ -563,6 +565,80 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     await board.flush();
     expect(llm.calls).toHaveLength(0);
     expect(events).toHaveLength(0);
+    board.stop();
+    await session.stop();
+  });
+
+  it('modo silencioso: grava/atualiza o CaseState, mas não gera contribuição ao vivo', async () => {
+    let t = 0;
+    const { stt, session, board, llm, events } = await setup({
+      now: () => (t += 3000),
+      caseStateEveryNFinals: 1,
+    });
+    let completeTextCalls = 0;
+    llm.completeText = async () => {
+      completeTextCalls += 1;
+      return { text: '{"hypotheses":[],"investigated":[],"meetingPoints":["reunião tumultuada"],"pending":{}}' };
+    };
+    board.setSilentMode(true);
+    expect(board.isSilentMode()).toBe(true);
+
+    stt.push('O preço por m² dos concorrentes caiu e preocupa.'); // dispararia Mercado se não fosse silencioso
+    await flush();
+    await board.flush();
+    await flush(); // update fire-and-forget do CaseState resolve
+
+    expect(events).toHaveLength(0); // nada AO VIVO — sem card, sem áudio
+    expect(completeTextCalls).toBeGreaterThan(0); // mas o CaseState seguiu vivo (insumo dos relatórios finais)
+    board.stop();
+    await session.stop();
+  });
+
+  it('modo silencioso: desligar retoma a produção normal para novos segmentos', async () => {
+    let t = 0;
+    const { stt, session, board, events } = await setup({ now: () => (t += 3000) });
+    board.setSilentMode(true);
+    stt.push('O preço por m² dos concorrentes caiu e preocupa.');
+    await flush();
+    await board.flush();
+    expect(events).toHaveLength(0);
+
+    board.setSilentMode(false);
+    stt.push('A ação judicial do terreno pressiona o fluxo de caixa do empreendimento.');
+    await flush();
+    await board.flush();
+    expect(events.length).toBeGreaterThan(0);
+    board.stop();
+    await session.stop();
+  });
+
+  it('modo silencioso NÃO bloqueia a síntese sob demanda (ação explícita do empresário)', async () => {
+    let t = 0;
+    const { stt, session, board, events } = await setup({ now: () => (t += 3000) });
+    stt.push('A ação judicial do terreno pressiona o fluxo de caixa do empreendimento.');
+    await flush();
+    await board.flush();
+    expect(events.length).toBeGreaterThan(0);
+
+    board.setSilentMode(true);
+    await board.synthesizeNow();
+    const synthesis = events.find((e) => e.contribution.agentId === 'presidente');
+    expect(synthesis).toBeDefined();
+    board.stop();
+    await session.stop();
+  });
+
+  it('pauta da reunião (meetingGuidance) entra no prompt dos agentes', async () => {
+    let t = 0;
+    const { stt, session, board, llm } = await setup({
+      now: () => (t += 3000),
+      meetingGuidance: 'PAUTA DESTA REUNIÃO: 1) terreno da zona norte 2) fluxo de caixa do Q3',
+    });
+    stt.push('A ação judicial do terreno pressiona o fluxo de caixa do empreendimento.');
+    await flush();
+    await board.flush();
+    const contributionCall = llm.calls.find((c) => !c.system.includes('SÍNTESE'));
+    expect(contributionCall!.transcript).toContain('PAUTA DESTA REUNIÃO');
     board.stop();
     await session.stop();
   });

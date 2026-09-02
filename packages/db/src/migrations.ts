@@ -476,4 +476,15 @@ CREATE TABLE IF NOT EXISTS voice_profile (
 CREATE INDEX IF NOT EXISTS idx_voice_profile_company ON voice_profile(company_id);
 `,
   },
+  {
+    name: '0021_meeting_guidance',
+    sql: `
+-- Pauta/roteiro opcional anexado na criação da reunião — vira contexto extra
+-- para os conselheiros (mesmo padrão de cifra do título). Puramente
+-- informativo: o board não é obrigado a seguir a ordem, só passa a
+-- "conhecer" o roteiro.
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS guidance_enc text;
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS guidance_filename text;
+`,
+  },
 ];

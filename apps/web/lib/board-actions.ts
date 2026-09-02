@@ -11,6 +11,7 @@ import {
   stopLiveBoard,
   runMeetingImprovementAnalysis,
   renameSpeaker,
+  setSilentMode,
 } from './board-runtime';
 import { toActionResult, type ActionResult } from './action-result';
 
@@ -55,6 +56,38 @@ export async function renameSpeakerAction(
   const applied = await renameSpeaker(meetingId, speakerNum, name, area || null);
   if (!applied) return { error: 'Sem sessão ativa no momento — inicie o board antes de renomear.' };
   return { ok: `Locutor ${speakerNum} agora aparece como "${name}"${area ? ` (${area})` : ''}.` };
+}
+
+export type ToggleSilentModeState = { error?: string; ok?: string; silentMode?: boolean } | null;
+
+/**
+ * Server action: liga/desliga o modo silencioso ao vivo (Etapa "board
+ * silencioso") — grava e atualiza o caso normalmente, mas para de gerar
+ * contribuições/sínteses AO VIVO. Útil numa reunião tumultuada, onde os
+ * áudios de opinião gerados na hora não seriam ouvidos por ninguém mesmo.
+ */
+export async function toggleSilentModeAction(
+  _prev: ToggleSilentModeState,
+  formData: FormData,
+): Promise<ToggleSilentModeState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem alterar o modo do board.' };
+  const meetingId = String(formData.get('meetingId') ?? '');
+  if (!meetingId) return { error: 'meetingId ausente.' };
+  const enabled = formData.get('enabled') === '1';
+  const db = await getDb();
+  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    return { error: 'Reunião não encontrada.' };
+  }
+  const applied = await setSilentMode(meetingId, enabled);
+  if (!applied) return { error: 'Sem sessão ativa no momento — inicie o board antes de alternar.' };
+  return {
+    ok: enabled
+      ? 'Modo silencioso ligado — o board só grava; os conselheiros voltam a opinar nos relatórios finais.'
+      : 'Modo silencioso desligado — o board volta a opinar ao vivo.',
+    silentMode: enabled,
+  };
 }
 
 /** Server action: síntese do Aurélio sob demanda (FR18). */

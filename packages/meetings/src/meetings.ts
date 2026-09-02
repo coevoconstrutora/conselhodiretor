@@ -35,9 +35,15 @@ export class RecordingRequiredError extends Error {
   }
 }
 
+/** Pauta/roteiro opcional anexado na criação da reunião (Etapa "guia de reunião"). */
+export interface MeetingGuidanceInput {
+  readonly content: string;
+  readonly filename: string;
+}
+
 /**
  * Abre uma reunião com gravação NÃO confirmada (default NEGA).
- * O título é cifrado em repouso antes de tocar o banco.
+ * O título (e a pauta, se houver) são cifrados em repouso antes de tocar o banco.
  */
 export async function createMeeting(
   db: SqlExecutor,
@@ -46,13 +52,40 @@ export async function createMeeting(
   title: string,
   encryptionKey: Buffer,
   meetingTypeId?: string | null,
+  guidance?: MeetingGuidanceInput | null,
 ): Promise<string> {
   const titleEnc = encryptField(title, encryptionKey);
+  const guidanceEnc = guidance ? encryptField(guidance.content, encryptionKey) : null;
   const res = await db.query<{ id: string }>(
-    'INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id) VALUES ($1, $2, $3, $4) RETURNING id',
-    [userId, companyId, titleEnc, meetingTypeId ?? null],
+    `INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id, guidance_enc, guidance_filename)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [userId, companyId, titleEnc, meetingTypeId ?? null, guidanceEnc, guidance?.filename ?? null],
   );
   return res.rows[0]!.id;
+}
+
+/**
+ * Pauta/roteiro anexado na criação da reunião — `null` se não houver, se a
+ * reunião não pertencer à empresa, ou se a chave não decifrar (degrada
+ * silenciosamente: pauta é só contexto extra, nunca crítica como o título).
+ */
+export async function getMeetingGuidance(
+  db: SqlExecutor,
+  meetingId: string,
+  companyId: string,
+  encryptionKey: Buffer,
+): Promise<MeetingGuidanceInput | null> {
+  const res = await db.query<{ guidance_enc: string | null; guidance_filename: string | null }>(
+    'SELECT guidance_enc, guidance_filename FROM meeting WHERE id = $1 AND company_id = $2',
+    [meetingId, companyId],
+  );
+  const row = res.rows[0];
+  if (!row?.guidance_enc) return null;
+  try {
+    return { content: decryptField(row.guidance_enc, encryptionKey), filename: row.guidance_filename ?? 'arquivo' };
+  } catch {
+    return null;
+  }
 }
 
 /**

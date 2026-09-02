@@ -7,6 +7,7 @@ import {
   type FullBoardConfig,
 } from '@conselho/board';
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
+import { getMeetingGuidance } from '@conselho/meetings';
 import { NamespacedKnowledgeStore, getCompanyProfile } from '@conselho/kb';
 import { analyzeMeetingForImprovements, saveMeetingImprovement } from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
@@ -431,6 +432,29 @@ async function loadPriorMeetingsContext(
   }
 }
 
+/**
+ * Pauta/roteiro anexado na criação da reunião (Etapa "guia de reunião"),
+ * pronta para `meetingGuidance` do orchestrator. Nunca lança — chave
+ * rotacionada/sem pauta degrada para "sem pauta", não trava o início.
+ */
+async function loadMeetingGuidance(
+  db: SqlExecutor,
+  meetingId: string,
+  companyId: string,
+): Promise<string | undefined> {
+  try {
+    const guidance = await getMeetingGuidance(db, meetingId, companyId, getEncryptionKey());
+    if (!guidance) return undefined;
+    return (
+      `PAUTA/ROTEIRO DESTA REUNIÃO (anexado por quem criou a reunião — "${guidance.filename}"; ` +
+      `siga a sequência sugerida quando fizer sentido, mas não é uma camisa de força):\n\n${guidance.content}`
+    );
+  } catch (error) {
+    console.error('[board] carregar pauta da reunião falhou:', error);
+    return undefined;
+  }
+}
+
 /** Empresa DONA da reunião — nunca confiar em companyId vindo só do cliente. */
 async function getMeetingCompanyId(db: SqlExecutor, meetingId: string): Promise<string> {
   const res = await db.query<{ company_id: string }>('SELECT company_id FROM meeting WHERE id = $1', [
@@ -496,6 +520,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   runtime.telemetry.sessionStarted(meetingId);
   const { llm, label } = makeLlm(hooks.onUsage);
   const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+  const meetingGuidance = await loadMeetingGuidance(db, meetingId, companyId);
   const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
   const extraTriggers = await getCompanyExtraTriggers(db, companyId);
   const orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
@@ -512,6 +537,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     onCaseStateUpdate: hooks.onCaseStateUpdate, // B5
     onCaseReview: hooks.onCaseReview,
     priorMeetingsContext,
+    meetingGuidance,
     activeAgentIds,
     extraTriggers,
   });
@@ -732,6 +758,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     runtime.telemetry.sessionStarted(meetingId);
     const { llm } = makeLlm(hooks.onUsage);
     const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
+    const meetingGuidance = await loadMeetingGuidance(db, meetingId, companyId);
     const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
     const extraTriggers = await getCompanyExtraTriggers(db, companyId);
     orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
@@ -751,6 +778,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       activeAgentIds,
       extraTriggers,
       priorMeetingsContext,
+      meetingGuidance,
     });
     runtime.gateway.bind(meetingId, orchestrator);
     const wired = wireSessionBroadcast(runtime, meetingId, session, db, { persistTranscript: true });
@@ -823,6 +851,25 @@ export async function listKnownSpeakers(meetingId: string): Promise<readonly Kno
   const runtime = await getBoardRuntime();
   const tracker = runtime.speakerNames.get(meetingId);
   return tracker ? tracker.listKnown() : [];
+}
+
+/**
+ * Modo silencioso (Etapa "board silencioso"): liga/desliga ao vivo, na sessão
+ * ATIVA da reunião — o board continua gravando/atualizando o caso, mas não
+ * gera contribuições/sínteses ao vivo. `false` se não há sessão ativa.
+ */
+export async function setSilentMode(meetingId: string, enabled: boolean): Promise<boolean> {
+  const runtime = await getBoardRuntime();
+  const active = runtime.active.get(meetingId);
+  if (!active) return false;
+  active.orchestrator.setSilentMode(enabled);
+  return true;
+}
+
+/** Estado atual do modo silencioso — `false` também quando não há sessão ativa. */
+export async function isSilentMode(meetingId: string): Promise<boolean> {
+  const runtime = await getBoardRuntime();
+  return runtime.active.get(meetingId)?.orchestrator.isSilentMode() ?? false;
 }
 
 /** Relatório de telemetria da reunião + sumário da instância (E10). */

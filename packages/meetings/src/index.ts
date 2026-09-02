@@ -2,6 +2,7 @@ export {
   createMeeting,
   listMeetings,
   getMeeting,
+  getMeetingGuidance,
   confirmRecording,
   revokeRecording,
   closeMeeting,
@@ -10,4 +11,5 @@ export {
   assertRecordingConfirmed,
   RecordingRequiredError,
   type MeetingSummary,
+  type MeetingGuidanceInput,
 } from './meetings';
