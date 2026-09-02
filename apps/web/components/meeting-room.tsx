@@ -48,7 +48,7 @@ export function MeetingRoom({
     clearBoard();
   }, [meetingId, clearBoard]);
 
-  useBoardStream(meetingId, { baseUrl: wsBaseUrl, token });
+  useBoardStream(meetingId, { baseUrl: wsBaseUrl, token, enabled: !closed });
   useUiTelemetry(meetingId); // E10 — ruído/aceite (R3/§9)
   const [voiceMuted, setVoiceMuted] = useState(false);
   const transcript = useBoardStore((s) => s.transcript);
@@ -110,30 +110,34 @@ export function MeetingRoom({
           </span>
         </h2>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-pressed={!(voiceMuted || focusMode)}
-            disabled={focusMode}
-            onClick={() => setVoiceMuted((m) => !m)}
-            title={
-              focusMode
-                ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
-                : voiceMuted
-                  ? 'Ativar voz dos conselheiros'
-                  : 'Silenciar voz dos conselheiros'
-            }
-            className="rounded-[var(--radius)] border border-white/25 px-2.5 py-1 text-xs text-white transition-colors hover:bg-white/10 disabled:opacity-50"
-          >
-            {voiceMuted || focusMode ? '🔇 voz' : '🔊 voz'}
-          </button>
-          <PipelineStatusBadge />
+          {!closed ? (
+            <button
+              type="button"
+              aria-pressed={!(voiceMuted || focusMode)}
+              disabled={focusMode}
+              onClick={() => setVoiceMuted((m) => !m)}
+              title={
+                focusMode
+                  ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
+                  : voiceMuted
+                    ? 'Ativar voz dos conselheiros'
+                    : 'Silenciar voz dos conselheiros'
+              }
+              className="rounded-[var(--radius)] border border-white/25 px-2.5 py-1 text-xs text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+            >
+              {voiceMuted || focusMode ? '🔇 voz' : '🔊 voz'}
+            </button>
+          ) : null}
+          {!closed ? <PipelineStatusBadge /> : null}
           {!closed ? <SilentModeToggle meetingId={meetingId} /> : null}
-          <span
-            title="⚠️ atenção · 💡 sugestão · 🔍 hipótese · 📋 síntese"
-            className="cursor-help text-xs text-white/50"
-          >
-            ⓘ 4 tipos
-          </span>
+          {!closed ? (
+            <span
+              title="⚠️ atenção · 💡 sugestão · 🔍 hipótese · 📋 síntese"
+              className="cursor-help text-xs text-white/50"
+            >
+              ⓘ 4 tipos
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -143,30 +147,44 @@ export function MeetingRoom({
       {!closed ? <SpeakerRosterPanel meetingId={meetingId} /> : null}
       {!closed ? <SpeakerRenamePanel meetingId={meetingId} finals={transcript.finals} /> : null}
 
-      {/* a "mesa" da reunião: transcrição (documento iluminado) + feed */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">
-        <div className="flex min-h-[420px] flex-col">
-          <TranscriptPanel source={transcriptSource} />
-        </div>
+      {/* a "mesa" da reunião: transcrição (documento iluminado) + feed — só
+          faz sentido AO VIVO (o WS não tem nada a entregar pra uma reunião
+          encerrada). Histórico de verdade já está nas seções abaixo
+          (transcrição revisada + relatórios do conselho), com dado real do
+          banco — nunca um painel "ao vivo" vazio fingindo ainda estar rodando. */}
+      {!closed ? (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">
+          <div className="flex min-h-[420px] flex-col">
+            <TranscriptPanel source={transcriptSource} />
+          </div>
 
-        <aside aria-label="Painel do conselho" className="flex min-h-[420px] flex-col gap-3">
-          <SuggestionFeed agents={agents} />
-        </aside>
-      </div>
+          <aside aria-label="Painel do conselho" className="flex min-h-[420px] flex-col gap-3">
+            <SuggestionFeed agents={agents} />
+          </aside>
+        </div>
+      ) : (
+        <p className="mt-4 rounded-[var(--radius)] border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+          🔒 Reunião encerrada — veja a transcrição revisada e os relatórios do conselho logo abaixo.
+        </p>
+      )}
 
       <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
-        <button
-          type="button"
-          aria-pressed={focusMode}
-          onClick={toggleFocusMode}
-          className={`rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-colors ${
-            focusMode
-              ? 'bg-white text-surface-deep'
-              : 'border border-white/25 text-white hover:bg-white/10'
-          }`}
-        >
-          🔇 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
-        </button>
+        {!closed ? (
+          <button
+            type="button"
+            aria-pressed={focusMode}
+            onClick={toggleFocusMode}
+            className={`rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-colors ${
+              focusMode
+                ? 'bg-white text-surface-deep'
+                : 'border border-white/25 text-white hover:bg-white/10'
+            }`}
+          >
+            🔇 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="flex items-start gap-2">
           {closed ? (
             <span className="rounded-[var(--radius)] border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-white/60">

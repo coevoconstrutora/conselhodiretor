@@ -27,6 +27,12 @@ export interface UseBoardStreamOptions {
   socketFactory?: BrowserSocketFactory;
   maxRetries?: number;
   retryDelayMs?: number;
+  /**
+   * `false` ⇒ nunca conecta (reunião encerrada/histórica — não há nada AO
+   * VIVO pra receber, e tentar mesmo assim só gera reconexões inúteis e o
+   * banner de "conexão perdida" numa tela que é pra ser estática). Default true.
+   */
+  enabled?: boolean;
 }
 
 export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = {}) {
@@ -35,8 +41,10 @@ export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = 
   const setSttStatus = useBoardStore((s) => s.setSttStatus);
   const setWsConnected = useBoardStore((s) => s.setWsConnected);
   const setWsGaveUp = useBoardStore((s) => s.setWsGaveUp);
+  const enabled = opts.enabled ?? true;
 
   useEffect(() => {
+    if (!enabled) return;
     const factory: BrowserSocketFactory =
       opts.socketFactory ?? ((url) => new WebSocket(url) as unknown as BrowserSocketLike);
     // baseUrl vazio ⇒ mesma origem (modo attached, A6)
@@ -99,6 +107,7 @@ export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = 
       socket?.close();
     };
   }, [
+    enabled,
     meetingId,
     addContribution,
     addTranscript,
