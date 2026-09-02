@@ -82,7 +82,7 @@ export function NewMeetingForm({
       ) : null}
       <div className="flex items-center justify-between pt-2">
         <Link href="/" className="text-sm text-ink-muted hover:text-ink hover:underline">
-          ← Voltar
+          🏠 Home
         </Link>
         <button
           type="submit"

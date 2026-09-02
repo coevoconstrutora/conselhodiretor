@@ -62,6 +62,14 @@ export async function DashboardShell({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {pageTitle ? (
+            <Link
+              href="/"
+              className="rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+            >
+              🏠 Home
+            </Link>
+          ) : null}
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
           <ConfigMenu items={items} />
           <form action={logoutAction}>

@@ -115,8 +115,11 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 </button>
               </form>
             ) : null}
-            <Link href="/" className="text-sm text-white/60 transition-colors hover:text-white">
-              ← Painel
+            <Link
+              href="/"
+              className="rounded-[var(--radius)] border border-white/25 px-3 py-1.5 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              🏠 Home
             </Link>
           </div>
         </div>

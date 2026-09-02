@@ -175,7 +175,13 @@ export function MeetingRoom({
           ) : (
             <>
               {synthesisForm}
-              {startForm}
+              {/* clique reinicia a demo no MESMO meetingId (sem navegação) — sem
+                  isto, cards/transcrição da rodada ANTERIOR ficavam na tela,
+                  parecendo que o botão "não fez nada" ou que um conselheiro
+                  antigo "ainda estava falando". */}
+              <div className="contents" onClickCapture={clearBoard}>
+                {startForm}
+              </div>
               <LiveMicButton meetingId={meetingId} token={token} wsBaseUrl={wsBaseUrl} />
             </>
           )}

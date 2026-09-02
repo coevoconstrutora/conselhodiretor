@@ -89,6 +89,9 @@ export function LiveMicButton({
   }, [meetingId]);
 
   const start = useCallback(async () => {
+    // reinicia no MESMO meetingId (sem navegação) — sem isto, cards/
+    // transcrição da rodada ANTERIOR ficavam na tela após um restart.
+    useBoardStore.getState().clear();
     setState('starting');
     setError(null);
     let micStream: MediaStream | null = null;
