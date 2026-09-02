@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { DisclaimerNote } from './disclaimer-note';
 import { useBoardStore, type BoardContributionItem } from '@/lib/board-store';
 import { formatTimeBR } from '@/lib/format';
+import { AgentIcon } from '@/lib/agent-icons';
+import type { StripCounselor } from './counselor-strip';
 
 /**
  * `<SuggestionCard>` (E7 — FR8/FR15/NFR3/NFR4, frontend-spec §6/§7).
@@ -48,26 +50,42 @@ const TYPE_CONFIG: Record<
   },
 };
 
-const PERSONA: Record<string, { name: string; specialty: string; accent: string; emoji: string }> = {
-  engenharia: { name: 'Engenharia', specialty: 'Lean Construction', accent: 'text-agent-engenharia', emoji: '🏗️' },
-  vendas: { name: 'Vendas', specialty: 'Vendas & Marketing', accent: 'text-agent-vendas', emoji: '📣' },
-  mercado: { name: 'Mercado', specialty: 'Inteligência & Produto', accent: 'text-agent-mercado', emoji: '📊' },
-  arquitetura: { name: 'Arquitetura', specialty: 'Arquitetura & Urbanismo', accent: 'text-agent-arquitetura', emoji: '📐' },
-  legal: { name: 'Legal', specialty: 'Legal & Compliance', accent: 'text-agent-legal', emoji: '⚖️' },
-  cs: { name: 'CS', specialty: 'Customer Success', accent: 'text-agent-cs', emoji: '🤝' },
-  cfo: { name: 'CFO', specialty: 'Funding, Caixa & MCMV', accent: 'text-agent-cfo', emoji: '💰' },
-  futurista: { name: 'Futurista', specialty: 'Tendências', accent: 'text-agent-futurista', emoji: '🔭' },
-  presidente: { name: 'Presidente', specialty: 'Síntese do Conselho', accent: 'text-agent-presidente', emoji: '⭐' },
+/**
+ * Cor de destaque por PAPEL (não por empresa — é bandeira visual do cargo,
+ * igual pra todo mundo). Nome/área/ícone de verdade vêm de `agents` (prop),
+ * que já reflete a personalização por empresa (`agent_profile`) — nunca um
+ * texto fixo aqui, senão a Velkor mostraria o nome que a Coevo configurou.
+ */
+const AGENT_ACCENT: Record<string, string> = {
+  engenharia: 'text-agent-engenharia',
+  vendas: 'text-agent-vendas',
+  mercado: 'text-agent-mercado',
+  arquitetura: 'text-agent-arquitetura',
+  legal: 'text-agent-legal',
+  cs: 'text-agent-cs',
+  cfo: 'text-agent-cfo',
+  futurista: 'text-agent-futurista',
+  presidente: 'text-agent-presidente',
 };
+const DEFAULT_ACCENT = 'text-ink-muted'; // conselheiro custom sem cor curada
 
 function timeLabel(at: number): string {
   return formatTimeBR(new Date(at), { hour: '2-digit', minute: '2-digit' });
 }
 
-export function SuggestionCard({ item }: { item: BoardContributionItem }) {
+export function SuggestionCard({
+  item,
+  agents,
+}: {
+  item: BoardContributionItem;
+  agents: readonly StripCounselor[];
+}) {
   const { contribution } = item;
   const config = TYPE_CONFIG[contribution.type] ?? TYPE_CONFIG.sugestao!;
-  const persona = PERSONA[contribution.agentId] ?? PERSONA.presidente!;
+  const counselor = agents.find((a) => a.id === contribution.agentId);
+  const name = counselor?.name ?? contribution.agentId;
+  const specialty = counselor?.area ?? '';
+  const accent = AGENT_ACCENT[contribution.agentId] ?? DEFAULT_ACCENT;
   const critical = contribution.severity === 'critical';
   const consolidated = (item.agentIds?.length ?? 1) > 1;
 
@@ -78,7 +96,7 @@ export function SuggestionCard({ item }: { item: BoardContributionItem }) {
 
   return (
     <article
-      aria-label={`${config.label} de ${persona.name}`}
+      aria-label={`${config.label} de ${name}`}
       data-type={contribution.type}
       data-severity={contribution.severity}
       className={`board-entry rounded-[var(--radius)] border border-ink/10 bg-surface p-4 shadow-[0_1px_2px_hsl(var(--text)/0.04),0_6px_16px_hsl(var(--text)/0.04)] ${config.border} ${
@@ -87,11 +105,16 @@ export function SuggestionCard({ item }: { item: BoardContributionItem }) {
     >
       <header className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span aria-hidden="true" className="text-lg">{persona.emoji}</span>
+          <AgentIcon
+            iconKey={counselor?.iconKey}
+            iconColor={counselor?.iconColor}
+            emoji={counselor?.emoji ?? '🧑‍💼'}
+            className="text-lg"
+          />
           <div>
             <p className={`font-display text-[15px] leading-tight ${critical ? 'font-bold' : 'font-semibold'} text-ink`}>
-              {persona.name}
-              <span className={`ml-1 text-xs font-medium ${persona.accent}`}>· {persona.specialty}</span>
+              {name}
+              {specialty ? <span className={`ml-1 text-xs font-medium ${accent}`}>· {specialty}</span> : null}
             </p>
             <p className={`text-[11px] font-bold uppercase tracking-wide ${config.labelColor}`}>
               <span aria-hidden="true">{config.icon} </span>
@@ -109,7 +132,7 @@ export function SuggestionCard({ item }: { item: BoardContributionItem }) {
 
       {consolidated ? (
         <p className="mt-1 text-[11px] font-semibold text-ink-muted">
-          🤝 Consolidado — {item.agentIds!.map((p) => PERSONA[p]?.name ?? p).join(' + ')}
+          🤝 Consolidado — {item.agentIds!.map((p) => agents.find((a) => a.id === p)?.name ?? p).join(' + ')}
         </p>
       ) : null}
       {item.divergent ? (

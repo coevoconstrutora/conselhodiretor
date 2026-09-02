@@ -150,7 +150,7 @@ export function MeetingRoom({
         </div>
 
         <aside aria-label="Painel do conselho" className="flex min-h-[420px] flex-col gap-3">
-          <SuggestionFeed />
+          <SuggestionFeed agents={agents} />
         </aside>
       </div>
 

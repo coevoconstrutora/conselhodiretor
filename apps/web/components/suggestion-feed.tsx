@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useBoardStore, feedOrder } from '@/lib/board-store';
 import { SuggestionCard } from './suggestion-card';
+import type { StripCounselor } from './counselor-strip';
 
 /**
  * `<SuggestionFeed>` (E7 — FR9, frontend-spec §9): feed cronológico INVERSO
@@ -10,7 +11,7 @@ import { SuggestionCard } from './suggestion-card';
  * severidade: `assertive` para críticos, `polite` para o resto. Dispensar tem
  * undo de 5s (FR15).
  */
-export function SuggestionFeed() {
+export function SuggestionFeed({ agents }: { agents: readonly StripCounselor[] }) {
   const contributions = useBoardStore((s) => s.contributions);
   const pinned = useBoardStore((s) => s.pinned);
   const dismissed = useBoardStore((s) => s.dismissed);
@@ -49,14 +50,14 @@ export function SuggestionFeed() {
       {/* ⚠️ críticos + 📌 fixos no topo — leitor de tela é interrompido (assertive) */}
       <div role="region" aria-label="Pontos de atenção" aria-live="assertive" className="space-y-3">
         {critical.map((item) => (
-          <SuggestionCard key={item.id} item={item} />
+          <SuggestionCard key={item.id} item={item} agents={agents} />
         ))}
       </div>
 
       {/* demais — anunciados sem interromper (polite) */}
       <div role="region" aria-label="Sugestões do board" aria-live="polite" className="space-y-3">
         {regular.map((item) => (
-          <SuggestionCard key={item.id} item={item} />
+          <SuggestionCard key={item.id} item={item} agents={agents} />
         ))}
       </div>
 
