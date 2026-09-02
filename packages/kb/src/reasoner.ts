@@ -33,6 +33,8 @@ export interface AgentProfile {
   /** Como ele tende a decidir sob incerteza — molda o tom das recomendações, não o escopo. */
   readonly riskPosture?: RiskPosture | null;
   readonly riskPostureNotes?: string | null;
+  /** Resumo curto (≤140 chars) gerado por IA a partir do perfil inteiro — usado nos cards/listas. */
+  readonly briefing?: string | null;
 }
 
 /**
@@ -191,6 +193,7 @@ export function applyAgentProfileOverrides(
     decisionCriteria?: string | null;
     riskPosture?: RiskPosture | null;
     riskPostureNotes?: string | null;
+    briefing?: string | null;
   }>,
 ): void {
   const profiles = getAgentProfiles(companyId);
@@ -207,6 +210,7 @@ export function applyAgentProfileOverrides(
         decisionCriteria: o.decisionCriteria !== undefined ? o.decisionCriteria : profile.decisionCriteria,
         riskPosture: o.riskPosture !== undefined ? o.riskPosture : profile.riskPosture,
         riskPostureNotes: o.riskPostureNotes !== undefined ? o.riskPostureNotes : profile.riskPostureNotes,
+        briefing: o.briefing !== undefined ? o.briefing : profile.briefing,
       };
     } else if (o.displayName?.trim() && o.scope?.trim()) {
       // conselheiro CUSTOM desta empresa — não estava no template padrão
@@ -221,6 +225,7 @@ export function applyAgentProfileOverrides(
         decisionCriteria: o.decisionCriteria ?? null,
         riskPosture: o.riskPosture ?? null,
         riskPostureNotes: o.riskPostureNotes ?? null,
+        briefing: o.briefing ?? null,
       };
     }
   }

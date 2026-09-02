@@ -487,4 +487,16 @@ ALTER TABLE meeting ADD COLUMN IF NOT EXISTS guidance_enc text;
 ALTER TABLE meeting ADD COLUMN IF NOT EXISTS guidance_filename text;
 `,
   },
+  {
+    name: '0022_agent_profile_briefing',
+    sql: `
+-- Resumo curto (≤140 chars) gerado por IA a partir do perfil INTEIRO do
+-- conselheiro (escopo + perfil profissional + critérios + postura de risco)
+-- — usado nos cards/listas em vez de truncar cru o texto do escopo (que
+-- carregava o prefixo "PODE opinar sobre:" do prompt, desperdiçando espaço
+-- e cortando no meio da frase). Não cifrado — mesmo padrão do resto de
+-- agent_profile (dado de configuração do produto, não do negócio).
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS briefing text;
+`,
+  },
 ];

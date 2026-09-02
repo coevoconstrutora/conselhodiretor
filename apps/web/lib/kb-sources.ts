@@ -16,6 +16,7 @@ import {
 } from '@conselho/kb';
 import type { AgentId, KbChunk } from '@conselho/providers';
 import { stripHtml, isBlockedUrl } from './text-extract';
+import { BRIEFING_MAX } from './agent-briefing';
 
 /**
  * "NotebookLM por conselheiro" — fontes de conhecimento geridas pelo DONO.
@@ -427,6 +428,50 @@ export async function saveAgentProfile(
   applyAgentProfileOverrides(companyId, [{ agentId, displayName, scope, ...f }]);
 }
 
+/** Persiste o briefing gerado — upsert (conselheiro padrão nunca editado ainda não tem linha). */
+export async function saveAgentBriefing(
+  db: SqlExecutor,
+  companyId: string,
+  agentId: AgentId,
+  briefing: string,
+): Promise<void> {
+  const profile = getAgentProfiles(companyId)[agentId];
+  if (!profile) throw new Error(`Conselheiro ${agentId} não encontrado.`);
+  const { scopeCan, scopeCannot } = await loadScopeSplit(db, companyId, agentId);
+  const trimmed = briefing.trim().slice(0, BRIEFING_MAX);
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: `agent-briefing-${agentId}`, kbSources: [], modelVersion: 'ai-briefing' },
+    async (tx) => {
+      await tx.query(
+        `INSERT INTO agent_profile
+           (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key, icon_color,
+            professional_profile, decision_criteria, risk_posture, risk_posture_notes, briefing)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         ON CONFLICT (company_id, agent_id) DO UPDATE
+           SET briefing = EXCLUDED.briefing, updated_at = now()`,
+        [
+          companyId,
+          agentId,
+          profile.displayName,
+          profile.scope,
+          scopeCan,
+          scopeCannot,
+          profile.iconKey ?? null,
+          profile.iconColor ?? null,
+          profile.professionalProfile ?? null,
+          profile.decisionCriteria ?? null,
+          profile.riskPosture ?? null,
+          profile.riskPostureNotes ?? null,
+          trimmed,
+        ],
+      );
+      return null;
+    },
+  );
+  applyAgentProfileOverrides(companyId, [{ agentId, briefing: trimmed }]);
+}
+
 function slugifyAgentId(displayName: string): string {
   const base = displayName
     .normalize('NFD')
@@ -539,9 +584,10 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
     decision_criteria: string | null;
     risk_posture: string | null;
     risk_posture_notes: string | null;
+    briefing: string | null;
   }>(
     `SELECT agent_id, display_name, scope, icon_key, icon_color, professional_profile, decision_criteria,
-            risk_posture, risk_posture_notes
+            risk_posture, risk_posture_notes, briefing
      FROM agent_profile WHERE company_id = $1`,
     [companyId],
   );
@@ -557,6 +603,7 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
       decisionCriteria: r.decision_criteria,
       riskPosture: r.risk_posture as RiskPosture | null,
       riskPostureNotes: r.risk_posture_notes,
+      briefing: r.briefing,
     })),
   );
 }

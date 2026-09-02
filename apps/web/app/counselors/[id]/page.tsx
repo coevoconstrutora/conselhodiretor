@@ -17,6 +17,7 @@ import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
 import { formatDateBR } from '@/lib/format';
 import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
+import { CounselorBriefingCard } from '@/components/counselor-briefing';
 import { DashboardShell } from '@/components/dashboard-shell';
 
 const KIND_LABEL: Record<string, string> = {
@@ -63,6 +64,8 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
 
   return (
     <DashboardShell pageTitle={profile.displayName}>
+      <CounselorBriefingCard agentId={agentId} briefing={profile.briefing ?? null} />
+
       <div className="mt-2 flex items-center gap-2">
         <AgentIcon
           iconKey={profile.iconKey}

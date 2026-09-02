@@ -58,4 +58,25 @@ describe('buildAgentRoster', () => {
     const roster = buildAgentRoster(profiles);
     expect(roster.map((r) => r.id)).toEqual(['cfo', 'custom', 'presidente']);
   });
+
+  it('prefere o briefing gerado por IA sobre o corte cru do escopo, quando presente', () => {
+    const profiles = {
+      cfo: {
+        agentId: 'cfo',
+        displayName: 'CFO — Funding',
+        scope: 'PODE opinar sobre: fluxo de caixa e exposição, funding e financiamento à produção',
+        briefing: 'Cuida do caixa e do funding — te avisa antes de faltar dinheiro.',
+      },
+    };
+    const roster = buildAgentRoster(profiles);
+    expect(roster[0]!.briefing).toBe('Cuida do caixa e do funding — te avisa antes de faltar dinheiro.');
+  });
+
+  it('sem briefing gerado, cai no corte cru do escopo (compat)', () => {
+    const profiles = {
+      cfo: { agentId: 'cfo', displayName: 'CFO — Funding', scope: 'fluxo de caixa e exposição' },
+    };
+    const roster = buildAgentRoster(profiles);
+    expect(roster[0]!.briefing).toBe('fluxo de caixa e exposição');
+  });
 });

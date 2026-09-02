@@ -8,6 +8,8 @@ import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { getCompanyKnowledgeStore } from './board-runtime';
 import { extractUploadedFileText } from './text-extract';
+import { createLlm } from './llm';
+import { generateAgentBriefing } from './agent-briefing';
 import {
   addKbSource,
   deleteKbSource,
@@ -15,8 +17,10 @@ import {
   saveAgentProfile,
   rebuildAgentKnowledge,
   loadAndApplyProfileOverrides,
+  loadScopeSplit,
   createCustomCounselor,
   deleteCustomCounselor,
+  saveAgentBriefing,
   SCOPE_FIELD_MAX,
   PROFESSIONAL_PROFILE_MAX,
   DECISION_CRITERIA_MAX,
@@ -92,6 +96,47 @@ export async function updateCounselorProfileAction(
   } catch (err) {
     console.error('[conselheiros] editar perfil falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao salvar o perfil.' };
+  }
+}
+
+export type BriefingActionState = { error?: string; briefing?: string } | null;
+
+/**
+ * Gera (via IA) um briefing curto (≤140 chars) a partir do perfil INTEIRO do
+ * conselheiro — escopo + perfil profissional + critérios de decisão + postura
+ * de risco — e salva. Sob demanda (botão): não roda sozinho, custa uma
+ * chamada de LLM por clique.
+ */
+export async function generateCounselorBriefingAction(
+  _prev: BriefingActionState,
+  formData: FormData,
+): Promise<BriefingActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem gerar briefing.' };
+  try {
+    const db = await getDb();
+    const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
+    const profile = getAgentProfiles(user.companyId)[agentId]!;
+    const { scopeCan, scopeCannot } = await loadScopeSplit(db, user.companyId, agentId);
+    const { llm } = createLlm({ maxTokens: 120 });
+    const briefing = await generateAgentBriefing(llm, {
+      displayName: profile.displayName,
+      scopeCan,
+      scopeCannot,
+      professionalProfile: profile.professionalProfile ?? null,
+      decisionCriteria: profile.decisionCriteria ?? null,
+      riskPosture: profile.riskPosture ?? null,
+      riskPostureNotes: profile.riskPostureNotes ?? null,
+    });
+    await saveAgentBriefing(db, user.companyId, agentId, briefing);
+    revalidatePath(`/counselors/${agentId}`);
+    revalidatePath('/counselors');
+    revalidatePath('/');
+    return { briefing };
+  } catch (err) {
+    console.error('[conselheiros] gerar briefing falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao gerar o briefing.' };
   }
 }
 

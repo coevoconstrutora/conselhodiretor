@@ -65,7 +65,15 @@ export interface AgentDisplayInfo {
 export function buildAgentRoster(
   profiles: Record<
     string,
-    { agentId: string; displayName: string; scope: string; iconKey?: string | null; iconColor?: string | null }
+    {
+      agentId: string;
+      displayName: string;
+      scope: string;
+      iconKey?: string | null;
+      iconColor?: string | null;
+      /** Resumo curto gerado por IA (Etapa "briefing do conselheiro") — preferido sobre o corte cru do escopo. */
+      briefing?: string | null;
+    }
   >,
 ): AgentDisplayInfo[] {
   return Object.values(profiles)
@@ -79,7 +87,7 @@ export function buildAgentRoster(
         emoji: getAgentEmoji(p.agentId),
         iconKey: p.iconKey ?? null,
         iconColor: p.iconColor ?? null,
-        briefing: buildQuickBriefing(p.scope),
+        briefing: p.briefing?.trim() || buildQuickBriefing(p.scope),
       };
     });
 }
