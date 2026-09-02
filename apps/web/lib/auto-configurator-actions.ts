@@ -83,50 +83,61 @@ export type ApplyConfiguratorState = { error?: string; ok?: string } | null;
  * entram; os demais preservam o valor ATUAL (nunca all-or-nothing). Passa
  * pelo MESMO `saveAgentProfile` já auditado — sem tabela de versão própria
  * nesta entrega (o audit_log já registra quem mudou o quê e quando).
+ * Assinatura (prevState, formData) — não void — pra alimentar `useActionState`
+ * no painel (spinner enquanto aplica + confirmação ao terminar).
  */
-export async function applyAutoConfiguratorAction(formData: FormData): Promise<void> {
+export async function applyAutoConfiguratorAction(
+  _prev: ApplyConfiguratorState,
+  formData: FormData,
+): Promise<ApplyConfiguratorState> {
   const user = await getCurrentUser();
-  if (!user) throw new Error('Não autenticado.');
-  if (!canWrite(user)) throw new Error('Convidados não podem aplicar configurações.');
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem aplicar configurações.' };
   const agentId = String(formData.get('agentId') ?? '') as AgentId;
-  if (!agentId) throw new Error('Conselheiro inválido.');
+  if (!agentId) return { error: 'Conselheiro inválido.' };
 
-  const db = await getDb();
-  await loadAndApplyProfileOverrides(db, user.companyId);
-  const profile = getAgentProfiles(user.companyId)[agentId];
-  if (!profile) throw new Error('Conselheiro não encontrado.');
-  const current = await loadScopeSplit(db, user.companyId, agentId);
+  try {
+    const db = await getDb();
+    await loadAndApplyProfileOverrides(db, user.companyId);
+    const profile = getAgentProfiles(user.companyId)[agentId];
+    if (!profile) return { error: 'Conselheiro não encontrado.' };
+    const current = await loadScopeSplit(db, user.companyId, agentId);
 
-  const accept = (field: string) => formData.get(`accept_${field}`) === 'on';
-  const professionalProfile = accept('professionalProfile')
-    ? String(formData.get('proposedProfessionalProfile') ?? '')
-    : (profile.professionalProfile ?? '');
-  const decisionCriteria = accept('decisionCriteria')
-    ? String(formData.get('proposedDecisionCriteria') ?? '')
-    : (profile.decisionCriteria ?? '');
-  const riskPosture = accept('riskPosture') ? String(formData.get('proposedRiskPosture') ?? '') : (profile.riskPosture ?? '');
-  const scopeCan = accept('scopeCan') ? String(formData.get('proposedScopeCan') ?? '') : current.scopeCan;
-  const scopeCannot = accept('scopeCannot') ? String(formData.get('proposedScopeCannot') ?? '') : current.scopeCannot;
-  const aiModel = accept('aiModel') ? String(formData.get('proposedAiModel') ?? '') : (profile.aiModel ?? '');
-  const reasoningEffort = accept('reasoningEffort')
-    ? String(formData.get('proposedReasoningEffort') ?? '')
-    : (profile.reasoningEffort ?? '');
+    const accept = (field: string) => formData.get(`accept_${field}`) === 'on';
+    const professionalProfile = accept('professionalProfile')
+      ? String(formData.get('proposedProfessionalProfile') ?? '')
+      : (profile.professionalProfile ?? '');
+    const decisionCriteria = accept('decisionCriteria')
+      ? String(formData.get('proposedDecisionCriteria') ?? '')
+      : (profile.decisionCriteria ?? '');
+    const riskPosture = accept('riskPosture') ? String(formData.get('proposedRiskPosture') ?? '') : (profile.riskPosture ?? '');
+    const scopeCan = accept('scopeCan') ? String(formData.get('proposedScopeCan') ?? '') : current.scopeCan;
+    const scopeCannot = accept('scopeCannot') ? String(formData.get('proposedScopeCannot') ?? '') : current.scopeCannot;
+    const aiModel = accept('aiModel') ? String(formData.get('proposedAiModel') ?? '') : (profile.aiModel ?? '');
+    const reasoningEffort = accept('reasoningEffort')
+      ? String(formData.get('proposedReasoningEffort') ?? '')
+      : (profile.reasoningEffort ?? '');
 
-  await saveAgentProfile(db, user.companyId, agentId, profile.displayName, scopeCan, scopeCannot, {
-    iconKey: profile.iconKey,
-    iconColor: profile.iconColor,
-    professionalProfile,
-    decisionCriteria,
-    riskPosture,
-    riskPostureNotes: profile.riskPostureNotes,
-    aiModel,
-    reasoningEffort,
-    voice: profile.voice,
-    voiceInstructions: profile.voiceInstructions,
-    speechRate: profile.speechRate,
-  });
-  revalidatePath(`/counselors/${agentId}`);
-  revalidatePath('/counselors');
+    await saveAgentProfile(db, user.companyId, agentId, profile.displayName, scopeCan, scopeCannot, {
+      iconKey: profile.iconKey,
+      iconColor: profile.iconColor,
+      professionalProfile,
+      decisionCriteria,
+      riskPosture,
+      riskPostureNotes: profile.riskPostureNotes,
+      aiModel,
+      reasoningEffort,
+      voice: profile.voice,
+      voiceInstructions: profile.voiceInstructions,
+      speechRate: profile.speechRate,
+    });
+    revalidatePath(`/counselors/${agentId}`);
+    revalidatePath('/counselors');
+    return { ok: 'Configuração aplicada.' };
+  } catch (err) {
+    console.error('[auto-configurador] aplicar falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao aplicar a configuração.' };
+  }
 }
 
 export interface BoardConfiguratorSummary {

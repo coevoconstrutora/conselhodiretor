@@ -1,10 +1,11 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import {
   runAutoConfiguratorAction,
   applyAutoConfiguratorAction,
   type AutoConfiguratorActionState,
+  type ApplyConfiguratorState,
 } from '@/lib/auto-configurator-actions';
 import { REASONING_MODELS, REASONING_EFFORTS } from '@/lib/ai-config';
 import { SCORE_LABEL_TEXT, classifyScoreLabel, type ConfigurationScore } from '@/lib/auto-configurator-scoring';
@@ -43,34 +44,43 @@ function ScoreBadge({ score }: { score: ConfigurationScore }) {
   );
 }
 
+/** Só entra na revisão (e no alvo do "Selecionar todas") quando a proposta difere do valor atual. */
+function hasDiff(current: string, proposed: string | null): boolean {
+  return Boolean(proposed && proposed.trim() !== current.trim());
+}
+
 function DiffField({
   fieldKey,
   label,
   current,
   proposed,
   proposedFieldName,
+  checked,
+  onToggle,
 }: {
   fieldKey: string;
   label: string;
   current: string;
   proposed: string | null;
   proposedFieldName: string;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
 }) {
-  const [accepted, setAccepted] = useState(false);
-  if (!proposed || proposed.trim() === current.trim()) return null;
+  if (!hasDiff(current, proposed)) return null;
+  const proposedValue = proposed!;
   return (
     <div className="rounded-[var(--radius)] border border-ink/10 p-3">
       <label className="flex items-start gap-2 text-xs font-semibold text-ink">
         <input
           type="checkbox"
           name={`accept_${fieldKey}`}
-          checked={accepted}
-          onChange={(e) => setAccepted(e.target.checked)}
+          checked={checked}
+          onChange={(e) => onToggle(e.target.checked)}
           className="mt-0.5"
         />
         <span>{label}</span>
       </label>
-      <input type="hidden" name={proposedFieldName} value={proposed} />
+      <input type="hidden" name={proposedFieldName} value={proposedValue} />
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <div>
           <p className="text-[10px] font-semibold uppercase text-ink-muted">Atual</p>
@@ -78,7 +88,7 @@ function DiffField({
         </div>
         <div>
           <p className="text-[10px] font-semibold uppercase text-brand">Proposto</p>
-          <p className="mt-0.5 whitespace-pre-line text-xs text-ink">{proposed}</p>
+          <p className="mt-0.5 whitespace-pre-line text-xs text-ink">{proposedValue}</p>
         </div>
       </div>
     </div>
@@ -91,7 +101,48 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
     runAutoConfiguratorAction,
     null,
   );
+  const [applyState, applyAction, applyPending] = useActionState<ApplyConfiguratorState, FormData>(
+    applyAutoConfiguratorAction,
+    null,
+  );
   const [open, setOpen] = useState(false);
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  // Valores já aplicados nesta sessão (sem reload) — faz o "Atual" refletir a
+  // última aplicação sem precisar remontar o form com um `key` novo.
+  const [appliedOverrides, setAppliedOverrides] = useState<Record<string, string>>({});
+  // Snapshot do que estava marcado NO MOMENTO do submit — lido pelo efeito de
+  // sucesso abaixo; um ref (não um dep de efeito) pra não disparar o efeito
+  // a cada toggle de checkbox, só quando `applyState` muda de verdade.
+  const acceptedAtSubmitRef = useRef<Record<string, boolean>>({});
+
+  const toggleField = (key: string, value: boolean) => setAccepted((prev) => ({ ...prev, [key]: value }));
+
+  // Proposta nova (outro clique em "Gerar proposta") zera seleção e overrides
+  // locais — não deixa aceite/aplicação de uma rodada anterior vazar pra nova.
+  useEffect(() => {
+    setAccepted({});
+    setAppliedOverrides({});
+  }, [genState?.proposal]);
+
+  useEffect(() => {
+    if (!applyState?.ok || !genState?.proposal) return;
+    const acc = acceptedAtSubmitRef.current;
+    const proposal = genState.proposal;
+    setAppliedOverrides((prev) => {
+      const next = { ...prev };
+      if (acc.professionalProfile && proposal.professionalProfile) next.professionalProfile = proposal.professionalProfile;
+      if (acc.decisionCriteria && proposal.decisionCriteria) next.decisionCriteria = proposal.decisionCriteria;
+      if (acc.riskPosture && proposal.riskPosture) next.riskPosture = proposal.riskPosture;
+      if (acc.scopeCan && proposal.scopeCan) next.scopeCan = proposal.scopeCan;
+      if (acc.scopeCannot && proposal.scopeCannot) next.scopeCannot = proposal.scopeCannot;
+      if (acc.aiModel && proposal.aiModelRecommendation) {
+        next.aiModel = proposal.aiModelRecommendation.model;
+        next.reasoningEffort = proposal.aiModelRecommendation.reasoningEffort;
+      }
+      return next;
+    });
+    setAccepted({});
+  }, [applyState, genState?.proposal]);
 
   if (!open) {
     return (
@@ -100,6 +151,62 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
       </button>
     );
   }
+
+  const current = genState?.current
+    ? {
+        professionalProfile: appliedOverrides.professionalProfile ?? genState.current.professionalProfile ?? '',
+        decisionCriteria: appliedOverrides.decisionCriteria ?? genState.current.decisionCriteria ?? '',
+        riskPosture: appliedOverrides.riskPosture ?? genState.current.riskPosture ?? '',
+        scopeCan: appliedOverrides.scopeCan ?? genState.current.scopeCan,
+        scopeCannot: appliedOverrides.scopeCannot ?? genState.current.scopeCannot,
+        aiModel: appliedOverrides.aiModel ?? genState.current.aiModel,
+        reasoningEffort: appliedOverrides.reasoningEffort ?? genState.current.reasoningEffort,
+      }
+    : null;
+
+  const fieldDescriptors = genState?.proposal && current
+    ? [
+        {
+          key: 'professionalProfile',
+          label: 'Perfil profissional',
+          current: current.professionalProfile,
+          proposed: genState.proposal.professionalProfile,
+          proposedFieldName: 'proposedProfessionalProfile',
+        },
+        {
+          key: 'decisionCriteria',
+          label: 'Critérios de decisão',
+          current: current.decisionCriteria,
+          proposed: genState.proposal.decisionCriteria,
+          proposedFieldName: 'proposedDecisionCriteria',
+        },
+        {
+          key: 'riskPosture',
+          label: 'Postura de risco',
+          current: current.riskPosture,
+          proposed: genState.proposal.riskPosture,
+          proposedFieldName: 'proposedRiskPosture',
+        },
+        {
+          key: 'scopeCan',
+          label: 'O que pode opinar',
+          current: current.scopeCan,
+          proposed: genState.proposal.scopeCan,
+          proposedFieldName: 'proposedScopeCan',
+        },
+        {
+          key: 'scopeCannot',
+          label: 'O que não pode opinar',
+          current: current.scopeCannot,
+          proposed: genState.proposal.scopeCannot,
+          proposedFieldName: 'proposedScopeCannot',
+        },
+      ]
+    : [];
+  const activeKeys = fieldDescriptors.filter((f) => hasDiff(f.current, f.proposed)).map((f) => f.key);
+  const hasAiModelSuggestion = Boolean(genState?.proposal?.aiModelRecommendation);
+  const allActiveKeys = hasAiModelSuggestion ? [...activeKeys, 'aiModel'] : activeKeys;
+  const selectAll = () => setAccepted(Object.fromEntries(allActiveKeys.map((k) => [k, true])));
 
   return (
     <div className="space-y-4 rounded-[var(--radius)] border border-brand/20 bg-brand/5 p-4">
@@ -129,8 +236,14 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
 
       {genState?.error ? <p className="text-xs font-medium text-attn-critical">⚠ {genState.error}</p> : null}
 
-      {genState?.proposal && genState.current && genState.score ? (
-        <form action={applyAutoConfiguratorAction} className="space-y-3">
+      {genState?.proposal && current && genState.score ? (
+        <form
+          action={applyAction}
+          onSubmit={() => {
+            acceptedAtSubmitRef.current = { ...accepted };
+          }}
+          className="space-y-3"
+        >
           <input type="hidden" name="agentId" value={genState.agentId} />
           <div className="flex flex-wrap items-center justify-between gap-2">
             <ScoreBadge score={genState.score} />
@@ -138,13 +251,24 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
           </div>
           {genState.proposal.reasoning ? <p className="text-xs italic text-ink-muted">{genState.proposal.reasoning}</p> : null}
 
-          <DiffField
-            fieldKey="professionalProfile"
-            label="Perfil profissional"
-            current={genState.current.professionalProfile ?? ''}
-            proposed={genState.proposal.professionalProfile}
-            proposedFieldName="proposedProfessionalProfile"
-          />
+          {allActiveKeys.length > 0 ? (
+            <button type="button" onClick={selectAll} className={secondaryButtonCls}>
+              ✅ Selecionar todas as sugestões
+            </button>
+          ) : null}
+
+          {fieldDescriptors.map((f) => (
+            <DiffField
+              key={f.key}
+              fieldKey={f.key}
+              label={f.label}
+              current={f.current}
+              proposed={f.proposed}
+              proposedFieldName={f.proposedFieldName}
+              checked={accepted[f.key] ?? false}
+              onToggle={(v) => toggleField(f.key, v)}
+            />
+          ))}
           {genState.proposal.expertise.length > 0 ? (
             <div className="rounded-[var(--radius)] border border-ink/10 p-3">
               <p className="text-xs font-semibold text-ink">Expertise sugerida</p>
@@ -155,45 +279,23 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
               </ul>
             </div>
           ) : null}
-          <DiffField
-            fieldKey="decisionCriteria"
-            label="Critérios de decisão"
-            current={genState.current.decisionCriteria ?? ''}
-            proposed={genState.proposal.decisionCriteria}
-            proposedFieldName="proposedDecisionCriteria"
-          />
-          <DiffField
-            fieldKey="riskPosture"
-            label="Postura de risco"
-            current={genState.current.riskPosture ?? ''}
-            proposed={genState.proposal.riskPosture}
-            proposedFieldName="proposedRiskPosture"
-          />
-          <DiffField
-            fieldKey="scopeCan"
-            label="O que pode opinar"
-            current={genState.current.scopeCan}
-            proposed={genState.proposal.scopeCan}
-            proposedFieldName="proposedScopeCan"
-          />
-          <DiffField
-            fieldKey="scopeCannot"
-            label="O que não pode opinar"
-            current={genState.current.scopeCannot}
-            proposed={genState.proposal.scopeCannot}
-            proposedFieldName="proposedScopeCannot"
-          />
           {genState.proposal.aiModelRecommendation ? (
             <div className="rounded-[var(--radius)] border border-ink/10 p-3">
               <label className="flex items-start gap-2 text-xs font-semibold text-ink">
-                <input type="checkbox" name="accept_aiModel" className="mt-0.5" />
+                <input
+                  type="checkbox"
+                  name="accept_aiModel"
+                  checked={accepted.aiModel ?? false}
+                  onChange={(e) => toggleField('aiModel', e.target.checked)}
+                  className="mt-0.5"
+                />
                 <span>Modelo de IA</span>
               </label>
               <input type="hidden" name="accept_reasoningEffort" value="on" />
               <input type="hidden" name="proposedAiModel" value={genState.proposal.aiModelRecommendation.model} />
               <input type="hidden" name="proposedReasoningEffort" value={genState.proposal.aiModelRecommendation.reasoningEffort} />
               <p className="mt-1 text-xs text-ink-muted">
-                Atual: {genState.current.aiModel ?? 'padrão'} / {genState.current.reasoningEffort ?? 'padrão'} → Proposto:{' '}
+                Atual: {current.aiModel ?? 'padrão'} / {current.reasoningEffort ?? 'padrão'} → Proposto:{' '}
                 {REASONING_MODELS.find((m) => m.value === genState.proposal!.aiModelRecommendation!.model)?.label}{' '}
                 / {REASONING_EFFORTS.find((r) => r.value === genState.proposal!.aiModelRecommendation!.reasoningEffort)?.label}
               </p>
@@ -212,9 +314,11 @@ export function AutoConfiguratorPanel({ agentId }: { agentId: string }) {
           ) : null}
 
           <div className="flex items-center gap-2 pt-2">
-            <button type="submit" className={buttonCls}>
-              💾 Aplicar selecionados
+            <button type="submit" disabled={applyPending} className={buttonCls}>
+              {applyPending ? '⏳ Aplicando…' : '💾 Aplicar selecionados'}
             </button>
+            {applyState?.ok ? <span className="text-xs font-medium text-success">✓ {applyState.ok}</span> : null}
+            {applyState?.error ? <span className="text-xs font-medium text-attn-critical">⚠ {applyState.error}</span> : null}
           </div>
         </form>
       ) : null}
