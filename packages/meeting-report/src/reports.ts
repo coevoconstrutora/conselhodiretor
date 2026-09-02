@@ -75,6 +75,10 @@ function presidentSystem(companyId: string): string {
 /**
  * Gera o rascunho do relatório de UM conselheiro sobre a reunião inteira.
  * `contributions` = o que aquele agente disse ao vivo (âncora anti-invenção).
+ * `modelOverride`/`reasoningEffortOverride`: além do uso normal (perfil do
+ * conselheiro), usado pelo motor de experimentação (Etapa "Experimentação
+ * de IA") para gerar a versão CANDIDATA do mesmo relatório com outro
+ * modelo/raciocínio — nunca sobrescreve o relatório oficial já salvo.
  */
 export async function generateCounselorReport(
   llm: ILlmProvider,
@@ -82,6 +86,8 @@ export async function generateCounselorReport(
   agentId: AgentId,
   transcriptFinals: readonly string[],
   contributions: readonly AgentContribution[] = [],
+  modelOverride?: string,
+  reasoningEffortOverride?: string,
 ): Promise<string> {
   const transcript = transcriptFinals.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const own = contributions.filter((c) => c.agentId === agentId);
@@ -91,6 +97,8 @@ export async function generateCounselorReport(
       : '';
   const result = await llm.complete({
     system: counselorReportSystem(agentId, companyId),
+    model: modelOverride,
+    reasoningEffort: reasoningEffortOverride,
     context: [],
     transcript: `Transcrição da reunião:\n${transcript}${saidBlock}`,
   });

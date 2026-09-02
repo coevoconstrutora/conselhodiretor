@@ -71,6 +71,7 @@ describe('Migrations — schema base', () => {
       '0025_participants_biometrics',
       '0026_meeting_history',
       '0027_meeting_analysis',
+      '0028_ai_experiments',
     ]);
   });
 
@@ -312,6 +313,44 @@ describe('meeting_improvement — auto-análise estruturada (migration 0027)', (
     );
     expect(legacy.rows[0]!.structured_enc).toBeNull();
     expect(legacy.rows[0]!.overall_score).toBeNull();
+  });
+});
+
+describe('Experimentação de IA (migration 0028)', () => {
+  it('ai_experiment persiste baseline/candidata e nunca sobrescreve reunião histórica', async () => {
+    const userId = await insertUser('experimento@conselho.test');
+    const res = await exec.query<{ id: string; status: string }>(
+      `INSERT INTO ai_experiment
+         (company_id, name, target_type, target_agent_id, baseline_model, baseline_reasoning_effort,
+          candidate_model, candidate_reasoning_effort, created_by)
+       VALUES ($1, 'CFO — Luna', 'counselor', 'cfo', 'gpt-5.6-terra', 'high', 'gpt-5.6-luna', 'medium', $2)
+       RETURNING id, status`,
+      [companyId, userId],
+    );
+    expect(res.rows[0]!.status).toBe('draft');
+  });
+
+  it('ai_experiment_meeting_result liga experimento a uma reunião existente', async () => {
+    const userId = await insertUser('experimento2@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const experiment = await exec.query<{ id: string }>(
+      `INSERT INTO ai_experiment (company_id, name, target_type, baseline_model, baseline_reasoning_effort, candidate_model, candidate_reasoning_effort)
+       VALUES ($1, 'Síntese candidata', 'president_synthesis', 'gpt-5.6-sol', 'high', 'gpt-5.6-terra', 'medium')
+       RETURNING id`,
+      [companyId],
+    );
+    const experimentId = experiment.rows[0]!.id;
+    const result = await exec.query<{ eligible: boolean }>(
+      `INSERT INTO ai_experiment_meeting_result (experiment_id, meeting_id, eligible, baseline_score, candidate_score)
+       VALUES ($1, $2, true, 88, 85) RETURNING eligible`,
+      [experimentId, meetingId],
+    );
+    expect(result.rows[0]!.eligible).toBe(true);
+
+    // apagar o experimento remove os resultados em cascata — nunca a reunião em si
+    await exec.query('DELETE FROM ai_experiment WHERE id = $1', [experimentId]);
+    const meetingStillExists = await exec.query('SELECT id FROM meeting WHERE id = $1', [meetingId]);
+    expect(meetingStillExists.rows).toHaveLength(1);
   });
 });
 

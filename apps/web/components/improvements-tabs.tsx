@@ -2,14 +2,16 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { MeetingImprovement } from '@conselho/meeting-report';
+import type { MeetingImprovement, AiExperiment } from '@conselho/meeting-report';
 import type { AgentProfile } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
 import { formatDateTimeBR } from '@/lib/format';
+import { CreateExperimentForm, ExperimentsList } from './experiment-admin';
 
 const TABS = [
   { key: 'geral', label: 'Visão Geral' },
   { key: 'conselheiros', label: 'Conselheiros' },
+  { key: 'experimentos', label: 'Experimentos' },
   { key: 'reunioes', label: 'Reuniões' },
 ] as const;
 
@@ -43,9 +45,13 @@ function scoreBadgeClass(score: number | null): string {
 export function ImprovementsTabs({
   improvements,
   profiles,
+  experiments = [],
+  counselors = [],
 }: {
   improvements: readonly MeetingImprovement[];
   profiles: Record<AgentId, AgentProfile>;
+  experiments?: readonly AiExperiment[];
+  counselors?: readonly { agentId: string; displayName: string }[];
 }) {
   const [active, setActive] = useState<TabKey>('geral');
 
@@ -174,6 +180,13 @@ export function ImprovementsTabs({
                 ) : null}
               </tbody>
             </table>
+          </div>
+        ) : null}
+
+        {active === 'experimentos' ? (
+          <div>
+            <CreateExperimentForm counselors={counselors} />
+            <ExperimentsList experiments={experiments} />
           </div>
         ) : null}
 

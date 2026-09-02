@@ -705,4 +705,58 @@ ALTER TABLE meeting_improvement ADD COLUMN IF NOT EXISTS structured_enc text;
 ALTER TABLE meeting_improvement ADD COLUMN IF NOT EXISTS overall_score int;
 `,
   },
+  {
+    name: '0028_ai_experiments',
+    sql: `
+-- Experimentacao controlada (Etapa "Experimentacao de IA") — REPLAY/A-B de
+-- config candidata (modelo/raciocinio) de UM conselheiro ou da sintese do
+-- Presidente contra reunioes historicas REAIS, sem tocar producao. Reunioes
+-- historicas sao evidencia IMUTAVEL: o experimento NUNCA sobrescreve
+-- agent_report/meeting_improvement — resultados vivem em tabelas proprias.
+-- Baseline reusa o relatorio/score JA ARMAZENADO daquela reuniao (Secao 53
+-- do pedido — nunca re-roda a baseline sem necessidade); só o candidato
+-- gera uma chamada de LLM nova, cujo custo/tokens/latencia REAIS ficam
+-- separados do custo normal da reuniao (Secao 48).
+CREATE TABLE IF NOT EXISTS ai_experiment (
+  id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id               uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  name                     text NOT NULL,
+  objective                text,
+  target_type              text NOT NULL, -- counselor | president_synthesis
+  target_agent_id          text,          -- null quando target_type = president_synthesis
+  baseline_model           text NOT NULL,
+  baseline_reasoning_effort text NOT NULL,
+  candidate_model          text NOT NULL,
+  candidate_reasoning_effort text NOT NULL,
+  status                   text NOT NULL DEFAULT 'draft', -- draft|running|completed|failed|promoted
+  result                   text, -- recommended|promising|inconclusive|not_recommended|harmful
+  created_by               uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  created_at               timestamptz NOT NULL DEFAULT now(),
+  completed_at             timestamptz,
+  promoted_at              timestamptz,
+  promoted_by              uuid REFERENCES app_user(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_experiment_company ON ai_experiment(company_id);
+
+-- 1 linha por reunião testada — baseline reaproveitado (score/custo já
+-- persistidos em agent_report/meeting_improvement), candidato gerado agora.
+CREATE TABLE IF NOT EXISTS ai_experiment_meeting_result (
+  id                     uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  experiment_id          uuid NOT NULL REFERENCES ai_experiment(id) ON DELETE CASCADE,
+  meeting_id             uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  eligible               boolean NOT NULL DEFAULT true,
+  ineligible_reason      text,
+  baseline_score         real,
+  candidate_score        real,
+  candidate_cost_usd     real,
+  candidate_latency_ms   int,
+  candidate_input_tokens int,
+  candidate_output_tokens int,
+  candidate_text_enc     text,
+  note                   text,
+  created_at             timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_ai_experiment_meeting_result_experiment ON ai_experiment_meeting_result(experiment_id);
+`,
+  },
 ];

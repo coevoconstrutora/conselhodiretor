@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation';
-import { listMeetingImprovements, type MeetingImprovement } from '@conselho/meeting-report';
+import { listMeetingImprovements, listExperiments, type MeetingImprovement } from '@conselho/meeting-report';
 import { getAgentProfiles } from '@conselho/kb';
+import { PRESIDENT_AGENT_ID } from '@conselho/providers';
 import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
+import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { DashboardShell } from '@/components/dashboard-shell';
 import { ImprovementsTabs } from '@/components/improvements-tabs';
 
@@ -20,19 +22,29 @@ export default async function ImprovementsPage() {
 
   const db = await getDb();
   const improvements = await listMeetingImprovements(db, user.companyId, getEncryptionKey());
+  await loadAndApplyProfileOverrides(db, user.companyId);
   const profiles = getAgentProfiles(user.companyId);
+  const experiments = await listExperiments(db, user.companyId);
+  const counselors = Object.values(profiles)
+    .filter((p) => p.agentId !== PRESIDENT_AGENT_ID)
+    .map((p) => ({ agentId: p.agentId, displayName: p.displayName }));
 
   return (
     <DashboardShell
       pageTitle="🧠 Aprendizado do Conselho"
       subtitle="A cada reunião, uma avaliação estruturada aponta o que daria pra melhorar no Conselho em si — nunca conselho de negócio. Isto é só um registro para aprendizado: nada aqui é aplicado sozinho no sistema."
     >
-      {improvements.length === 0 ? (
+      {improvements.length === 0 && experiments.length === 0 ? (
         <p className="mt-8 rounded-[var(--radius)] border border-dashed border-ink/15 p-6 text-sm text-ink-muted">
           Nenhuma análise ainda — gere os relatórios de uma reunião encerrada para produzir a primeira.
         </p>
       ) : (
-        <ImprovementsTabs improvements={improvements as MeetingImprovement[]} profiles={profiles} />
+        <ImprovementsTabs
+          improvements={improvements as MeetingImprovement[]}
+          profiles={profiles}
+          experiments={experiments}
+          counselors={counselors}
+        />
       )}
     </DashboardShell>
   );
