@@ -2,7 +2,6 @@ import { requireCurrentUser } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { loadCompanyProfile, listCompanySources, rescanDueCompanySources } from '@/lib/company-profile';
-import { listVoiceProfiles } from '@/lib/voice-profile';
 import { CompanyProfileForm } from '@/components/company-profile-form';
 import { CompanyAppearanceForm } from '@/components/company-appearance-form';
 import { VoiceRecognitionSection } from '@/components/voice-profile-admin';
@@ -26,7 +25,6 @@ export default async function CompanyPage() {
   const key = getEncryptionKey();
   const profile = await loadCompanyProfile(db, user.companyId, key);
   const sources = await listCompanySources(db, user.companyId, key);
-  const voiceProfiles = await listVoiceProfiles(db, user.companyId);
 
   // revisão automática de links vencidos — best-effort, nunca bloqueia o render
   void rescanDueCompanySources(db, user.companyId, key).catch((error) => {
@@ -53,12 +51,11 @@ export default async function CompanyPage() {
         </div>
       </section>
 
-      {/* Tier 3 — reconhecimento de voz entre reuniões (dado biométrico, LGPD) — opt-in. */}
+      {/* Reconhecimento de voz entre reuniões (dado biométrico, LGPD) — opt-in.
+          Cadastro/gestão por pessoa mudou para /participants (Etapa
+          "Participantes") — aqui fica só o interruptor geral da empresa. */}
       <section className="mt-6">
-        <VoiceRecognitionSection
-          enabled={profile.voiceRecognitionEnabled ?? false}
-          profiles={voiceProfiles}
-        />
+        <VoiceRecognitionSection enabled={profile.voiceRecognitionEnabled ?? false} />
       </section>
 
       {/* Documentos: mesmo padrão do "NotebookLM por conselheiro", mas

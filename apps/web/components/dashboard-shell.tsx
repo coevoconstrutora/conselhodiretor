@@ -32,6 +32,7 @@ export async function DashboardShell({
   const items: ConfigMenuItem[] = [
     { href: '/company', label: 'Empresa' },
     ...(canWrite(user) ? [{ href: '/counselors', label: 'Conselheiros' }] : []),
+    ...(canWrite(user) ? [{ href: '/participants', label: 'Participantes' }] : []),
     ...(canWrite(user) ? [{ href: '/meeting-types', label: 'Tipos de reunião' }] : []),
     ...(canWrite(user) ? [{ href: '/improvements', label: '🧠 Melhorias' }] : []),
     ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),

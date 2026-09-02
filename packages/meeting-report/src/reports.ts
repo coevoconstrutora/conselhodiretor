@@ -61,6 +61,8 @@ function presidentSystem(companyId: string): string {
     'em português do Brasil, markdown leve, com as seções: ' +
     '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
     `${CONSENSUS_INSTRUCTION} ${DECISION_LABELS_INSTRUCTION} ` +
+    'Se receber SINAIS OBJETIVOS DE PARTICIPAÇÃO, use-os só como pista de contexto (ex.: quem mais ' +
+    'interveio num tema) — NUNCA os liste como seção própria nem infira estado emocional/psicológico. ' +
     'Integre as visões e NÃO invente nada que os relatórios não sustentem. Termine SEMPRE devolvendo ' +
     'a decisão ao empresário ("a decisão é sua") e com a linha ' +
     '"_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
@@ -112,14 +114,17 @@ export async function generatePresidentSynthesis(
   counselorReports: ReadonlyArray<{ agentId: AgentId; content: string }>,
   modelOverride?: string,
   reasoningEffortOverride?: string,
+  /** Sinais objetivos de participação (Etapa "Participantes", Seção 25) — '' ou omitido se não houver. */
+  participantSignalsBlock?: string,
 ): Promise<string> {
   const blocks = counselorReports
     .map((r) => `### Relatório — ${requireProfile(companyId, r.agentId).displayName}\n${r.content}`)
     .join('\n\n');
+  const signals = participantSignalsBlock ? `\n\n${participantSignalsBlock}` : '';
   const result = await llm.complete({
     system: presidentSystem(companyId),
     context: [],
-    transcript: `Relatórios dos conselheiros:\n\n${blocks}`,
+    transcript: `Relatórios dos conselheiros:\n\n${blocks}${signals}`,
     model: modelOverride,
     reasoningEffort: reasoningEffortOverride,
   });

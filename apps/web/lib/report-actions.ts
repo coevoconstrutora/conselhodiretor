@@ -18,6 +18,7 @@ import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
 import { loadAndApplyProfileOverrides } from './kb-sources';
 import { loadAndApplyPresidentConfig, getPresidentConfig } from './president-config-store';
+import { listMeetingParticipantSignals, formatParticipantSignalsBlock } from './meeting-speakers';
 import { buildReportsPdf } from './report-export';
 import { sendReportsEmail } from './email';
 
@@ -74,12 +75,14 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
     // só aqui, 1x por reunião).
     await loadAndApplyPresidentConfig(db, user.companyId);
     const presidentConfig = getPresidentConfig(user.companyId);
+    const participantSignals = await listMeetingParticipantSignals(db, meetingId);
     const synthesis = await generatePresidentSynthesis(
       llm,
       user.companyId,
       reports,
       presidentConfig.synthesisModel,
       presidentConfig.finalSynthesisReasoningEffort,
+      formatParticipantSignalsBlock(participantSignals),
     );
     await saveAgentReport(db, meetingId, 'presidente', synthesis, key, {
       action: 'generate',

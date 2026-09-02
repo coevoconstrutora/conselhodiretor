@@ -6,7 +6,6 @@ import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { saveCompanyProfile, loadCompanyProfile } from './company-profile';
-import { deleteVoiceProfile } from './voice-profile';
 
 export type VoiceRecognitionToggleState = { error?: string; ok?: string } | null;
 
@@ -39,16 +38,3 @@ export async function saveVoiceRecognitionToggleAction(
   };
 }
 
-export type DeleteVoiceProfileState = { error?: string; ok?: string } | null;
-
-/** Direito de exclusão do titular (LGPD Art. 18) — apaga o perfil de voz de uma pessoa. */
-export async function deleteVoiceProfileAction(formData: FormData): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user) throw new Error('Não autenticado.');
-  if (!canWrite(user)) throw new Error('Convidados não podem remover perfis de voz.');
-  const profileId = String(formData.get('profileId') ?? '');
-  if (!profileId) throw new Error('Perfil inválido.');
-  const db = await getDb();
-  await deleteVoiceProfile(db, user.companyId, profileId);
-  revalidatePath('/company');
-}

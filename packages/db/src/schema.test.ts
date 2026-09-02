@@ -68,6 +68,7 @@ describe('Migrations — schema base', () => {
       '0022_agent_profile_briefing',
       '0023_agent_profile_ai_voice_config',
       '0024_president_config',
+      '0025_participants_biometrics',
     ]);
   });
 
@@ -151,6 +152,87 @@ describe('transcript_segment — persistência incremental', () => {
       exec.query(
         'INSERT INTO transcript_segment (meeting_id, seq, content_enc) VALUES ($1, 1, $2)',
         [meetingId, encryptField('duplicado', key)],
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe('Participantes e biometria de voz (migration 0025)', () => {
+  it('participant referencia company e aceita os campos opcionais', async () => {
+    const res = await exec.query<{ id: string; status: string }>(
+      `INSERT INTO participant (company_id, name, email, job_title, department)
+       VALUES ($1, 'Marina Alves', 'marina@coevo.test', 'CFO', 'Financeiro') RETURNING id, status`,
+      [companyId],
+    );
+    expect(res.rows[0]!.status).toBe('active'); // default
+  });
+
+  it('participant_biometric_consent preserva histórico — conceder e revogar NUNCA sobrescreve', async () => {
+    const participant = await exec.query<{ id: string }>(
+      `INSERT INTO participant (company_id, name) VALUES ($1, 'Jonathan Reis') RETURNING id`,
+      [companyId],
+    );
+    const participantId = participant.rows[0]!.id;
+    await exec.query(
+      `INSERT INTO participant_biometric_consent (participant_id, status, source) VALUES ($1, 'granted', 'admin_enrollment')`,
+      [participantId],
+    );
+    await exec.query(
+      `INSERT INTO participant_biometric_consent (participant_id, status, revoked_at, source) VALUES ($1, 'revoked', now(), 'admin_revocation')`,
+      [participantId],
+    );
+    const history = await exec.query<{ status: string }>(
+      'SELECT status FROM participant_biometric_consent WHERE participant_id = $1 ORDER BY created_at ASC',
+      [participantId],
+    );
+    expect(history.rows.map((r) => r.status)).toEqual(['granted', 'revoked']); // ambos preservados
+  });
+
+  it('voice_profile: novas colunas (participant_id/status/model_*) com defaults compatíveis', async () => {
+    const participant = await exec.query<{ id: string }>(
+      `INSERT INTO participant (company_id, name) VALUES ($1, 'Ana Paula') RETURNING id`,
+      [companyId],
+    );
+    const participantId = participant.rows[0]!.id;
+    const res = await exec.query<{ status: string; model_provider: string; model_version: string }>(
+      `INSERT INTO voice_profile (company_id, participant_id, name, embedding_enc)
+       VALUES ($1, $2, 'Ana Paula', $3) RETURNING status, model_provider, model_version`,
+      [companyId, participantId, encryptField('[0.1,0.2]', key)],
+    );
+    expect(res.rows[0]).toEqual({ status: 'active', model_provider: 'resemblyzer', model_version: 'v1' });
+  });
+
+  it('meeting_speaker: PK composta (meeting_id, speaker_label) rejeita duplicata', async () => {
+    const userId = await insertUser('speaker@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    await exec.query(
+      `INSERT INTO meeting_speaker (meeting_id, speaker_label, identification_status) VALUES ($1, 'Locutor 1', 'unknown')`,
+      [meetingId],
+    );
+    await expect(
+      exec.query(
+        `INSERT INTO meeting_speaker (meeting_id, speaker_label, identification_status) VALUES ($1, 'Locutor 1', 'unknown')`,
+        [meetingId],
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('participant_meeting_analytics: PK composta (meeting_id, participant_id) rejeita duplicata', async () => {
+    const userId = await insertUser('analytics@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const participant = await exec.query<{ id: string }>(
+      `INSERT INTO participant (company_id, name) VALUES ($1, 'Carlos Souza') RETURNING id`,
+      [companyId],
+    );
+    const participantId = participant.rows[0]!.id;
+    await exec.query(
+      `INSERT INTO participant_meeting_analytics (meeting_id, participant_id, speaking_turns) VALUES ($1, $2, 3)`,
+      [meetingId, participantId],
+    );
+    await expect(
+      exec.query(
+        `INSERT INTO participant_meeting_analytics (meeting_id, participant_id, speaking_turns) VALUES ($1, $2, 5)`,
+        [meetingId, participantId],
       ),
     ).rejects.toThrow();
   });

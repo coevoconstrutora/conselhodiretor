@@ -543,4 +543,94 @@ CREATE TABLE IF NOT EXISTS president_config (
 );
 `,
   },
+  {
+    name: '0025_participants_biometrics',
+    sql: `
+-- Participante REAL de reunião (Etapa "Participantes"): distinto de app_user
+-- (login) — uma pessoa pode participar de reuniões sem NUNCA ter conta no
+-- sistema, e um app_user pode opcionalmente referenciar seu Participant.
+CREATE TABLE IF NOT EXISTS participant (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id     uuid NOT NULL REFERENCES company(id) ON DELETE CASCADE,
+  name           text NOT NULL,
+  email          text,
+  job_title      text,
+  department     text,
+  company_name   text,
+  app_user_id    uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  status         text NOT NULL DEFAULT 'active',
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  updated_at     timestamptz NOT NULL DEFAULT now(),
+  last_meeting_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_participant_company ON participant(company_id);
+
+-- Consentimento auditável (LGPD Art. 5º II — dado biométrico) — HISTÓRICO,
+-- nunca sobrescrito: revogar grava um NOVO registro, a linha anterior
+-- permanece intacta como prova do que foi consentido e quando.
+CREATE TABLE IF NOT EXISTS participant_biometric_consent (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant_id uuid NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+  consent_type   text NOT NULL DEFAULT 'voice_biometrics',
+  status         text NOT NULL, -- granted | revoked
+  version        text NOT NULL DEFAULT 'v1',
+  granted_at     timestamptz NOT NULL DEFAULT now(),
+  revoked_at     timestamptz,
+  granted_by     uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  source         text NOT NULL DEFAULT 'admin_enrollment',
+  created_at     timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_biometric_consent_participant ON participant_biometric_consent(participant_id);
+
+-- voice_profile (migration 0020) passa a ser ligado a um Participant (era só
+-- "nome solto" por empresa). Colunas antigas (name/area) permanecem — ainda
+-- usadas como fallback de exibição sem precisar de JOIN — e novas linhas
+-- continuam preenchendo-as a partir do Participant, por compatibilidade.
+-- SEM KMS/envelope encryption (decisão explícita do dono): mesmo padrão
+-- AES-256-GCM simples já usado em embedding_enc (@conselho/crypto),
+-- consistente com o resto do produto — nenhuma infra de KMS existe neste
+-- deploy. "Não substituir silenciosamente" (pedido) = nunca fazer UPDATE no
+-- embedding_enc de uma linha ativa: reenrollment marca a linha antiga como
+-- 'superseded' (revoked_at preenchido) e INSERE uma linha nova — histórico
+-- de versões preservado como múltiplas linhas, sem coluna de versão à parte.
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS participant_id uuid REFERENCES participant(id) ON DELETE CASCADE;
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS model_provider text NOT NULL DEFAULT 'resemblyzer';
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS model_name text NOT NULL DEFAULT 'resemblyzer';
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS model_version text NOT NULL DEFAULT 'v1';
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS quality_score real;
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS last_used_at timestamptz;
+ALTER TABLE voice_profile ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_voice_profile_participant ON voice_profile(participant_id);
+
+-- Mapeamento locutor→participante POR REUNIÃO (diarização do Deepgram só
+-- devolve "speaker_0/1/2" anônimos — isto é o elo com uma identidade real).
+-- PK composta (meeting_id, speaker_label): 1 linha por locutor detectado.
+CREATE TABLE IF NOT EXISTS meeting_speaker (
+  meeting_id           uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  speaker_label        text NOT NULL,
+  participant_id       uuid REFERENCES participant(id) ON DELETE SET NULL,
+  identification_status text NOT NULL DEFAULT 'unknown',
+  confidence           real,
+  identification_source text,
+  confirmed_by_user_id uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  confirmed_at         timestamptz,
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (meeting_id, speaker_label)
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_speaker_participant ON meeting_speaker(participant_id);
+
+-- Analytics OBJETIVAS de participação (nunca estado emocional/psicológico —
+-- só contagens observáveis). 1 linha por participante por reunião.
+CREATE TABLE IF NOT EXISTS participant_meeting_analytics (
+  meeting_id      uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  participant_id  uuid NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+  speaking_turns  int NOT NULL DEFAULT 0,
+  speech_share    real,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (meeting_id, participant_id)
+);
+`,
+  },
 ];

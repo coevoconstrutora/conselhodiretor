@@ -32,6 +32,7 @@ import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
 import { loadAndApplyPresidentConfig } from './president-config-store';
+import { reconcileMeetingSpeakers, computeParticipantMeetingAnalytics } from './meeting-speakers';
 import { createSpeakerNameTracker, type SpeakerNameTracker, type KnownSpeaker } from './speaker-names';
 import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
@@ -826,6 +827,24 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
  * `active` nunca era limpo e o RSS crescia sem bound. */
 const ACTIVE_RETENTION_MS = Number(process.env.BOARD_ACTIVE_RETENTION_MS ?? 2 * 60 * 60 * 1000);
 
+/**
+ * Ao encerrar a reunião: casa locutores autoapresentados (Tier 2) com
+ * Participantes cadastrados (Etapa "Participantes") e calcula analytics
+ * objetivas de participação. Best-effort — nunca bloqueia nem derruba o
+ * encerramento da reunião (fire-and-forget no call site).
+ */
+async function reconcileSpeakersOnClose(meetingId: string): Promise<void> {
+  const runtime = await getBoardRuntime();
+  const tracker = runtime.speakerNames.get(meetingId);
+  const known = tracker?.listKnown() ?? [];
+  if (known.length === 0) return;
+  const db = await getDb();
+  const companyId = await getMeetingCompanyId(db, meetingId);
+  await reconcileMeetingSpeakers(db, meetingId, companyId, known);
+  const inputs = await getNoteInputs(meetingId);
+  if (inputs) await computeParticipantMeetingAnalytics(db, meetingId, inputs.finals, known);
+}
+
 /** Encerra a reunião ao vivo (para STT e board; preserva transcript p/ os relatórios). */
 export async function stopLiveBoard(meetingId: string): Promise<void> {
   const runtime = await getBoardRuntime();
@@ -836,6 +855,9 @@ export async function stopLiveBoard(meetingId: string): Promise<void> {
     await active.session.stop();
   }
   runtime.telemetry.sessionEnded(meetingId);
+  void reconcileSpeakersOnClose(meetingId).catch((error) =>
+    console.error('[participantes] reconciliar locutores da reunião falhou:', error),
+  );
   // TTL: a entrada sai da memória depois da retenção (o transcript persistido
   // cobre getNoteInputs dali em diante). unref: não segura o processo vivo.
   const timer = setTimeout(() => {
