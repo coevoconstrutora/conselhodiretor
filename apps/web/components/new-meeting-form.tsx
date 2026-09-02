@@ -1,30 +1,46 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { startMeetingAction, type StartMeetingState } from '@/lib/meeting-actions';
+import { formatDateBR } from '@/lib/format';
 
 interface MeetingTypeOption {
   readonly id: string;
   readonly name: string;
 }
 
+interface PreviousMeetingPreviewOption {
+  readonly meetingId: string;
+  readonly title: string;
+  readonly closedAt: string; // serializado do Server Component — vira Date aqui
+  readonly decisionsCount: number;
+  readonly pendingDecisionsCount: number;
+  readonly actionItemsCount: number;
+}
+
 /**
  * Formulário de nova reunião: título + tipo + pauta/roteiro opcional (Etapa
- * "guia de reunião" — anexa um arquivo que vira contexto extra para os
- * conselheiros, ex.: a sequência de assuntos a tratar).
+ * "guia de reunião") + contexto da reunião anterior do MESMO tipo (Etapa
+ * "Histórico de reuniões", Seção 19) — opt-in explícito, nunca marcado por
+ * padrão (Seção 10: "the user must intentionally choose").
  */
 export function NewMeetingForm({
   types,
   defaultTypeId,
+  previousByType = {},
 }: {
   types: readonly MeetingTypeOption[];
   defaultTypeId: string | undefined;
+  previousByType?: Record<string, PreviousMeetingPreviewOption | null>;
 }) {
   const [state, formAction, pending] = useActionState<StartMeetingState, FormData>(
     startMeetingAction,
     null,
   );
+  const [selectedTypeId, setSelectedTypeId] = useState(defaultTypeId ?? types[0]?.id);
+  const [usePrevious, setUsePrevious] = useState(false);
+  const previous = selectedTypeId ? previousByType[selectedTypeId] : null;
 
   return (
     <form action={formAction} className="card-premium mt-8 space-y-4 p-6">
@@ -42,6 +58,10 @@ export function NewMeetingForm({
         <select
           name="meetingTypeId"
           defaultValue={defaultTypeId}
+          onChange={(e) => {
+            setSelectedTypeId(e.target.value);
+            setUsePrevious(false); // trocar de tipo nunca herda a escolha do tipo anterior
+          }}
           className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
         >
           {types.map((t) => (
@@ -58,6 +78,39 @@ export function NewMeetingForm({
           .
         </span>
       </label>
+
+      {previous ? (
+        <div className="rounded-[var(--radius)] border border-ink/15 bg-surface-muted/60 p-3.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            Contexto da reunião anterior
+          </p>
+          <p className="mt-1 text-sm text-ink">
+            {previous.title} — {formatDateBR(new Date(previous.closedAt))}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-muted">
+            {previous.decisionsCount} decisõe{previous.decisionsCount === 1 ? '' : 's'}
+            {previous.pendingDecisionsCount > 0 ? ` (${previous.pendingDecisionsCount} pendente${previous.pendingDecisionsCount === 1 ? '' : 's'})` : ''}
+            {' · '}
+            {previous.actionItemsCount} ação{previous.actionItemsCount === 1 ? '' : 'ões'}
+          </p>
+          <label className="mt-2 flex items-start gap-2 text-xs font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={usePrevious}
+              onChange={(e) => setUsePrevious(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Usar ata anterior como contexto</span>
+          </label>
+          <p className="mt-1 text-[11px] text-ink-muted">
+            A ata anterior será usada apenas como contexto para identificar decisões pendentes, ações,
+            riscos e assuntos que possam exigir acompanhamento. Ela não será copiada para a nova reunião.
+          </p>
+          {usePrevious ? (
+            <input type="hidden" name="previousContextMeetingId" value={previous.meetingId} />
+          ) : null}
+        </div>
+      ) : null}
       <label className="block">
         <span className="text-sm font-medium text-ink">
           Pauta/roteiro <span className="font-normal text-ink-muted">(opcional)</span>

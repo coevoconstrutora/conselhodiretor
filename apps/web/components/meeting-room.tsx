@@ -30,6 +30,7 @@ export function MeetingRoom({
   endMeetingButton,
   closed,
   agents,
+  historicalCounts,
 }: {
   meetingId: string;
   token: string;
@@ -39,6 +40,8 @@ export function MeetingRoom({
   endMeetingButton?: React.ReactNode;
   closed?: boolean;
   agents: readonly StripCounselor[];
+  /** Reunião ENCERRADA (Etapa "Histórico de reuniões") — contagem de contribuições por agente. */
+  historicalCounts?: ReadonlyMap<string, number>;
 }) {
   // `useBoardStore` é um singleton global (fora da árvore React): sem isto,
   // trocar de reunião por navegação client-side (sem reload) deixava o
@@ -142,7 +145,12 @@ export function MeetingRoom({
       </div>
 
       {/* faixa hero — os médicos acompanham a reunião, grandes e presentes */}
-      <CounselorStrip agents={agents} closed={closed} voiceEnabled={!(voiceMuted || focusMode)} />
+      <CounselorStrip
+        agents={agents}
+        closed={closed}
+        voiceEnabled={!(voiceMuted || focusMode)}
+        historicalCounts={historicalCounts}
+      />
 
       {!closed ? <SpeakerRosterPanel meetingId={meetingId} /> : null}
       {!closed ? <SpeakerRenamePanel meetingId={meetingId} finals={transcript.finals} /> : null}

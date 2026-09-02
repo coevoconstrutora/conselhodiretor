@@ -69,6 +69,7 @@ describe('Migrations — schema base', () => {
       '0023_agent_profile_ai_voice_config',
       '0024_president_config',
       '0025_participants_biometrics',
+      '0026_meeting_history',
     ]);
   });
 
@@ -235,6 +236,59 @@ describe('Participantes e biometria de voz (migration 0025)', () => {
         [meetingId, participantId],
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('Histórico de reuniões (migration 0026)', () => {
+  it('meeting_contribution persiste contribuições regulares (não só a síntese)', async () => {
+    const userId = await insertUser('historico@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const res = await exec.query<{ id: string }>(
+      `INSERT INTO meeting_contribution (meeting_id, agent_id, type, severity, content_enc)
+       VALUES ($1, 'cfo', 'sugestao', 'normal', $2) RETURNING id`,
+      [meetingId, encryptField(JSON.stringify({ text: 'Revisar o fluxo de caixa.' }), key)],
+    );
+    expect(res.rows).toHaveLength(1);
+  });
+
+  it('meeting_decision aceita status/prazo em claro e conteúdo cifrado', async () => {
+    const userId = await insertUser('decisao@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const res = await exec.query<{ status: string }>(
+      `INSERT INTO meeting_decision (meeting_id, status, content_enc)
+       VALUES ($1, 'decidido', $2) RETURNING status`,
+      [meetingId, encryptField(JSON.stringify({ topic: 'Fornecedor', decision: 'Selecionar B' }), key)],
+    );
+    expect(res.rows[0]!.status).toBe('decidido');
+  });
+
+  it('meeting_action_item pode referenciar uma meeting_decision', async () => {
+    const userId = await insertUser('acao@conselho.test');
+    const meetingId = await insertMeeting(userId);
+    const decision = await exec.query<{ id: string }>(
+      `INSERT INTO meeting_decision (meeting_id, content_enc) VALUES ($1, $2) RETURNING id`,
+      [meetingId, encryptField('{}', key)],
+    );
+    const action = await exec.query<{ decision_id: string }>(
+      `INSERT INTO meeting_action_item (meeting_id, decision_id, content_enc) VALUES ($1, $2, $3) RETURNING decision_id`,
+      [meetingId, decision.rows[0]!.id, encryptField(JSON.stringify({ action: 'Assinar contrato' }), key)],
+    );
+    expect(action.rows[0]!.decision_id).toBe(decision.rows[0]!.id);
+  });
+
+  it('meeting.previous_context_meeting_id referencia outra reunião explicitamente', async () => {
+    const userId = await insertUser('contexto@conselho.test');
+    const previousMeetingId = await insertMeeting(userId, 'Reunião anterior');
+    const newMeetingId = await insertMeeting(userId, 'Reunião nova');
+    await exec.query('UPDATE meeting SET previous_context_meeting_id = $2 WHERE id = $1', [
+      newMeetingId,
+      previousMeetingId,
+    ]);
+    const res = await exec.query<{ previous_context_meeting_id: string }>(
+      'SELECT previous_context_meeting_id FROM meeting WHERE id = $1',
+      [newMeetingId],
+    );
+    expect(res.rows[0]!.previous_context_meeting_id).toBe(previousMeetingId);
   });
 });
 

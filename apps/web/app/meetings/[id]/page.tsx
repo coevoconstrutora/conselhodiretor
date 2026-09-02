@@ -13,6 +13,12 @@ import { startDemoBoardAction, requestSynthesisAction } from '@/lib/board-action
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
 import {
+  loadMeetingContributions,
+  loadMeetingContributionCounts,
+  loadMeetingDecisions,
+  loadMeetingActionItems,
+} from '@/lib/meeting-history';
+import {
   getCompanyKnowledgeStore,
   getTelemetryReport,
   getMeetingActiveAgentIds,
@@ -26,6 +32,8 @@ import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
+import { HistoricalMeetingTabs } from '@/components/historical-meeting-tabs';
+import { ContributionsPanel, DecisionsPanel, ActionsPanel } from '@/components/meeting-history-panels';
 
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
@@ -74,6 +82,60 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const syntheses = authorized ? await listSyntheses(db, id, getEncryptionKey()) : [];
   const reports = authorized ? await loadReports(id).catch(() => []) : [];
   const telemetry = authorized ? await getTelemetryReport(id) : null;
+
+  // Histórico de verdade (Etapa "Histórico de reuniões") — só faz sentido
+  // buscar depois de encerrada (reunião ao vivo não tem nada aqui ainda).
+  const contributions = closed && authorized ? await loadMeetingContributions(id) : [];
+  const contributionCounts = closed && authorized ? await loadMeetingContributionCounts(id) : new Map<string, number>();
+  const decisions = closed && authorized ? await loadMeetingDecisions(id) : [];
+  const actionItems = closed && authorized ? await loadMeetingActionItems(id) : [];
+  const presidentReport = reports.find((r) => r.agentId === 'presidente') ?? null;
+  const counselorReports = reports.filter((r) => r.agentId !== 'presidente');
+  const historicalCounts = closed
+    ? new Map<string, number>([
+        ...contributionCounts,
+        ['presidente', syntheses.length > 0 || presidentReport ? 1 : 0],
+      ])
+    : undefined;
+
+  /** 1 relatório editável — reusado nas abas Ata/Síntese (histórico) e no layout ao vivo. */
+  function renderReportDetails(report: (typeof reports)[number]) {
+    return (
+      <details
+        key={report.agentId}
+        className="rounded-[var(--radius)] border border-ink/10 bg-surface"
+        open={report.agentId === 'presidente'}
+      >
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink">
+          {report.agentId === 'presidente' ? '⭐ ' : ''}
+          {profiles[report.agentId]?.displayName ?? report.agentId}
+          <span className="ml-2 text-[11px] font-normal text-ink-muted">
+            atualizado {formatDateTimeBR(report.updatedAt)}
+          </span>
+        </summary>
+        <form action={saveAgentReportAction} className="space-y-3 px-4 pb-4">
+          <input type="hidden" name="meetingId" value={id} />
+          <input type="hidden" name="agentId" value={report.agentId} />
+          <textarea
+            key={report.updatedAt.getTime()}
+            name="content"
+            defaultValue={report.content}
+            rows={12}
+            aria-label={`Relatório — ${profiles[report.agentId]?.displayName ?? report.agentId}`}
+            className="font-mono-data w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+          />
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+            >
+              💾 Salvar edição
+            </button>
+          </div>
+        </form>
+      </details>
+    );
+  }
 
   return (
     <main className="min-h-screen">
@@ -190,6 +252,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               wsBaseUrl={wsBaseUrl}
               closed={closed}
               agents={roomAgents}
+              historicalCounts={historicalCounts}
               endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
               startForm={
                 <form action={startDemoBoardAction}>
@@ -230,129 +293,190 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               </details>
             ) : null}
 
-            {/* Revisão do transcript: o empresário corrige o que o STT ouviu ANTES
-                de gerar os relatórios — a versão revisada vira a fonte. */}
-            {hasTranscript && (
-              <section aria-label="Transcrição da reunião" className="card-premium mt-6 p-6">
-                <div>
-                  <h2 className="font-display text-base font-semibold text-ink">
-                    <span className="blueprint-index mr-2 text-brand/70">02/</span>
-                    📝 Transcrição da reunião
-                  </h2>
-                  <p className="text-xs text-ink-muted">
-                    Revise e corrija o que a transcrição automática captou. Os relatórios dos
-                    conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.
-                  </p>
-                </div>
-                <form action={saveTranscriptReviewAction} className="mt-4 space-y-3">
-                  <input type="hidden" name="meetingId" value={id} />
-                  <textarea
-                    key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
-                    name="content"
-                    defaultValue={transcriptText}
-                    rows={12}
-                    aria-label="Transcrição da reunião"
-                    className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                  />
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-ink-muted">
-                      {transcriptReview
-                        ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
-                        : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
-                    </p>
-                    <button
-                      type="submit"
-                      className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-                    >
-                      💾 Salvar transcrição corrigida
-                    </button>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            {/* Relatórios finais: 1 por conselheiro + síntese do Presidente */}
-            <section aria-label="Relatórios do conselho" className="card-premium mt-6 p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-display text-base font-semibold text-ink">
-                    <span className="blueprint-index mr-2 text-brand/70">03/</span>
-                    📊 Relatórios do conselho
-                  </h2>
-                  <p className="text-xs text-ink-muted">
-                    A visão de cada conselheiro sobre a reunião + a síntese executiva do
-                    Presidente. Rascunhos editáveis, cifrados e auditados.
-                  </p>
-                </div>
-                <ReportsGeneratorForm meetingId={id} hasReports={reports.length > 0} />
-              </div>
-
-              {reports.length === 0 ? (
-                <p className="mt-4 rounded-[var(--radius)] border border-dashed border-ink/15 p-4 text-sm text-ink-muted">
-                  Nenhum relatório ainda — encerre a reunião, revise a transcrição e clique em
-                  &ldquo;Gerar relatórios do conselho&rdquo;.
-                </p>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  {reports.map((report) => (
-                    <details
-                      key={report.agentId}
-                      className="rounded-[var(--radius)] border border-ink/10 bg-surface"
-                      open={report.agentId === 'presidente'}
-                    >
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink">
-                        {report.agentId === 'presidente' ? '⭐ ' : ''}
-                        {profiles[report.agentId]?.displayName ?? report.agentId}
-                        <span className="ml-2 text-[11px] font-normal text-ink-muted">
-                          atualizado {formatDateTimeBR(report.updatedAt)}
-                        </span>
-                      </summary>
-                      <form action={saveAgentReportAction} className="space-y-3 px-4 pb-4">
+            {closed ? (
+              <HistoricalMeetingTabs
+                transcricao={
+                  hasTranscript ? (
+                    <div>
+                      <p className="mb-3 text-xs text-ink-muted">
+                        Revise e corrija o que a transcrição automática captou. Os relatórios dos
+                        conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.
+                      </p>
+                      <form action={saveTranscriptReviewAction} className="space-y-3">
                         <input type="hidden" name="meetingId" value={id} />
-                        <input type="hidden" name="agentId" value={report.agentId} />
                         <textarea
-                          key={report.updatedAt.getTime()}
+                          key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
                           name="content"
-                          defaultValue={report.content}
-                          rows={12}
-                          aria-label={`Relatório — ${profiles[report.agentId]?.displayName ?? report.agentId}`}
-                          className="font-mono-data w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                          defaultValue={transcriptText}
+                          rows={16}
+                          aria-label="Transcrição da reunião"
+                          className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                         />
-                        <div className="flex justify-end">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs text-ink-muted">
+                            {transcriptReview
+                              ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
+                              : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
+                          </p>
                           <button
                             type="submit"
-                            className="rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                            className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
                           >
-                            💾 Salvar edição
+                            💾 Salvar transcrição corrigida
                           </button>
                         </div>
                       </form>
-                    </details>
-                  ))}
-                </div>
-              )}
-              {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
-            </section>
-
-            {/* Histórico de sínteses do Presidente durante a reunião */}
-            {syntheses.length > 0 && (
-              <section aria-label="Sínteses do Presidente" className="card-premium mt-6 p-6">
-                <h2 className="font-display text-base font-semibold text-ink">
-                  Sínteses do Presidente{' '}
-                  <span className="text-sm font-normal text-ink-muted">· histórico salvo</span>
-                </h2>
-                <ul className="mt-4 space-y-3">
-                  {[...syntheses].reverse().map((s) => (
-                    <li key={s.id} className="rounded-[var(--radius)] border border-ink/10 bg-surface p-4">
-                      <p className="text-sm leading-relaxed text-ink">{s.content}</p>
-                      <p className="mt-2 text-[11px] text-ink-muted">
-                        {formatDateTimeBR(s.createdAt)}
-                        {s.modelVersion ? ` · ${s.modelVersion}` : ''}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-ink-muted">Não há transcrição armazenada para esta reunião.</p>
+                  )
+                }
+                contribuicoes={<ContributionsPanel contributions={contributions} profiles={profiles} />}
+                decisoes={<DecisionsPanel decisions={decisions} />}
+                acoes={<ActionsPanel actionItems={actionItems} />}
+                ata={
+                  <div>
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <h3 className="font-display text-sm font-semibold text-ink">
+                          📊 Relatórios dos conselheiros
+                        </h3>
+                        <p className="text-xs text-ink-muted">
+                          A visão de cada conselheiro sobre a reunião. Rascunhos editáveis, cifrados e auditados.
+                        </p>
+                      </div>
+                      <ReportsGeneratorForm meetingId={id} hasReports={reports.length > 0} />
+                    </div>
+                    {counselorReports.length === 0 ? (
+                      <p className="rounded-[var(--radius)] border border-dashed border-ink/15 p-4 text-sm text-ink-muted">
+                        Nenhum relatório ainda — revise a transcrição e clique em &ldquo;Gerar relatórios do
+                        conselho&rdquo;.
                       </p>
-                    </li>
-                  ))}
-                </ul>
-              </section>
+                    ) : (
+                      <div className="space-y-4">{counselorReports.map((report) => renderReportDetails(report))}</div>
+                    )}
+                    {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
+                  </div>
+                }
+                sintese={
+                  <div className="space-y-4">
+                    {presidentReport ? (
+                      renderReportDetails(presidentReport)
+                    ) : (
+                      <p className="text-sm text-ink-muted">Síntese não disponível.</p>
+                    )}
+                    {syntheses.length > 0 ? (
+                      <div>
+                        <h3 className="font-display text-sm font-semibold text-ink">
+                          Sínteses do Presidente <span className="font-normal text-ink-muted">· histórico ao vivo</span>
+                        </h3>
+                        <ul className="mt-3 space-y-3">
+                          {[...syntheses].reverse().map((s) => (
+                            <li key={s.id} className="rounded-[var(--radius)] border border-ink/10 bg-surface p-4">
+                              <p className="text-sm leading-relaxed text-ink">{s.content}</p>
+                              <p className="mt-2 text-[11px] text-ink-muted">
+                                {formatDateTimeBR(s.createdAt)}
+                                {s.modelVersion ? ` · ${s.modelVersion}` : ''}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                }
+              />
+            ) : (
+              <>
+                {/* Revisão do transcript: o empresário corrige o que o STT ouviu ANTES
+                    de gerar os relatórios — a versão revisada vira a fonte. */}
+                {hasTranscript && (
+                  <section aria-label="Transcrição da reunião" className="card-premium mt-6 p-6">
+                    <div>
+                      <h2 className="font-display text-base font-semibold text-ink">
+                        <span className="blueprint-index mr-2 text-brand/70">02/</span>
+                        📝 Transcrição da reunião
+                      </h2>
+                      <p className="text-xs text-ink-muted">
+                        Revise e corrija o que a transcrição automática captou. Os relatórios dos
+                        conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.
+                      </p>
+                    </div>
+                    <form action={saveTranscriptReviewAction} className="mt-4 space-y-3">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <textarea
+                        key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
+                        name="content"
+                        defaultValue={transcriptText}
+                        rows={12}
+                        aria-label="Transcrição da reunião"
+                        className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-ink-muted">
+                          {transcriptReview
+                            ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
+                            : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
+                        </p>
+                        <button
+                          type="submit"
+                          className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                        >
+                          💾 Salvar transcrição corrigida
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                {/* Relatórios finais: 1 por conselheiro + síntese do Presidente */}
+                <section aria-label="Relatórios do conselho" className="card-premium mt-6 p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="font-display text-base font-semibold text-ink">
+                        <span className="blueprint-index mr-2 text-brand/70">03/</span>
+                        📊 Relatórios do conselho
+                      </h2>
+                      <p className="text-xs text-ink-muted">
+                        A visão de cada conselheiro sobre a reunião + a síntese executiva do
+                        Presidente. Rascunhos editáveis, cifrados e auditados.
+                      </p>
+                    </div>
+                    <ReportsGeneratorForm meetingId={id} hasReports={reports.length > 0} />
+                  </div>
+
+                  {reports.length === 0 ? (
+                    <p className="mt-4 rounded-[var(--radius)] border border-dashed border-ink/15 p-4 text-sm text-ink-muted">
+                      Nenhum relatório ainda — encerre a reunião, revise a transcrição e clique em
+                      &ldquo;Gerar relatórios do conselho&rdquo;.
+                    </p>
+                  ) : (
+                    <div className="mt-4 space-y-4">{reports.map((report) => renderReportDetails(report))}</div>
+                  )}
+                  {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
+                </section>
+
+                {/* Histórico de sínteses do Presidente durante a reunião */}
+                {syntheses.length > 0 && (
+                  <section aria-label="Sínteses do Presidente" className="card-premium mt-6 p-6">
+                    <h2 className="font-display text-base font-semibold text-ink">
+                      Sínteses do Presidente{' '}
+                      <span className="text-sm font-normal text-ink-muted">· histórico salvo</span>
+                    </h2>
+                    <ul className="mt-4 space-y-3">
+                      {[...syntheses].reverse().map((s) => (
+                        <li key={s.id} className="rounded-[var(--radius)] border border-ink/10 bg-surface p-4">
+                          <p className="text-sm leading-relaxed text-ink">{s.content}</p>
+                          <p className="mt-2 text-[11px] text-ink-muted">
+                            {formatDateTimeBR(s.createdAt)}
+                            {s.modelVersion ? ` · ${s.modelVersion}` : ''}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+              </>
             )}
 
             {telemetry ? (

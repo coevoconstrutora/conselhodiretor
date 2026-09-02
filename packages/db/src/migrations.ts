@@ -633,4 +633,62 @@ CREATE TABLE IF NOT EXISTS participant_meeting_analytics (
 );
 `,
   },
+  {
+    name: '0026_meeting_history',
+    sql: `
+-- Reunião histórica de verdade (Etapa "Histórico de reuniões"): hoje só a
+-- SÍNTESE do Presidente é persistida por contribuição (board_synthesis) —
+-- as contribuições REGULARES dos 8 conselheiros (atencao/sugestao/hipotese)
+-- só viviam em memória (perdidas ao reiniciar/expirar o TTL). Esta migration
+-- fecha essa lacuna + adiciona Decisões/Ações (extraídas por IA da síntese
+-- final, 1x por reunião) + a referência explícita de contexto entre reuniões.
+--
+-- Conteúdo sensível vira 1 blob JSON cifrado por linha (content_enc) — mesmo
+-- padrão do resto do produto; metadados curtos (tipo/severidade/status/prazo)
+-- ficam em claro para filtrar/ordenar sem decifrar every row.
+CREATE TABLE IF NOT EXISTS meeting_contribution (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  meeting_id    uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  agent_id      text NOT NULL,
+  type          text NOT NULL,
+  severity      text NOT NULL,
+  urgency       text,
+  category      text,
+  content_enc   text NOT NULL,
+  model_version text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_contribution_meeting ON meeting_contribution(meeting_id, created_at);
+
+-- Decision Ledger (Seção 5 "DECISÕES") — 1 linha por decisão/recomendação
+-- identificada na síntese final.
+CREATE TABLE IF NOT EXISTS meeting_decision (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  meeting_id    uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  status        text NOT NULL DEFAULT 'pendente', -- decidido | recomendado | pendente | cancelado
+  deadline      timestamptz,
+  content_enc   text NOT NULL, -- {topic, decision, responsible, evidence}
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_decision_meeting ON meeting_decision(meeting_id);
+
+-- Ações (Seção 5 "AÇÕES") — pode (ou não) originar de uma decisão específica.
+CREATE TABLE IF NOT EXISTS meeting_action_item (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  meeting_id    uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  decision_id   uuid REFERENCES meeting_decision(id) ON DELETE SET NULL,
+  status        text NOT NULL DEFAULT 'pendente',
+  deadline      timestamptz,
+  content_enc   text NOT NULL, -- {action, responsible}
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_action_item_meeting ON meeting_action_item(meeting_id);
+
+-- Contexto ENTRE reuniões — referência EXPLÍCITA (Seção 14), escolhida pelo
+-- dono ao criar a reunião nova, nunca atribuída sozinha. Substitui a injeção
+-- automática das últimas 3 sínteses (comportamento antigo, sem opt-in) —
+-- decisão explícita desta etapa: só entra contexto anterior quando ESCOLHIDO.
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS previous_context_meeting_id uuid REFERENCES meeting(id) ON DELETE SET NULL;
+`,
+  },
 ];

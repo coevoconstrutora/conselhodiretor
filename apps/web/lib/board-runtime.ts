@@ -22,8 +22,9 @@ import {
   listSyntheses,
   auditTranscriptPersistStart,
   loadTranscriptReview,
-  listRecentPresidentSyntheses,
-  buildPriorMeetingsBlock,
+  saveMeetingContribution,
+  loadPreviousMeetingContext,
+  buildPreviousMeetingContextBlock,
 } from '@conselho/meeting-report';
 import type { SqlExecutor } from '@conselho/db';
 import { getDb } from './db';
@@ -303,14 +304,22 @@ function makeLlm(onUsage?: (u: { inputTokens: number; outputTokens: number }) =>
 }
 
 /**
- * Persistência do histórico do board: toda SÍNTESE do Presidente é gravada
- * (cifrada + auditada) no momento em que sai — sobrevive a restart/fim da
- * consulta. Fire-and-forget com log: falha de persistência não derruba o board.
+ * Persistência DURÁVEL do histórico do board (Etapa "Histórico de
+ * reuniões") — toda contribuição (não só a síntese) é gravada cifrada no
+ * momento em que sai, para a aba "Contribuições" da reunião encerrada
+ * existir de verdade (antes só a síntese sobrevivia a um restart/TTL).
+ * Fire-and-forget com log: falha de persistência não derruba o board.
  */
-function persistSynthesisEvents(db: SqlExecutor, meetingId: string, event: FullBoardEvent): void {
-  if (event.contribution.type !== 'sintese') return;
-  saveSynthesis(db, meetingId, event.contribution.text, getEncryptionKey(), event.contribution.modelVersion).catch(
-    (error) => console.error('[board] falha ao salvar síntese:', error),
+function persistBoardEvent(db: SqlExecutor, meetingId: string, event: FullBoardEvent): void {
+  const key = getEncryptionKey();
+  if (event.contribution.type === 'sintese') {
+    saveSynthesis(db, meetingId, event.contribution.text, key, event.contribution.modelVersion).catch((error) =>
+      console.error('[board] falha ao salvar síntese:', error),
+    );
+    return;
+  }
+  saveMeetingContribution(db, meetingId, event.contribution, key).catch((error) =>
+    console.error('[board] falha ao salvar contribuição:', error),
   );
 }
 
@@ -430,10 +439,11 @@ function telemetryHooks(runtime: BoardRuntime, meetingId: string) {
 
 /** Inicia a demo do BOARD COMPLETO (E6) — gate de gravação incluso. */
 /**
- * Memória entre reuniões: síntese do Presidente das últimas reuniões
- * ENCERRADAS, pronta para `priorMeetingsContext` do orchestrator. Nunca
- * lança — sem histórico (ou erro ao buscar), a reunião só começa "em branco"
- * como hoje, não trava o início.
+ * Contexto ENTRE reuniões (Etapa "Histórico de reuniões") — SÓ entra se o
+ * dono escolheu explicitamente uma reunião anterior ao criar esta (Seção
+ * 9/10 do pedido: nunca injetar sozinho). Substitui a memória automática das
+ * últimas 3 reuniões encerradas que existia antes desta etapa. Nunca lança —
+ * falha ao buscar degrada para "sem contexto anterior", não trava o início.
  */
 async function loadPriorMeetingsContext(
   db: SqlExecutor,
@@ -441,10 +451,16 @@ async function loadPriorMeetingsContext(
   meetingId: string,
 ): Promise<string | undefined> {
   try {
-    const syntheses = await listRecentPresidentSyntheses(db, getEncryptionKey(), companyId, meetingId);
-    return buildPriorMeetingsBlock(syntheses) || undefined;
+    const res = await db.query<{ previous_context_meeting_id: string | null }>(
+      'SELECT previous_context_meeting_id FROM meeting WHERE id = $1',
+      [meetingId],
+    );
+    const previousId = res.rows[0]?.previous_context_meeting_id;
+    if (!previousId) return undefined;
+    const ctx = await loadPreviousMeetingContext(db, companyId, previousId, getEncryptionKey());
+    return ctx ? buildPreviousMeetingContextBlock(ctx) : undefined;
   } catch (error) {
-    console.error('[board] carregar histórico de reuniões anteriores falhou:', error);
+    console.error('[board] carregar contexto da reunião anterior falhou:', error);
     return undefined;
   }
 }
@@ -568,7 +584,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   const events: FullBoardEvent[] = [];
   orchestrator.subscribe((event) => {
     events.push(event);
-    persistSynthesisEvents(db, meetingId, event); // histórico salvo (cifrado+auditado)
+    persistBoardEvent(db, meetingId, event); // histórico salvo (cifrado+auditado)
   });
   orchestrator.start();
   runtime.active.set(meetingId, { session, orchestrator, events, flushTranscript: wired.flushTranscript });
@@ -809,7 +825,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const events: FullBoardEvent[] = [];
     orchestrator.subscribe((event) => {
       events.push(event);
-      persistSynthesisEvents(db, meetingId, event); // histórico salvo (cifrado+auditado)
+      persistBoardEvent(db, meetingId, event); // histórico salvo (cifrado+auditado)
     });
     orchestrator.start();
     runtime.active.set(meetingId, { session, orchestrator, events, flushTranscript: wired.flushTranscript });

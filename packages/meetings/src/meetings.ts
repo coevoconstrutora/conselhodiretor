@@ -53,13 +53,28 @@ export async function createMeeting(
   encryptionKey: Buffer,
   meetingTypeId?: string | null,
   guidance?: MeetingGuidanceInput | null,
+  /**
+   * Contexto ENTRE reuniões (Etapa "Histórico de reuniões") — referência
+   * EXPLÍCITA a uma reunião anterior, só aplicada se ela realmente existir,
+   * pertencer À MESMA empresa e estiver ENCERRADA (nunca confia no valor cru
+   * do formulário — Seção 14 do pedido: nunca atribuir sozinho).
+   */
+  previousContextMeetingId?: string | null,
 ): Promise<string> {
   const titleEnc = encryptField(title, encryptionKey);
   const guidanceEnc = guidance ? encryptField(guidance.content, encryptionKey) : null;
+  let validPreviousId: string | null = null;
+  if (previousContextMeetingId) {
+    const check = await db.query<{ id: string }>(
+      `SELECT id FROM meeting WHERE id = $1 AND company_id = $2 AND status = 'closed'`,
+      [previousContextMeetingId, companyId],
+    );
+    validPreviousId = check.rows[0]?.id ?? null;
+  }
   const res = await db.query<{ id: string }>(
-    `INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id, guidance_enc, guidance_filename)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [userId, companyId, titleEnc, meetingTypeId ?? null, guidanceEnc, guidance?.filename ?? null],
+    `INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id, guidance_enc, guidance_filename, previous_context_meeting_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [userId, companyId, titleEnc, meetingTypeId ?? null, guidanceEnc, guidance?.filename ?? null, validPreviousId],
   );
   return res.rows[0]!.id;
 }

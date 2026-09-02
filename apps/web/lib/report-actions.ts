@@ -6,6 +6,8 @@ import {
   generatePresidentSynthesis,
   saveAgentReport,
   listAgentReports,
+  extractMeetingOutcome,
+  saveMeetingOutcome,
 } from '@conselho/meeting-report';
 import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
 import { PRESIDENT_AGENT_ID, type AgentId } from '@conselho/providers';
@@ -88,6 +90,21 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
       action: 'generate',
       modelVersion: modelLabel,
     });
+
+    // Decision Ledger + Ações (Etapa "Histórico de reuniões") — extraídos da
+    // síntese final, mesma chamada de trabalho. Nunca lança: falha aqui não
+    // derruba a geração dos relatórios, a reunião só fica sem essas 2 abas.
+    const outcome = await extractMeetingOutcome(
+      llm,
+      synthesis,
+      presidentConfig.synthesisModel,
+      presidentConfig.synthesisReasoningEffort,
+    );
+    if (outcome) {
+      await saveMeetingOutcome(db, meetingId, outcome, key).catch((error) =>
+        console.error('[relatorios] salvar decisões/ações falhou:', error),
+      );
+    }
 
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };

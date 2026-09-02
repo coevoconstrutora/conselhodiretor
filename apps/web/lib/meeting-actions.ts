@@ -25,6 +25,9 @@ export async function startMeetingAction(
   const title = String(formData.get('title') ?? '').trim();
   if (!title) return { error: 'Informe o título da reunião.' };
   const meetingTypeId = String(formData.get('meetingTypeId') ?? '').trim() || null;
+  // Contexto da reunião anterior (Etapa "Histórico de reuniões") — só existe
+  // no FormData quando o dono marcou o checkbox explicitamente (Seção 10).
+  const previousContextMeetingId = String(formData.get('previousContextMeetingId') ?? '').trim() || null;
 
   let guidance: MeetingGuidanceInput | null = null;
   const file = formData.get('guidanceFile');
@@ -45,6 +48,7 @@ export async function startMeetingAction(
     getEncryptionKey(),
     meetingTypeId,
     guidance,
+    previousContextMeetingId,
   );
   redirect(`/meetings/${meetingId}`);
 }

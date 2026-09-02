@@ -36,6 +36,22 @@ const TYPE_ICON: Record<string, string> = {
   sintese: '📋',
 };
 
+/** Reunião ENCERRADA (Seção 6): rótulo útil por conselheiro em vez do genérico "encerrado". */
+function historicalLabel(
+  agentId: string,
+  isPresident: boolean,
+  historicalCounts: ReadonlyMap<string, number> | undefined,
+): { state: string; label: string } {
+  if (!historicalCounts) return { state: 'encerrado', label: 'encerrado' };
+  const count = historicalCounts.get(agentId) ?? 0;
+  if (isPresident) {
+    return count > 0 ? { state: 'sintetizou', label: 'sintetizou' } : { state: 'nao-sintetizou', label: 'não sintetizou' };
+  }
+  return count > 0
+    ? { state: 'participou', label: `${count} contribuiç${count === 1 ? 'ão' : 'ões'}` }
+    : { state: 'nao-acionado', label: 'não acionado' };
+}
+
 function latestBy(
   contributions: BoardContributionItem[],
   agentId: string,
@@ -50,6 +66,7 @@ export function CounselorStrip({
   agents,
   closed = false,
   voiceEnabled = true,
+  historicalCounts,
 }: {
   agents: readonly StripCounselor[];
   closed?: boolean;
@@ -57,6 +74,14 @@ export function CounselorStrip({
    * áudio de verdade (`speakingAgentId`); sem voz, cai na janela de tempo
    * (só feedback visual — nunca haveria áudio pra sincronizar com). */
   voiceEnabled?: boolean;
+  /**
+   * Reunião ENCERRADA (Etapa "Histórico de reuniões", Seção 6): contagem de
+   * contribuições por agente nesta reunião — substitui o genérico
+   * "encerrado" por "N contribuições"/"Não acionado" (Presidente:
+   * "Sintetizou"/"Não sintetizou"). `undefined` ⇒ mantém "encerrado" (ex.:
+   * reunião antiga sem este dado).
+   */
+  historicalCounts?: ReadonlyMap<string, number>;
 }) {
   const contributions = useBoardStore((s) => s.contributions);
   const silenced = useBoardStore((s) => s.silenced);
@@ -166,7 +191,7 @@ export function CounselorStrip({
                         ? 'presidindo'
                         : 'falando'
                       : closed
-                        ? 'encerrado'
+                        ? historicalLabel(counselor.id, isPresident, historicalCounts).state
                         : synthesisAvailable
                           ? 'sintese-disponivel'
                           : isPresident
@@ -200,7 +225,7 @@ export function CounselorStrip({
                   ) : speaking ? (
                     <span className="text-emerald-300">● {isPresident ? 'presidindo' : 'falando'}</span>
                   ) : closed ? (
-                    <span className="text-white/40">encerrado</span>
+                    <span className="text-white/40">{historicalLabel(counselor.id, isPresident, historicalCounts).label}</span>
                   ) : synthesisAvailable ? (
                     <span className="text-emerald-300">📋 síntese disponível</span>
                   ) : isPresident ? (
