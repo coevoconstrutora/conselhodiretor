@@ -9,7 +9,7 @@ import {
 } from '@conselho/board';
 import { startMeetingSession, type MeetingSession } from '@conselho/session';
 import { getMeetingGuidance } from '@conselho/meetings';
-import { NamespacedKnowledgeStore, getCompanyProfile } from '@conselho/kb';
+import { NamespacedKnowledgeStore, getCompanyProfile, getPresidentConfig } from '@conselho/kb';
 import { analyzeMeetingForImprovements, saveMeetingImprovement } from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
 import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
@@ -31,6 +31,7 @@ import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
+import { loadAndApplyPresidentConfig } from './president-config-store';
 import { createSpeakerNameTracker, type SpeakerNameTracker, type KnownSpeaker } from './speaker-names';
 import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
@@ -144,6 +145,7 @@ export async function getCompanyKnowledgeStore(companyId: string): Promise<Names
   const kb = new NamespacedKnowledgeStore();
   await loadAndApplyProfileOverrides(db, companyId);
   await loadAndApplyCompanyProfile(db, companyId, getEncryptionKey());
+  await loadAndApplyPresidentConfig(db, companyId);
   await rebuildAllKnowledge(kb, db, companyId, getEncryptionKey(), COUNSELOR_AGENT_IDS);
   runtime.kbByCompany.set(companyId, kb);
   return kb;
@@ -555,6 +557,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     activeAgentIds,
     extraTriggers,
     relevanceRouter: createRelevanceRouter(),
+    presidentConfig: getPresidentConfig(companyId),
   });
   runtime.gateway.bind(meetingId, orchestrator);
   // transcrição ao vivo p/ o painel (texto via WS — áudio nunca passa aqui, §7).
@@ -798,6 +801,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       priorMeetingsContext,
       meetingGuidance,
       relevanceRouter: createRelevanceRouter(),
+      presidentConfig: getPresidentConfig(companyId),
     });
     runtime.gateway.bind(meetingId, orchestrator);
     const wired = wireSessionBroadcast(runtime, meetingId, session, db, { persistTranscript: true });

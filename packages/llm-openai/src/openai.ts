@@ -197,7 +197,7 @@ export class OpenAiLlmProvider implements ILlmProvider {
    * forçado. Também reporta usage (custo E10).
    */
   async completeText(req: TextCompletionRequest): Promise<{ text: string; modelVersion?: string }> {
-    const data = await this.callApi(req.system, req.prompt, req.maxTokens ?? 400, false);
+    const data = await this.callApi(req.system, req.prompt, req.maxTokens ?? 400, false, req.model, req.reasoningEffort);
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new OpenAiLlmError('Resposta sem conteúdo.', 'parse');
     return { text, modelVersion: data.model ?? this.config.model ?? DEFAULT_MODEL };

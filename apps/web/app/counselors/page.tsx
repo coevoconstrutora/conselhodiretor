@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID } from '@conselho/providers';
 import { requireCurrentUser, canWrite } from '@/lib/auth';
@@ -37,7 +38,20 @@ export default async function CounselorsPage() {
         </>
       }
     >
-      <section className="mt-8">
+      <section className="mt-8 flex items-center justify-between gap-3">
+        <p className="text-xs text-ink-muted">
+          O Presidente do Conselho não aparece na lista abaixo — ele não é um especialista, é
+          governança e síntese.
+        </p>
+        <Link
+          href="/counselors/presidente"
+          className="shrink-0 rounded-[var(--radius)] border border-ink/15 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted"
+        >
+          ⚙️ Configurar Presidente
+        </Link>
+      </section>
+
+      <section className="mt-6">
         <CreateCounselorForm />
       </section>
 

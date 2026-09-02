@@ -18,6 +18,7 @@ import { startMeetingSession } from '@conselho/session';
 import { NamespacedKnowledgeStore, ingest } from '@conselho/kb';
 import { FullBoardOrchestrator, type FullBoardEvent } from './full-board';
 import { RelevanceRouter } from './relevance-router';
+import type { PresidentConfig } from '@conselho/kb';
 
 class PushSttProvider implements ISttProvider {
   private queue: Array<TranscriptSegment | null> = [];
@@ -148,6 +149,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       activeAgentIds?: readonly AgentId[];
       meetingGuidance?: string;
       relevanceRouter?: RelevanceRouter;
+      presidentConfig?: PresidentConfig;
     } = {},
   ) {
     const stt = new PushSttProvider();
@@ -170,6 +172,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       activeAgentIds: opts.activeAgentIds,
       meetingGuidance: opts.meetingGuidance,
       relevanceRouter: opts.relevanceRouter,
+      presidentConfig: opts.presidentConfig,
     });
     const events: FullBoardEvent[] = [];
     board.subscribe((e) => events.push(e));
@@ -676,6 +679,74 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     await flush();
     await board.flush();
     expect(events).toHaveLength(0); // sem roteador, nada cobre esse segmento — igual ao comportamento pré-Etapa 2
+    board.stop();
+    await session.stop();
+  });
+
+  it('Configuração do Presidente: a síntese usa o "modelo de síntese", não o de acompanhamento', async () => {
+    let t = 0;
+    const presidentConfig: PresidentConfig = {
+      monitoringModel: 'gpt-5.6-terra',
+      monitoringReasoningEffort: 'medium',
+      synthesisModel: 'gpt-5.6-sol',
+      synthesisReasoningEffort: 'high',
+      finalSynthesisReasoningEffort: 'xhigh',
+      interventionLevel: 'moderate',
+      consensusPolicy: 'preserve_disagreement',
+      canRequestCounselors: true,
+      canRegisterDecisions: true,
+      canOverrideSpecialist: false,
+      autoInterruption: false,
+    };
+    const { stt, session, board, llm } = await setup({ now: () => (t += 3000), presidentConfig });
+    stt.push('Recebemos uma ação judicial sobre o terreno.');
+    await flush();
+    await board.flush();
+
+    await board.synthesizeNow();
+    const synthCall = llm.calls[llm.calls.length - 1]!;
+    expect(synthCall.model).toBe('gpt-5.6-sol');
+    expect(synthCall.reasoningEffort).toBe('high');
+    // reforço da política de consenso (Seção 6) sempre presente na síntese
+    expect(synthCall.system).toContain('preservar divergências');
+    board.stop();
+    await session.stop();
+  });
+
+  it('Configuração do Presidente: o CaseState usa o "modelo de acompanhamento"', async () => {
+    let t = 0;
+    const presidentConfig: PresidentConfig = {
+      monitoringModel: 'gpt-5.6-terra',
+      monitoringReasoningEffort: 'low',
+      synthesisModel: 'gpt-5.6-sol',
+      synthesisReasoningEffort: 'high',
+      finalSynthesisReasoningEffort: 'xhigh',
+      interventionLevel: 'moderate',
+      consensusPolicy: 'preserve_disagreement',
+      canRequestCounselors: true,
+      canRegisterDecisions: true,
+      canOverrideSpecialist: false,
+      autoInterruption: false,
+    };
+    const { stt, session, board, llm } = await setup({
+      now: () => (t += 3000),
+      caseStateEveryNFinals: 1,
+      presidentConfig,
+    });
+    const received: TextCompletionRequest[] = [];
+    llm.completeText = async (req) => {
+      received.push(req);
+      return { text: '{"hypotheses":[],"investigated":[],"meetingPoints":[],"pending":{}}' };
+    };
+
+    stt.push('Bom dia, vamos começar a reunião de hoje.');
+    await flush();
+    await board.flush();
+    await flush(); // update fire-and-forget do tracker resolve
+
+    expect(received).toHaveLength(1);
+    expect(received[0]!.model).toBe('gpt-5.6-terra');
+    expect(received[0]!.reasoningEffort).toBe('low');
     board.stop();
     await session.stop();
   });

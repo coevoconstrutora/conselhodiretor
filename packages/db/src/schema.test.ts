@@ -67,6 +67,7 @@ describe('Migrations — schema base', () => {
       '0021_meeting_guidance',
       '0022_agent_profile_briefing',
       '0023_agent_profile_ai_voice_config',
+      '0024_president_config',
     ]);
   });
 

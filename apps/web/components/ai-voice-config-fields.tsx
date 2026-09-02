@@ -31,6 +31,7 @@ export function AiVoiceConfigFields({
   voiceInstructions,
   speechRate,
   fallbackVoice,
+  hideModelFields = false,
 }: {
   aiModel: string | null;
   reasoningEffort: string | null;
@@ -39,6 +40,13 @@ export function AiVoiceConfigFields({
   speechRate: number | null;
   /** Voz que este conselheiro usa HOJE sem configuração própria (tts-voices.ts) — usada no preview quando "Voz" está em branco. */
   fallbackVoice: string;
+  /**
+   * Presidente: modelo/raciocínio de acompanhamento e síntese têm config
+   * PRÓPRIA e dedicada (Etapa "Configuração do Presidente") — mostrar este
+   * seletor genérico junto criaria dois campos de "modelo" divergentes na
+   * mesma página. `false` para os 8 conselheiros comuns.
+   */
+  hideModelFields?: boolean;
 }) {
   const [model, setModel] = useState(aiModel ?? DEFAULT_AI_MODEL);
   const [selectedVoice, setSelectedVoice] = useState(voice ?? '');
@@ -88,37 +96,43 @@ export function AiVoiceConfigFields({
     <div className="rounded-[var(--radius)] border border-ink/10 bg-surface-muted/40 p-4">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Configuração da IA</h3>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs font-semibold text-ink">Modelo de raciocínio</span>
-          <select name="aiModel" value={model} onChange={(e) => setModel(e.target.value)} className={selectCls}>
-            {REASONING_MODELS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-          {modelInfo ? <p className="mt-1 text-[11px] text-ink-muted">{modelInfo.description}</p> : null}
-        </label>
+      {!hideModelFields ? (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold text-ink">Modelo de raciocínio</span>
+            <select name="aiModel" value={model} onChange={(e) => setModel(e.target.value)} className={selectCls}>
+              {REASONING_MODELS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            {modelInfo ? <p className="mt-1 text-[11px] text-ink-muted">{modelInfo.description}</p> : null}
+          </label>
 
-        <label className="block">
-          <span className="text-xs font-semibold text-ink">Nível de raciocínio</span>
-          <select
-            name="reasoningEffort"
-            defaultValue={reasoningEffort ?? DEFAULT_REASONING_EFFORT}
-            className={selectCls}
-          >
-            {REASONING_EFFORTS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[11px] text-ink-muted">
-            Define quanto processamento analítico o conselheiro deve utilizar antes de emitir sua opinião.
-          </p>
-        </label>
-      </div>
+          <label className="block">
+            <span className="text-xs font-semibold text-ink">Nível de raciocínio</span>
+            <select
+              name="reasoningEffort"
+              defaultValue={reasoningEffort ?? DEFAULT_REASONING_EFFORT}
+              className={selectCls}
+            >
+              {REASONING_EFFORTS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-ink-muted">
+              Define quanto processamento analítico o conselheiro deve utilizar antes de emitir sua opinião.
+            </p>
+          </label>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] text-ink-muted">
+          Modelo de acompanhamento e de síntese têm configuração própria, abaixo (Configuração do Presidente).
+        </p>
+      )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
         <label className="block">

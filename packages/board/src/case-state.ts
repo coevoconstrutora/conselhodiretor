@@ -35,6 +35,13 @@ export interface CaseStateTrackerOptions {
   readonly everyNFinals?: number;
   /** Telemetria: chamada de update concluída. */
   readonly onUpdate?: () => void;
+  /**
+   * Configuração do Presidente — "modelo de acompanhamento" (Seção 2/12-A do
+   * pedido): o tracker É o acompanhamento contínuo da reunião. `undefined` ⇒
+   * o provider usa o próprio default.
+   */
+  readonly model?: string;
+  readonly reasoningEffort?: string;
 }
 
 export class CaseStateTracker {
@@ -77,6 +84,8 @@ export class CaseStateTracker {
         system: UPDATER_SYSTEM,
         prompt: JSON.stringify({ estadoAnterior: this.state, novosTrechos: batch }),
         maxTokens: 400,
+        model: this.opts.model,
+        reasoningEffort: this.opts.reasoningEffort,
       });
       const parsed = parseCaseState(res.text);
       if (parsed) {

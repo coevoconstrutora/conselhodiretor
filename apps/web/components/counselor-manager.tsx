@@ -122,6 +122,7 @@ export function ProfileForm({
         voiceInstructions={voiceInstructions}
         speechRate={speechRate}
         fallbackVoice={resolveAgentVoice(agentId as AgentId)}
+        hideModelFields={agentId === 'presidente'}
       />
       <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
       <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />

@@ -82,7 +82,19 @@ export function CounselorStrip({
       !signaling &&
       !!latest &&
       (voiceEnabled ? speakingAgentId === counselor.id : now - latest.at < SPEAK_WINDOW_MS);
-    return { counselor, latest, isSilenced, signaling, speaking };
+    // Configuração do Presidente (Seção 15) — estados PRÓPRIOS do card do
+    // Presidente, derivados do que já está disponível no store (sem WS novo):
+    // "Presidindo" reusa o mesmo sinal de `speaking`; "Síntese disponível" é a
+    // última contribuição dele ser do tipo síntese e ainda recente.
+    const isPresident = counselor.id === 'presidente';
+    const synthesisAvailable =
+      isPresident &&
+      !closed &&
+      !speaking &&
+      !!latest &&
+      latest.contribution.type === 'sintese' &&
+      now - latest.at < SIGNAL_WINDOW_MS;
+    return { counselor, latest, isSilenced, signaling, speaking, isPresident, synthesisAvailable };
   });
 
   // spotlight = agente ativo mais recente (sinalizando vence empate)
@@ -138,7 +150,7 @@ export function CounselorStrip({
       ) : null}
 
       <div className="grid grid-cols-3 gap-2 sm:[grid-template-columns:repeat(auto-fit,minmax(72px,1fr))]">
-        {states.map(({ counselor, isSilenced, signaling, speaking }, i) => {
+        {states.map(({ counselor, isSilenced, signaling, speaking, isPresident, synthesisAvailable }, i) => {
           const inSpotlight = i === activeIdx;
           return (
             <figure
@@ -150,10 +162,16 @@ export function CounselorStrip({
                   : signaling
                     ? 'sinalizando'
                     : speaking
-                      ? 'falando'
+                      ? isPresident
+                        ? 'presidindo'
+                        : 'falando'
                       : closed
                         ? 'encerrado'
-                        : 'ouvindo'
+                        : synthesisAvailable
+                          ? 'sintese-disponivel'
+                          : isPresident
+                            ? 'acompanhando'
+                            : 'ouvindo'
               }
               className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-[var(--radius)] border border-white/10 bg-white/5 px-1 py-3 ring-2 transition-all motion-reduce:transition-none ${
                 signaling
@@ -180,9 +198,13 @@ export function CounselorStrip({
                   ) : signaling ? (
                     <span className="text-attn">▲ sinalizando</span>
                   ) : speaking ? (
-                    <span className="text-emerald-300">● falando</span>
+                    <span className="text-emerald-300">● {isPresident ? 'presidindo' : 'falando'}</span>
                   ) : closed ? (
                     <span className="text-white/40">encerrado</span>
+                  ) : synthesisAvailable ? (
+                    <span className="text-emerald-300">📋 síntese disponível</span>
+                  ) : isPresident ? (
+                    <span className="text-emerald-200/80">● acompanhando</span>
                   ) : (
                     <span className="text-emerald-200/80">● ouvindo</span>
                   )}

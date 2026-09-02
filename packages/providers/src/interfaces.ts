@@ -66,6 +66,13 @@ export interface TextCompletionRequest {
   readonly system: string;
   readonly prompt: string;
   readonly maxTokens?: number;
+  /**
+   * Override de modelo/esforço PARA ESTA chamada (Configuração do Presidente
+   * — modelo de acompanhamento) — mesmo mecanismo de `LlmCompletionRequest`.
+   * `undefined` ⇒ o provider usa o próprio default.
+   */
+  readonly model?: string;
+  readonly reasoningEffort?: string;
 }
 
 /** LLM que produz a contribuição de uma persona a partir do contexto recuperado. */

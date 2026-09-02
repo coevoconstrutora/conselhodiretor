@@ -17,6 +17,7 @@ import { getNoteInputs } from './board-runtime';
 import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
 import { loadAndApplyProfileOverrides } from './kb-sources';
+import { loadAndApplyPresidentConfig, getPresidentConfig } from './president-config-store';
 import { buildReportsPdf } from './report-export';
 import { sendReportsEmail } from './email';
 
@@ -68,8 +69,18 @@ export async function generateReportsAction(meetingId: string): Promise<ActionRe
       reports.push({ agentId, content });
     }
 
-    // síntese executiva do Presidente a partir dos 8 relatórios
-    const synthesis = await generatePresidentSynthesis(llm, user.companyId, reports);
+    // síntese executiva do Presidente a partir dos 8 relatórios — "raciocínio
+    // da síntese final" da Configuração do Presidente (tipicamente xhigh/max,
+    // só aqui, 1x por reunião).
+    await loadAndApplyPresidentConfig(db, user.companyId);
+    const presidentConfig = getPresidentConfig(user.companyId);
+    const synthesis = await generatePresidentSynthesis(
+      llm,
+      user.companyId,
+      reports,
+      presidentConfig.synthesisModel,
+      presidentConfig.finalSynthesisReasoningEffort,
+    );
     await saveAgentReport(db, meetingId, 'presidente', synthesis, key, {
       action: 'generate',
       modelVersion: modelLabel,

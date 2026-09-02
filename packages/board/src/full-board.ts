@@ -16,7 +16,14 @@ import {
   type TriggerMatch,
   type AgentTriggerDef,
 } from '@conselho/engines';
-import { AgentReasoner, getAgentProfiles, buildAgentSystem } from '@conselho/kb';
+import {
+  AgentReasoner,
+  getAgentProfiles,
+  buildAgentSystem,
+  DEFAULT_PRESIDENT_CONFIG,
+  CONSENSUS_INSTRUCTION,
+  type PresidentConfig,
+} from '@conselho/kb';
 import type { IKnowledgeRetriever } from '@conselho/providers';
 import { CaseStateTracker } from './case-state';
 import { CASE_REVIEW_SYSTEM, parseCaseReview } from './case-review';
@@ -112,6 +119,13 @@ export interface FullBoardConfig extends GatekeeperConfig {
    * — só cobre agentes que os triggers NÃO pegaram no mesmo segmento.
    */
   readonly relevanceRouter?: RelevanceRouter;
+  /**
+   * Configuração do Presidente (Etapa "Configuração do Presidente") — modelo/
+   * raciocínio de acompanhamento (CaseState + case review) e de síntese
+   * (síntese sob demanda/automática), separados. `undefined` ⇒ defaults do
+   * pedido (compat total — Seção 21).
+   */
+  readonly presidentConfig?: PresidentConfig;
 }
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
@@ -176,6 +190,8 @@ export class FullBoardOrchestrator {
   private readonly activeAgentIds: ReadonlySet<AgentId> | undefined;
   /** Roteador de relevância (Etapa "Orquestração") — `undefined` ⇒ só triggers regex, como sempre. */
   private readonly relevanceRouter: RelevanceRouter | undefined;
+  /** Configuração do Presidente (Etapa "Configuração do Presidente") — defaults do pedido se ausente. */
+  private readonly presidentConfig: PresidentConfig;
 
   constructor(
     private readonly companyId: string,
@@ -193,11 +209,15 @@ export class FullBoardOrchestrator {
     this.profiles = getAgentProfiles(companyId);
     this.activeAgentIds = config.activeAgentIds ? new Set(config.activeAgentIds) : undefined;
     this.relevanceRouter = config.relevanceRouter;
+    this.presidentConfig = config.presidentConfig ?? DEFAULT_PRESIDENT_CONFIG;
     this.semanticDedupThreshold = config.semanticDedupThreshold ?? DEFAULT_SEMANTIC_DEDUP_THRESHOLD;
     this.semanticDedup = new SemanticDeduplicator({ threshold: this.semanticDedupThreshold });
     this.caseState = new CaseStateTracker(llm, {
       everyNFinals: config.caseStateEveryNFinals,
       onUpdate: config.onCaseStateUpdate,
+      // "modelo de acompanhamento" do Presidente — o CaseState É o acompanhamento contínuo.
+      model: this.presidentConfig.monitoringModel,
+      reasoningEffort: this.presidentConfig.monitoringReasoningEffort,
     });
     this.priorMeetingsContext = config.priorMeetingsContext;
     this.meetingGuidance = config.meetingGuidance;
@@ -383,6 +403,9 @@ export class FullBoardOrchestrator {
           `Últimas falas:\n${this.recentFinals.slice(-4).join(' ')}\n\n` +
           `O conselho JÁ disse nesta reunião:\n${said || '- (nada ainda)'}`,
         maxTokens: 300,
+        // case review É acompanhamento contínuo — mesmo modelo/raciocínio do CaseState.
+        model: this.presidentConfig.monitoringModel,
+        reasoningEffort: this.presidentConfig.monitoringReasoningEffort,
       });
       const parsed = parseCaseReview(res.text);
       if (!parsed || 'skip' in parsed) {
@@ -515,8 +538,8 @@ export class FullBoardOrchestrator {
       const synthesis = await this.llm.complete({
         system:
           buildAgentSystem(presidentProfile, this.companyId) +
-          ' Agora seu papel é o de SÍNTESE: integre as contribuições do conselho abaixo numa recomendação única e curta. ' +
-          'Se houver divergência entre os conselheiros, exponha-a com transparência e modere. ' +
+          ` ${CONSENSUS_INSTRUCTION} ` +
+          'Agora seu papel é o de SÍNTESE EXECUTIVA: integre as contribuições do conselho abaixo numa recomendação única e curta. ' +
           'Termine SEMPRE devolvendo a decisão ao empresário (ex.: "a decisão é sua").',
         context: [],
         // B3: a síntese do Presidente enxerga o caso INTEIRO (antes: só a janela curta)
@@ -526,6 +549,9 @@ export class FullBoardOrchestrator {
         priorContributions: this.history
           .slice(-20)
           .map((h) => `[${this.profiles[h.agentId]?.displayName ?? h.agentId}] ${h.text}`),
+        // Configuração do Presidente — "modelo de síntese" (Seção 3/12-B do pedido).
+        model: this.presidentConfig.synthesisModel,
+        reasoningEffort: this.presidentConfig.synthesisReasoningEffort,
       });
       if (synthesis.skip || !synthesis.text.trim()) {
         // síntese vazia NUNCA vira card/persistência — rodada permanece p/ nova tentativa

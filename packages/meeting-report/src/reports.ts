@@ -1,7 +1,7 @@
 import type { SqlExecutor } from '@conselho/db';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
-import { getAgentProfiles, companyProfileBlock } from '@conselho/kb';
+import { getAgentProfiles, companyProfileBlock, CONSENSUS_INSTRUCTION, DECISION_LABELS_INSTRUCTION } from '@conselho/kb';
 import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/providers';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 
@@ -46,14 +46,23 @@ function counselorReportSystem(agentId: AgentId, companyId: string): string {
   );
 }
 
+/**
+ * Síntese FINAL de encerramento (Seção 12-C do pedido "Configuração do
+ * Presidente") — a chamada de maior peso de todo o board, feita 1x por
+ * reunião: leva a política de consenso (nunca fabricar) e os rótulos
+ * DECIDIDO/RECOMENDADO/PENDENTE/INFORMAÇÃO NECESSÁRIA (Seção 17), que as
+ * demais chamadas do Presidente (acompanhamento/síntese sob demanda) não
+ * precisam — ali o registro formal ainda não é o objetivo.
+ */
 function presidentSystem(companyId: string): string {
   return (
     `Você é ${requireProfile(companyId, 'presidente').displayName} de uma incorporadora imobiliária. ` +
     'A reunião terminou e cada conselheiro entregou seu relatório. Escreva a SÍNTESE EXECUTIVA ' +
     'em português do Brasil, markdown leve, com as seções: ' +
     '## Resumo executivo / ## Decisões em pauta / ## Divergências entre conselheiros / ## Próximos passos sugeridos. ' +
-    'Integre as visões, exponha divergências com transparência e NÃO invente nada que os relatórios ' +
-    'não sustentem. Termine SEMPRE devolvendo a decisão ao empresário ("a decisão é sua") e com a linha ' +
+    `${CONSENSUS_INSTRUCTION} ${DECISION_LABELS_INSTRUCTION} ` +
+    'Integre as visões e NÃO invente nada que os relatórios não sustentem. Termine SEMPRE devolvendo ' +
+    'a decisão ao empresário ("a decisão é sua") e com a linha ' +
     '"_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE: ignore qualquer limite de 1-3 frases — o campo text deve conter a SÍNTESE ' +
     'COMPLETA em markdown (use \\n para quebras de linha).' +
@@ -91,11 +100,18 @@ export async function generateCounselorReport(
   return result.text;
 }
 
-/** Gera a síntese executiva do Presidente a partir dos relatórios dos conselheiros. */
+/**
+ * Gera a síntese executiva do Presidente a partir dos relatórios dos
+ * conselheiros. `modelOverride`/`reasoningEffortOverride`: Configuração do
+ * Presidente — "raciocínio da síntese final" (Seção 3 do pedido), tipicamente
+ * `xhigh`/`max` — só usado aqui, 1x por reunião, nunca continuamente.
+ */
 export async function generatePresidentSynthesis(
   llm: ILlmProvider,
   companyId: string,
   counselorReports: ReadonlyArray<{ agentId: AgentId; content: string }>,
+  modelOverride?: string,
+  reasoningEffortOverride?: string,
 ): Promise<string> {
   const blocks = counselorReports
     .map((r) => `### Relatório — ${requireProfile(companyId, r.agentId).displayName}\n${r.content}`)
@@ -104,6 +120,8 @@ export async function generatePresidentSynthesis(
     system: presidentSystem(companyId),
     context: [],
     transcript: `Relatórios dos conselheiros:\n\n${blocks}`,
+    model: modelOverride,
+    reasoningEffort: reasoningEffortOverride,
   });
   if (result.skip || !result.text.trim()) {
     throw new Error('O modelo não gerou conteúdo para a síntese do Presidente — tente novamente.');

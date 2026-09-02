@@ -25,3 +25,10 @@ export {
   companyProfileBlock,
   type CompanyProfile,
 } from './company-profile';
+export {
+  applyPresidentConfig,
+  getPresidentConfig,
+  DEFAULT_PRESIDENT_CONFIG,
+  type PresidentConfig,
+} from './president-config';
+export { PRESIDENT_CORE_SYSTEM, CONSENSUS_INSTRUCTION, DECISION_LABELS_INSTRUCTION } from './president-prompt';

@@ -105,3 +105,48 @@ export function isValidSpeechRate(value: unknown): value is number {
 export function findReasoningModel(value: string | null | undefined): ReasoningModelOption | undefined {
   return REASONING_MODELS.find((m) => m.value === value);
 }
+
+/**
+ * Configuração do Presidente (governança — distinta da config por
+ * conselheiro acima): nível de intervenção na reunião. Único ponto de
+ * verdade, mesmo padrão das listas de cima.
+ */
+export const INTERVENTION_LEVELS: readonly (SelectOption & { readonly description: string })[] = [
+  {
+    value: 'low',
+    label: 'Baixo',
+    description: 'O Presidente majoritariamente observa e só fala quando explicitamente solicitado.',
+  },
+  {
+    value: 'moderate',
+    label: 'Moderado',
+    description:
+      'O Presidente intervém quando há divergência relevante, decisão em aberto, risco material ou informação importante faltando.',
+  },
+  {
+    value: 'active',
+    label: 'Ativo',
+    description: 'O Presidente conduz a reunião mais ativamente e solicita análises com mais frequência.',
+  },
+] as const;
+
+export const DEFAULT_INTERVENTION_LEVEL = 'moderate';
+
+export function isValidInterventionLevel(value: unknown): value is string {
+  return typeof value === 'string' && INTERVENTION_LEVELS.some((l) => l.value === value);
+}
+
+/**
+ * Política de consenso do Presidente — hoje só existe UM valor válido (nunca
+ * fabricar consenso entre conselheiros divergentes). Modelado como catálogo
+ * (não uma string solta) para caso outras políticas sejam adicionadas depois.
+ */
+export const CONSENSUS_POLICIES: readonly SelectOption[] = [
+  { value: 'preserve_disagreement', label: 'Preservar divergências' },
+] as const;
+
+export const DEFAULT_CONSENSUS_POLICY = 'preserve_disagreement';
+
+export function isValidConsensusPolicy(value: unknown): value is string {
+  return typeof value === 'string' && CONSENSUS_POLICIES.some((p) => p.value === value);
+}

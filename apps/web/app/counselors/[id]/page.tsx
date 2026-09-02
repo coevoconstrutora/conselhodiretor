@@ -13,6 +13,8 @@ import {
 } from '@/lib/kb-sources';
 import { getCompanyKnowledgeStore } from '@/lib/board-runtime';
 import { deleteSourceAction } from '@/lib/counselor-actions';
+import { loadAndApplyPresidentConfig, getPresidentConfig } from '@/lib/president-config-store';
+import { PresidentConfigFields } from '@/components/president-config-fields';
 import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
 import { formatDateBR } from '@/lib/format';
@@ -43,6 +45,8 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
   const { scopeCan, scopeCannot } = await loadScopeSplit(db, user.companyId, agentId);
+  if (isPresident) await loadAndApplyPresidentConfig(db, user.companyId);
+  const presidentConfig = isPresident ? getPresidentConfig(user.companyId) : null;
 
   // Revisão automática de fontes por LINK vencidas — não bloqueia o render
   // (best-effort; processo fica de pé no Fly Machine, então isso completa
@@ -107,18 +111,32 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
         />
       </section>
 
-      {isPresident ? (
-        <section className="card-premium mt-6 p-6">
-          <h2 className="font-display text-base font-semibold text-ink">
-            <span className="blueprint-index mr-2 text-brand/70">02/</span>
-            Base de conhecimento
-          </h2>
-          <p className="mt-2 text-sm text-ink-muted">
-            O Presidente não tem base própria: o papel dele é <strong>sintetizar</strong> as
-            contribuições dos outros 8 conselheiros e devolver a decisão a você. Para influenciar
-            as sínteses, alimente as bases dos especialistas.
-          </p>
-        </section>
+      {isPresident && presidentConfig ? (
+        <>
+          <section aria-label="Configuração do Presidente" className="card-premium mt-6 p-6">
+            <h2 className="font-display text-base font-semibold text-ink">
+              <span className="blueprint-index mr-2 text-brand/70">02/</span>
+              Configuração do Presidente
+            </h2>
+            <p className="mb-4 text-xs text-ink-muted">
+              O Presidente não é um conselheiro comum: é um papel de governança que acompanha a
+              reunião, identifica decisões e divergências, e sintetiza — por isso tem modelos e
+              regras próprios, separados dos conselheiros especialistas.
+            </p>
+            <PresidentConfigFields config={presidentConfig} />
+          </section>
+          <section className="card-premium mt-6 p-6">
+            <h2 className="font-display text-base font-semibold text-ink">
+              <span className="blueprint-index mr-2 text-brand/70">03/</span>
+              Base de conhecimento
+            </h2>
+            <p className="mt-2 text-sm text-ink-muted">
+              O Presidente não tem base própria: o papel dele é <strong>sintetizar</strong> as
+              contribuições dos outros 8 conselheiros e devolver a decisão a você. Para influenciar
+              as sínteses, alimente as bases dos especialistas.
+            </p>
+          </section>
+        </>
       ) : (
         <>
           {/* Fontes atuais */}

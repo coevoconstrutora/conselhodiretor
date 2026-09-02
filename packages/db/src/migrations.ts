@@ -516,4 +516,31 @@ ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS voice_instructions text;
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS speech_rate real DEFAULT 1.0;
 `,
   },
+  {
+    name: '0024_president_config',
+    sql: `
+-- Configuração do Presidente (governança) — SINGLETON por empresa, distinta
+-- de agent_profile: o Presidente não tem 1 modelo, tem 2 (acompanhamento e
+-- síntese), mais um 3º nível de raciocínio só para a síntese final de
+-- encerramento, mais uma camada de governança (nível de intervenção,
+-- política de consenso, autoridade) sem equivalente num conselheiro comum.
+-- Não cifrado — mesmo padrão de agent_profile (config do produto, não do
+-- negócio). Sem linha ⇒ aplicação usa os defaults do pedido (compat total).
+CREATE TABLE IF NOT EXISTS president_config (
+  company_id                       uuid PRIMARY KEY REFERENCES company(id) ON DELETE CASCADE,
+  monitoring_model                 text NOT NULL DEFAULT 'gpt-5.6-terra',
+  monitoring_reasoning_effort      text NOT NULL DEFAULT 'medium',
+  synthesis_model                  text NOT NULL DEFAULT 'gpt-5.6-sol',
+  synthesis_reasoning_effort       text NOT NULL DEFAULT 'high',
+  final_synthesis_reasoning_effort text NOT NULL DEFAULT 'xhigh',
+  intervention_level               text NOT NULL DEFAULT 'moderate',
+  consensus_policy                 text NOT NULL DEFAULT 'preserve_disagreement',
+  can_request_counselors           boolean NOT NULL DEFAULT true,
+  can_register_decisions           boolean NOT NULL DEFAULT true,
+  can_override_specialist          boolean NOT NULL DEFAULT false,
+  auto_interruption                boolean NOT NULL DEFAULT false,
+  updated_at                       timestamptz NOT NULL DEFAULT now()
+);
+`,
+  },
 ];
