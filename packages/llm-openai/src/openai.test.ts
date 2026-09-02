@@ -58,7 +58,7 @@ describe('OpenAiLlmProvider (Chat Completions — adapter NFR8)', () => {
     expect(body.model).toBe('gpt-5.6-luna');
     expect(body.max_completion_tokens).toBe(300);
     expect(body.max_tokens).toBeUndefined();
-    expect(body.reasoning_effort).toBe('minimal'); // gpt-5.x: sem isto o raciocínio come o teto de tokens curto
+    expect(body.reasoning_effort).toBe('none'); // gpt-5.x: sem isto o raciocínio come o teto de tokens curto
     expect(body.response_format).toEqual({ type: 'json_object' });
     expect(body.messages[0].content).toContain('Legal');
     expect(body.messages[1].content).toContain('construtora');
@@ -80,6 +80,27 @@ describe('OpenAiLlmProvider (Chat Completions — adapter NFR8)', () => {
     expect(body.model).toBe('gpt-4o-mini');
     expect(body.reasoning_effort).toBeUndefined();
     expect(body.max_completion_tokens).toBe(300);
+  });
+
+  it('Etapa "IA por conselheiro" — model/reasoningEffort do request sobrepõem o default do provider', async () => {
+    const doFetch = fakeFetch(okResponse);
+    const provider = new OpenAiLlmProvider({
+      apiKey: 'sk-test',
+      agentId: 'cfo',
+      model: 'gpt-5.6-luna', // default do board — o conselheiro pede outro
+      fetchImpl: doFetch,
+    });
+    await provider.complete({
+      system: 's',
+      context: [],
+      transcript: 't',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'high',
+    });
+    const [, init] = doFetch.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.model).toBe('gpt-5.6-sol');
+    expect(body.reasoning_effort).toBe('high');
   });
 
   it('B1 — priors entram no prompt e allowSkip instrui o {"skip":true}', async () => {

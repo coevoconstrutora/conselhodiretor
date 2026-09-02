@@ -99,6 +99,11 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
           decisionCriteria={profile.decisionCriteria ?? null}
           riskPosture={profile.riskPosture ?? null}
           riskPostureNotes={profile.riskPostureNotes ?? null}
+          aiModel={profile.aiModel ?? null}
+          reasoningEffort={profile.reasoningEffort ?? null}
+          voice={profile.voice ?? null}
+          voiceInstructions={profile.voiceInstructions ?? null}
+          speechRate={profile.speechRate ?? null}
         />
       </section>
 

@@ -11,7 +11,10 @@ import {
 import { ScopeTextarea, PROFESSIONAL_PROFILE_MAX, DECISION_CRITERIA_MAX } from './scope-textarea';
 import { IconPicker } from './icon-picker';
 import { RiskPostureField } from './risk-posture-field';
+import { AiVoiceConfigFields } from './ai-voice-config-fields';
 import { getAgentEmoji } from '@/lib/agent-display';
+import { resolveAgentVoice } from '@/lib/tts-voices';
+import type { AgentId } from '@conselho/providers';
 
 /**
  * Gestão de um conselheiro ("NotebookLM do agente"): edição de perfil e as 3
@@ -53,6 +56,11 @@ export function ProfileForm({
   decisionCriteria,
   riskPosture,
   riskPostureNotes,
+  aiModel,
+  reasoningEffort,
+  voice,
+  voiceInstructions,
+  speechRate,
 }: {
   agentId: string;
   displayName: string;
@@ -64,6 +72,11 @@ export function ProfileForm({
   decisionCriteria: string | null;
   riskPosture: string | null;
   riskPostureNotes: string | null;
+  aiModel: string | null;
+  reasoningEffort: string | null;
+  voice: string | null;
+  voiceInstructions: string | null;
+  speechRate: number | null;
 }) {
   const [state, formAction, pending] = useActionState(updateCounselorProfileAction, null);
   return (
@@ -102,6 +115,14 @@ export function ProfileForm({
         placeholder="ex.: prioriza custo e prazo sobre inovação; exige dados concretos antes de recomendar mudança de método construtivo"
       />
       <RiskPostureField defaultValue={riskPosture ?? ''} defaultNotes={riskPostureNotes ?? ''} />
+      <AiVoiceConfigFields
+        aiModel={aiModel}
+        reasoningEffort={reasoningEffort}
+        voice={voice}
+        voiceInstructions={voiceInstructions}
+        speechRate={speechRate}
+        fallbackVoice={resolveAgentVoice(agentId as AgentId)}
+      />
       <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
       <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />
       <div className="flex items-center justify-between gap-3">

@@ -499,4 +499,21 @@ ALTER TABLE meeting ADD COLUMN IF NOT EXISTS guidance_filename text;
 ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS briefing text;
 `,
   },
+  {
+    name: '0023_agent_profile_ai_voice_config',
+    sql: `
+-- IA e voz INDIVIDUAIS por conselheiro (Etapa "IA por conselheiro") — modelo
+-- de raciocínio, nível de raciocínio, voz, estilo de voz e velocidade da
+-- fala. Compatível com conselheiros existentes: ai_model/reasoning_effort/
+-- speech_rate ganham DEFAULT (Postgres aplica o valor a linhas já
+-- existentes sem reescrever a tabela); voice/voice_instructions ficam NULL
+-- de propósito — o conselheiro continua na voz global/padrão por agentId
+-- (apps/web/lib/tts-voices.ts) até alguém configurar uma voz própria.
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS ai_model text DEFAULT 'gpt-5.6-luna';
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS reasoning_effort text DEFAULT 'medium';
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS voice text;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS voice_instructions text;
+ALTER TABLE agent_profile ADD COLUMN IF NOT EXISTS speech_rate real DEFAULT 1.0;
+`,
+  },
 ];

@@ -27,8 +27,9 @@ import {
   type ProfileFieldsInput,
 } from './kb-sources';
 
-/** Lê os 4 campos do perfil profissional (ícone, formação, critérios, postura de risco) de um FormData. */
+/** Lê os campos do perfil profissional + IA/voz individuais (Etapa "IA por conselheiro") de um FormData. */
 function parseProfileFields(formData: FormData): ProfileFieldsInput {
+  const rawSpeechRate = String(formData.get('speechRate') ?? '').trim();
   return {
     iconKey: String(formData.get('iconKey') ?? '').trim() || null,
     iconColor: String(formData.get('iconColor') ?? '').trim() || null,
@@ -36,6 +37,11 @@ function parseProfileFields(formData: FormData): ProfileFieldsInput {
     decisionCriteria: String(formData.get('decisionCriteria') ?? '').trim() || null,
     riskPosture: String(formData.get('riskPosture') ?? '').trim() || null,
     riskPostureNotes: String(formData.get('riskPostureNotes') ?? '').trim() || null,
+    aiModel: String(formData.get('aiModel') ?? '').trim() || null,
+    reasoningEffort: String(formData.get('reasoningEffort') ?? '').trim() || null,
+    voice: String(formData.get('voice') ?? '').trim() || null,
+    voiceInstructions: String(formData.get('voiceInstructions') ?? '').trim() || null,
+    speechRate: rawSpeechRate ? Number(rawSpeechRate) : null,
   };
 }
 

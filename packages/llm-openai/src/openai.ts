@@ -149,6 +149,9 @@ export class OpenAiLlmProvider implements ILlmProvider {
       `${req.system}\n\n${outputInstructions(this.config.longForm ?? false, req.allowSkip ?? false)}`,
       `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}`,
       this.config.maxTokens ?? 300,
+      true,
+      req.model,
+      req.reasoningEffort,
     );
 
     const text = data.choices?.[0]?.message?.content;
@@ -195,9 +198,17 @@ export class OpenAiLlmProvider implements ILlmProvider {
     user: string,
     maxTokens: number,
     jsonMode = true,
+    modelOverride?: string,
+    reasoningEffortOverride?: string,
   ): Promise<OpenAiResponse> {
     const doFetch = this.config.fetchImpl ?? fetch;
-    const model = this.config.model ?? DEFAULT_MODEL;
+    const model = modelOverride || this.config.model || DEFAULT_MODEL;
+    // reasoning models "pensam" por default — sem um esforço explícito, o
+    // raciocínio interno consome o teto de tokens de saídas curtas e a
+    // resposta some (mesma lição do Gemini, CLAUDE.md). 'none' é o piso
+    // seguro quando ninguém pediu um nível específico (Etapa "IA por
+    // conselheiro" — reasoningEffortOverride normalmente vem configurado).
+    const effort = reasoningEffortOverride || (isReasoningModel(model) ? 'none' : undefined);
     const response = await fetchWithTimeout(
       doFetch,
       this.config.endpoint ?? DEFAULT_ENDPOINT,
@@ -210,7 +221,7 @@ export class OpenAiLlmProvider implements ILlmProvider {
         body: JSON.stringify({
           model,
           max_completion_tokens: maxTokens,
-          ...(isReasoningModel(model) ? { reasoning_effort: 'minimal' } : {}),
+          ...(effort ? { reasoning_effort: effort } : {}),
           ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
           messages: [
             { role: 'system', content: system },

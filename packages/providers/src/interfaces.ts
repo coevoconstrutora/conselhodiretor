@@ -51,6 +51,14 @@ export interface LlmCompletionRequest {
   readonly priorContributions?: readonly string[];
   /** ADITIVO (B1): autoriza o modelo a responder {"skip":true} quando não há nada novo. */
   readonly allowSkip?: boolean;
+  /**
+   * Configuração INDIVIDUAL do conselheiro (Etapa "IA por conselheiro") —
+   * sobrepõe o modelo/esforço de raciocínio default do provider PARA ESTA
+   * chamada. `undefined` ⇒ o provider usa o próprio default. Só o adapter
+   * OpenAI lê estes campos hoje (Gemini/Anthropic ignoram, sem quebrar).
+   */
+  readonly model?: string;
+  readonly reasoningEffort?: string;
 }
 
 /** Requisição de completion de TEXTO LIVRE (uso interno — não vira card do board). */

@@ -17,6 +17,13 @@ import {
 import type { AgentId, KbChunk } from '@conselho/providers';
 import { stripHtml, isBlockedUrl } from './text-extract';
 import { BRIEFING_MAX } from './agent-briefing';
+import {
+  isValidAiModel,
+  isValidReasoningEffort,
+  isValidVoice,
+  isValidSpeechRate,
+  VOICE_STYLE_MAX,
+} from './ai-config';
 
 /**
  * "NotebookLM por conselheiro" — fontes de conhecimento geridas pelo DONO.
@@ -349,6 +356,12 @@ export interface ProfileFieldsInput {
   readonly decisionCriteria?: string | null;
   readonly riskPosture?: string | null;
   readonly riskPostureNotes?: string | null;
+  /** Etapa "IA por conselheiro" — validados contra ai-config.ts, nunca confiar no valor cru do cliente. */
+  readonly aiModel?: string | null;
+  readonly reasoningEffort?: string | null;
+  readonly voice?: string | null;
+  readonly voiceInstructions?: string | null;
+  readonly speechRate?: number | null;
 }
 
 interface NormalizedProfileFields {
@@ -358,6 +371,11 @@ interface NormalizedProfileFields {
   readonly decisionCriteria: string | null;
   readonly riskPosture: RiskPosture | null;
   readonly riskPostureNotes: string | null;
+  readonly aiModel: string | null;
+  readonly reasoningEffort: string | null;
+  readonly voice: string | null;
+  readonly voiceInstructions: string | null;
+  readonly speechRate: number | null;
 }
 
 function normalizeProfileFields(fields: ProfileFieldsInput | undefined): NormalizedProfileFields {
@@ -375,6 +393,12 @@ function normalizeProfileFields(fields: ProfileFieldsInput | undefined): Normali
     decisionCriteria: fields?.decisionCriteria?.trim().slice(0, DECISION_CRITERIA_MAX) || null,
     riskPosture,
     riskPostureNotes: riskPosture ? fields?.riskPostureNotes?.trim().slice(0, 300) || null : null,
+    // valor desconhecido/ausente ⇒ null — quem lê cai no default da aplicação (nunca um valor não-suportado)
+    aiModel: isValidAiModel(fields?.aiModel) ? fields!.aiModel! : null,
+    reasoningEffort: isValidReasoningEffort(fields?.reasoningEffort) ? fields!.reasoningEffort! : null,
+    voice: isValidVoice(fields?.voice) ? fields!.voice! : null,
+    voiceInstructions: fields?.voiceInstructions?.trim().slice(0, VOICE_STYLE_MAX) || null,
+    speechRate: isValidSpeechRate(fields?.speechRate) ? fields!.speechRate! : null,
   };
 }
 
@@ -398,15 +422,19 @@ export async function saveAgentProfile(
       await tx.query(
         `INSERT INTO agent_profile
            (company_id, agent_id, display_name, scope, scope_can, scope_cannot, icon_key, icon_color,
-            professional_profile, decision_criteria, risk_posture, risk_posture_notes)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            professional_profile, decision_criteria, risk_posture, risk_posture_notes,
+            ai_model, reasoning_effort, voice, voice_instructions, speech_rate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
          ON CONFLICT (company_id, agent_id) DO UPDATE
            SET display_name = EXCLUDED.display_name, scope = EXCLUDED.scope,
                scope_can = EXCLUDED.scope_can, scope_cannot = EXCLUDED.scope_cannot,
                icon_key = EXCLUDED.icon_key, icon_color = EXCLUDED.icon_color,
                professional_profile = EXCLUDED.professional_profile,
                decision_criteria = EXCLUDED.decision_criteria, risk_posture = EXCLUDED.risk_posture,
-               risk_posture_notes = EXCLUDED.risk_posture_notes, updated_at = now()`,
+               risk_posture_notes = EXCLUDED.risk_posture_notes,
+               ai_model = EXCLUDED.ai_model, reasoning_effort = EXCLUDED.reasoning_effort,
+               voice = EXCLUDED.voice, voice_instructions = EXCLUDED.voice_instructions,
+               speech_rate = EXCLUDED.speech_rate, updated_at = now()`,
         [
           companyId,
           agentId,
@@ -420,6 +448,11 @@ export async function saveAgentProfile(
           f.decisionCriteria,
           f.riskPosture,
           f.riskPostureNotes,
+          f.aiModel,
+          f.reasoningEffort,
+          f.voice,
+          f.voiceInstructions,
+          f.speechRate,
         ],
       );
       return null; // agent_profile não tem id próprio (PK é company_id+agent_id, ambos não-uuid)
@@ -585,9 +618,15 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
     risk_posture: string | null;
     risk_posture_notes: string | null;
     briefing: string | null;
+    ai_model: string | null;
+    reasoning_effort: string | null;
+    voice: string | null;
+    voice_instructions: string | null;
+    speech_rate: number | null;
   }>(
     `SELECT agent_id, display_name, scope, icon_key, icon_color, professional_profile, decision_criteria,
-            risk_posture, risk_posture_notes, briefing
+            risk_posture, risk_posture_notes, briefing, ai_model, reasoning_effort, voice,
+            voice_instructions, speech_rate
      FROM agent_profile WHERE company_id = $1`,
     [companyId],
   );
@@ -604,6 +643,11 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
       riskPosture: r.risk_posture as RiskPosture | null,
       riskPostureNotes: r.risk_posture_notes,
       briefing: r.briefing,
+      aiModel: r.ai_model,
+      reasoningEffort: r.reasoning_effort,
+      voice: r.voice,
+      voiceInstructions: r.voice_instructions,
+      speechRate: r.speech_rate,
     })),
   );
 }

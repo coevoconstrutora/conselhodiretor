@@ -35,6 +35,16 @@ export interface AgentProfile {
   readonly riskPostureNotes?: string | null;
   /** Resumo curto (≤140 chars) gerado por IA a partir do perfil inteiro — usado nos cards/listas. */
   readonly briefing?: string | null;
+  /** Modelo de raciocínio INDIVIDUAL (Etapa "IA por conselheiro") — `null` ⇒ default da aplicação. */
+  readonly aiModel?: string | null;
+  /** Nível de esforço de raciocínio INDIVIDUAL — mesmos valores aceitos pela API da OpenAI. */
+  readonly reasoningEffort?: string | null;
+  /** Voz TTS INDIVIDUAL — `null` ⇒ cai no fallback por agentId (tts-voices.ts). */
+  readonly voice?: string | null;
+  /** Estilo de fala em texto livre — some ao `instructions` do TTS quando presente. */
+  readonly voiceInstructions?: string | null;
+  /** Velocidade da fala (0.9–1.2) — `null` ⇒ default 1.0. */
+  readonly speechRate?: number | null;
 }
 
 /**
@@ -194,6 +204,11 @@ export function applyAgentProfileOverrides(
     riskPosture?: RiskPosture | null;
     riskPostureNotes?: string | null;
     briefing?: string | null;
+    aiModel?: string | null;
+    reasoningEffort?: string | null;
+    voice?: string | null;
+    voiceInstructions?: string | null;
+    speechRate?: number | null;
   }>,
 ): void {
   const profiles = getAgentProfiles(companyId);
@@ -211,6 +226,11 @@ export function applyAgentProfileOverrides(
         riskPosture: o.riskPosture !== undefined ? o.riskPosture : profile.riskPosture,
         riskPostureNotes: o.riskPostureNotes !== undefined ? o.riskPostureNotes : profile.riskPostureNotes,
         briefing: o.briefing !== undefined ? o.briefing : profile.briefing,
+        aiModel: o.aiModel !== undefined ? o.aiModel : profile.aiModel,
+        reasoningEffort: o.reasoningEffort !== undefined ? o.reasoningEffort : profile.reasoningEffort,
+        voice: o.voice !== undefined ? o.voice : profile.voice,
+        voiceInstructions: o.voiceInstructions !== undefined ? o.voiceInstructions : profile.voiceInstructions,
+        speechRate: o.speechRate !== undefined ? o.speechRate : profile.speechRate,
       };
     } else if (o.displayName?.trim() && o.scope?.trim()) {
       // conselheiro CUSTOM desta empresa — não estava no template padrão
@@ -225,6 +245,11 @@ export function applyAgentProfileOverrides(
         decisionCriteria: o.decisionCriteria ?? null,
         riskPosture: o.riskPosture ?? null,
         riskPostureNotes: o.riskPostureNotes ?? null,
+        aiModel: o.aiModel ?? null,
+        reasoningEffort: o.reasoningEffort ?? null,
+        voice: o.voice ?? null,
+        voiceInstructions: o.voiceInstructions ?? null,
+        speechRate: o.speechRate ?? null,
         briefing: o.briefing ?? null,
       };
     }
@@ -292,6 +317,11 @@ export class AgentReasoner {
       transcript: input.caseState ? `${input.caseState}\n\n${input.transcript}` : input.transcript,
       priorContributions: priors,
       allowSkip: true, // sem nada novo, o modelo devolve {"skip":true} e nada é exibido
+      // Etapa "IA por conselheiro": modelo/esforço INDIVIDUAIS, não o default
+      // global do board — `undefined` quando o conselheiro não configurou
+      // nada, e o provider cai no próprio default.
+      model: profile.aiModel ?? undefined,
+      reasoningEffort: profile.reasoningEffort ?? undefined,
     });
     if (contribution.skip) return { ...contribution, agentId: input.agentId };
     return {

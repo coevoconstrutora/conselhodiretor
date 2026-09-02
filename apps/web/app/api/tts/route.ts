@@ -5,14 +5,16 @@ import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { resolveAgentVoice, buildVoiceInstructions } from '@/lib/tts-voices';
 import { expandForSpeech } from '@/lib/tts-glossary';
+import { synthesizeSpeech } from '@/lib/openai-tts';
+import { DEFAULT_SPEECH_RATE } from '@/lib/ai-config';
 
 /**
  * Voz dos conselheiros (OpenAI TTS) — texto de uma contribuição → áudio.
- * Sem SDK de vendor (mesmo padrão dos adapters de LLM). Autenticado: evita
- * que a chave da OpenAI vire um proxy de TTS aberto para quem tiver o link.
+ * Autenticado: evita que a chave da OpenAI vire um proxy de TTS aberto para
+ * quem tiver o link. Usa a voz/instruções/velocidade INDIVIDUAIS do
+ * conselheiro (Etapa "IA por conselheiro") quando configuradas; sem isso,
+ * cai no fallback por agentId de sempre (tts-voices.ts).
  */
-const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
-const TTS_MODEL = 'gpt-4o-mini-tts'; // versão mais nova, mais barata que tts-1
 const MAX_CHARS = 4000; // teto da própria API da OpenAI para entrada de fala
 
 export async function POST(request: Request): Promise<NextResponse | Response> {
@@ -41,21 +43,15 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
   }
   if (!text) return NextResponse.json({ error: 'empty-text' }, { status: 400 });
 
-  const voice = resolveAgentVoice(agentId);
-  const instructions = buildVoiceInstructions(profile.displayName, profile.riskPosture);
-  const response = await fetch(OPENAI_TTS_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: TTS_MODEL,
-      voice,
-      input: expandForSpeech(text).slice(0, MAX_CHARS),
-      instructions,
-      response_format: 'mp3',
-    }),
+  const voice = profile.voice ?? resolveAgentVoice(agentId);
+  const instructions =
+    profile.voiceInstructions?.trim() || buildVoiceInstructions(profile.displayName, profile.riskPosture);
+  const response = await synthesizeSpeech({
+    apiKey,
+    voice,
+    input: expandForSpeech(text).slice(0, MAX_CHARS),
+    instructions,
+    speed: profile.speechRate ?? DEFAULT_SPEECH_RATE,
   });
 
   if (!response.ok || !response.body) {
