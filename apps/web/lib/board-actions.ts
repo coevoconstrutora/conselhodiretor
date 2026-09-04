@@ -15,6 +15,8 @@ import {
   renameSpeaker,
   setSilentMode,
 } from './board-runtime';
+import { embedAudioClip, findMatchingVoiceProfile, touchVoiceProfileLastUsed } from './voice-profile';
+import { linkSpeakerByVoice } from './meeting-speakers';
 import { toActionResult, type ActionResult } from './action-result';
 
 /** Server action: inicia a demo do board (auth + gate de consentimento no caminho). */
@@ -58,6 +60,49 @@ export async function renameSpeakerAction(
   const applied = await renameSpeaker(meetingId, speakerNum, name, area || null);
   if (!applied) return { error: 'Sem sessão ativa no momento — inicie o board antes de renomear.' };
   return { ok: `Locutor ${speakerNum} agora aparece como "${name}"${area ? ` (${area})` : ''}.` };
+}
+
+/**
+ * Server action: reconhecimento de voz AO VIVO (Etapa "Reconhecimento de voz
+ * ao vivo") — complementa a autoapresentação em texto (Tier 2 acima) com
+ * biometria. O cliente grava um clipe curto (alguns segundos) do "Locutor N"
+ * ainda não identificado assim que o detecta falando e manda pra cá; o
+ * áudio em si nunca é persistido, só o embedding é comparado e descartado.
+ *
+ * `identified` (alta confiança) renomeia AO VIVO na transcrição, igual à
+ * autoapresentação — `probable` só grava em `meeting_speaker` (mostrado como
+ * "Provável" no histórico do participante), nunca renomeia direto: não dá
+ * pra saber se é a pessoa certa com confiança suficiente pra afirmar isso na
+ * tela de todo mundo. Nunca lança — melhor esforço, silencioso por design
+ * (o cliente não deve interromper a reunião por causa disto).
+ */
+export async function identifySpeakerByVoiceAction(
+  meetingId: string,
+  speakerNum: string,
+  audio: Blob,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!meetingId || !speakerNum || !audio) return { ok: false, code: 'invalid-input' };
+  try {
+    const db = await getDb();
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
+    const buffer = Buffer.from(await audio.arrayBuffer());
+    const embedding = await embedAudioClip(buffer, audio.type || 'audio/webm');
+    const key = getEncryptionKey();
+    const match = await findMatchingVoiceProfile(db, user.companyId, key, embedding);
+    if (!match) return { ok: true }; // sem correspondência — segue "Locutor N" normalmente
+    await linkSpeakerByVoice(db, meetingId, speakerNum, match.participantId, match.band);
+    await touchVoiceProfileLastUsed(db, user.companyId, match.participantId);
+    if (match.band === 'identified') await renameSpeaker(meetingId, speakerNum, match.name);
+    revalidatePath(`/meetings/${meetingId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error('[voz] reconhecimento ao vivo falhou:', err);
+    return toActionResult(err);
+  }
 }
 
 export type ToggleSilentModeState = { error?: string; ok?: string; silentMode?: boolean } | null;

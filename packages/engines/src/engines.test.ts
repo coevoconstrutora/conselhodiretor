@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { AgentId, ContributionSeverity } from '@conselho/providers';
-import { TriggerDetector, LEGAL_TRIGGERS, CFO_TRIGGERS, ENGENHARIA_TRIGGERS } from './triggers';
+import { TriggerDetector, LEGAL_TRIGGERS, CFO_TRIGGERS, ENGENHARIA_TRIGGERS, DIRECT_ADDRESS_TRIGGERS, ALL_TRIGGERS } from './triggers';
 import {
   scoreMatch,
   RelevanceGate,
@@ -24,6 +24,7 @@ function candidate(over: Partial<Candidate> = {}): Candidate {
     score: over.score ?? 0.8,
     segmentText: over.segmentText ?? 'texto',
     at: over.at ?? 0,
+    directAddress: over.directAddress,
   };
 }
 
@@ -311,5 +312,70 @@ describe('Catálogos', () => {
     expect(agents(ENGENHARIA_TRIGGERS)).toEqual(new Set(['engenharia']));
     expect(LEGAL_TRIGGERS.filter((t) => t.severityHint === 'critical').length).toBeGreaterThanOrEqual(1);
     expect(CFO_TRIGGERS.filter((t) => t.severityHint === 'critical').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('todo conselheiro (exceto Presidente, que não tem triggers) tem gatilho de chamada direta', () => {
+    const withDirectAddress = new Set(DIRECT_ADDRESS_TRIGGERS.map((t) => t.agentId));
+    const counselors: AgentId[] = ['engenharia', 'vendas', 'mercado', 'arquitetura', 'legal', 'cs', 'cfo', 'futurista'];
+    for (const agentId of counselors) expect(withDirectAddress.has(agentId)).toBe(true);
+    expect(withDirectAddress.has('presidente')).toBe(false);
+  });
+});
+
+describe('Chamada direta — Etapa "Conselheiro responder quando chamado"', () => {
+  const detector = new TriggerDetector(ALL_TRIGGERS);
+
+  it('"CFO, o que você acha?" dispara mesmo sem jargão financeiro', () => {
+    const matches = detector.detect('CFO, o que você acha disso?', 0);
+    const cfoMatch = matches.find((m) => m.trigger.agentId === 'cfo' && m.trigger.directAddress);
+    expect(cfoMatch).toBeDefined();
+  });
+
+  it('"legal" solto (sentido coloquial) NÃO chama o conselheiro Legal', () => {
+    const matches = detector.detect('Que legal essa ideia!', 0);
+    expect(matches.some((m) => m.trigger.agentId === 'legal' && m.trigger.directAddress)).toBe(false);
+  });
+
+  it('chamada direta fura o rate-limit por agente (AgentRateLimiter)', () => {
+    const limiter = new AgentRateLimiter({ maxPerMinutePerAgent: 1, maxPerMinuteGlobal: 100 });
+    expect(limiter.allow('cfo', 'normal', 0)).toBe(true); // consome a cota do CFO
+    expect(limiter.allow('cfo', 'normal', 100)).toBe(false); // cota estourada
+    expect(limiter.allow('cfo', 'normal', 200, true)).toBe(true); // chamada direta ainda passa
+  });
+
+  it('chamada direta fura a pausa natural (PauseGate) sem virar severity critical', () => {
+    const gate = new PauseGate({ pauseMs: 2500 });
+    gate.onSpeech(1000);
+    const out = gate.submit(candidate({ severity: 'normal', directAddress: true }), 1100);
+    expect(out).not.toBeNull();
+    expect(out!.severity).toBe('normal'); // não empresta a cor/urgência de "critical"
+  });
+
+  it('pipeline completo: conselheiro no teto do minuto ainda responde quando chamado por nome', () => {
+    const gate = new BoardGatekeeper({
+      threshold: 0.6,
+      criticalThreshold: 0.3,
+      maxPerMinutePerAgent: 1,
+      maxPerMinuteGlobal: 4,
+      pauseMs: 0, // sem pausa natural neste teste — foco no rate-limit
+    });
+    // 1ª contribuição normal do CFO estoura a cota do minuto
+    expect(
+      gate.submit(candidate({ id: 'a', agentId: 'cfo', topicKey: 'viabilidade', score: 0.8, at: 0 }), 0)
+        .kind,
+    ).toBe('deliver');
+    // chamado por nome logo em seguida — sem directAddress, cairia em rate-limited
+    const called = gate.submit(
+      candidate({
+        id: 'b',
+        agentId: 'cfo',
+        topicKey: 'cfo-chamada-direta',
+        score: 0.6,
+        at: 100,
+        directAddress: true,
+      }),
+      100,
+    );
+    expect(called.kind).toBe('deliver');
   });
 });

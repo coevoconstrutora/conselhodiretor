@@ -31,6 +31,7 @@ export function MeetingRoom({
   closed,
   agents,
   historicalCounts,
+  voiceRecognitionEnabled,
 }: {
   meetingId: string;
   token: string;
@@ -42,6 +43,8 @@ export function MeetingRoom({
   agents: readonly StripCounselor[];
   /** Reunião ENCERRADA (Etapa "Histórico de reuniões") — contagem de contribuições por agente. */
   historicalCounts?: ReadonlyMap<string, number>;
+  /** Etapa "Reconhecimento de voz ao vivo" — reusa o toggle já existente da empresa. */
+  voiceRecognitionEnabled?: boolean;
 }) {
   // `useBoardStore` é um singleton global (fora da árvore React): sem isto,
   // trocar de reunião por navegação client-side (sem reload) deixava o
@@ -208,7 +211,12 @@ export function MeetingRoom({
               <div className="contents" onClickCapture={clearBoard}>
                 {startForm}
               </div>
-              <LiveMicButton meetingId={meetingId} token={token} wsBaseUrl={wsBaseUrl} />
+              <LiveMicButton
+                meetingId={meetingId}
+                token={token}
+                wsBaseUrl={wsBaseUrl}
+                voiceRecognitionEnabled={voiceRecognitionEnabled}
+              />
             </>
           )}
           {endMeetingButton}

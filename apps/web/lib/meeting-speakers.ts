@@ -70,6 +70,39 @@ export async function reconcileMeetingSpeakers(
 }
 
 /**
+ * Linka um "Locutor N" a um Participant por RECONHECIMENTO DE VOZ ao vivo
+ * (Etapa "Reconhecimento de voz ao vivo") — complementa `reconcileMeetingSpeakers`
+ * (que só liga por autoapresentação em TEXTO). O clipe em si nunca é
+ * persistido: o cliente grava alguns segundos, manda pro embedding e
+ * descarta — só o resultado da comparação chega aqui.
+ *
+ * Nunca REBAIXA uma identificação já 'identified' (self-introduction ou
+ * confirmação manual) para um match de voz mais fraco — só complementa
+ * locutores ainda 'unknown'/'probable'.
+ */
+export async function linkSpeakerByVoice(
+  db: SqlExecutor,
+  meetingId: string,
+  speakerNum: string,
+  participantId: string,
+  band: 'identified' | 'probable',
+): Promise<void> {
+  await db.query(
+    `INSERT INTO meeting_speaker
+       (meeting_id, speaker_label, participant_id, identification_status, identification_source)
+     VALUES ($1, $2, $3, $4, 'voice_biometric')
+     ON CONFLICT (meeting_id, speaker_label) DO UPDATE
+       SET participant_id = EXCLUDED.participant_id,
+           identification_status = EXCLUDED.identification_status,
+           identification_source = EXCLUDED.identification_source,
+           updated_at = now()
+       WHERE meeting_speaker.identification_status IS DISTINCT FROM 'identified'`,
+    [meetingId, `Locutor ${speakerNum}`, participantId, band],
+  );
+  await touchParticipantLastMeeting(db, [participantId]);
+}
+
+/**
  * Analytics OBJETIVAS (Seção 21) — intervenções, fatia da reunião, tempo real
  * de fala e trocas abruptas de turno; NUNCA estado emocional/psicológico.
  * Proxy honesto de identidade: resolve o locutor pelo prefixo do segmento

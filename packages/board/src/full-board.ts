@@ -640,11 +640,19 @@ function toCandidate(match: TriggerMatch): Candidate {
     agentId: match.trigger.agentId,
     agentIds: [match.trigger.agentId],
     triggerId: match.trigger.id,
-    topicKey: match.trigger.id.replace(/^[a-z]+-/, ''), // tópico sem o prefixo da persona
+    // tópico sem o prefixo da persona — EXCETO chamada direta, que mantém o
+    // id inteiro: "cfo-chamada-direta"/"vendas-chamada-direta" perderiam o
+    // prefixo e virariam o MESMO topicKey "chamada-direta", fazendo o
+    // Deduplicator consolidar duas chamadas a agentes DIFERENTES em 1 só
+    // candidato (só o primeiro agentId de fato seria invocado — o segundo
+    // conselheiro chamado voltaria a nunca responder, o próprio bug desta
+    // etapa, só que entre dois agentes em vez de nenhum trigger).
+    topicKey: match.trigger.directAddress ? match.trigger.id : match.trigger.id.replace(/^[a-z]+-/, ''),
     type: match.trigger.typeHint,
     severity: match.trigger.severityHint,
     score: scoreMatch(match),
     segmentText: match.segmentText,
     at: match.at,
+    directAddress: match.trigger.directAddress,
   };
 }

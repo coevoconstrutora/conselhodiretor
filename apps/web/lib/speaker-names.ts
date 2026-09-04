@@ -32,6 +32,17 @@ export interface SpeakerNameTracker {
 }
 
 const SPEAKER_PREFIX_RE = /^Locutor (\d+): /;
+
+/**
+ * Extrai o número do locutor quando o texto AINDA está com o rótulo cru
+ * "Locutor N: " (autoapresentação/renomeação/reconhecimento de voz ainda não
+ * resolveu esse número) — usado pelo cliente (`live-mic-button.tsx`) pra
+ * saber quando vale a pena tentar reconhecimento de voz ao vivo. `null` se o
+ * texto já tem um nome resolvido.
+ */
+export function unresolvedSpeakerNum(text: string): string | null {
+  return SPEAKER_PREFIX_RE.exec(text)?.[1] ?? null;
+}
 const NAME_GROUP = '([a-zà-ÿ]+(?:\\s+[a-zà-ÿ]+){0,2})';
 // área só conta com uma palavra-chave explícita ("área/departamento/setor") — sem
 // isso, um "do lado de fora" ou "do outro prédio" viraria uma "área" inventada.

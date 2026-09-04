@@ -24,6 +24,10 @@ export interface Candidate {
   readonly score: number;
   readonly segmentText: string;
   readonly at: number;
+  /** Chamada direta por nome/cargo (Etapa "Conselheiro responder quando
+   * chamado") — mesmo bypass de rate-limit/pausa de `severity: 'critical'`,
+   * sem tomar a severidade emprestada (não é risco de negócio). */
+  readonly directAddress?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,8 +59,8 @@ export class RelevanceGate {
     this.criticalThreshold = config.criticalThreshold ?? 0.3;
   }
 
-  passes(score: number, severity: ContributionSeverity): boolean {
-    return score >= (severity === 'critical' ? this.criticalThreshold : this.threshold);
+  passes(score: number, severity: ContributionSeverity, directAddress?: boolean): boolean {
+    return score >= (severity === 'critical' || directAddress ? this.criticalThreshold : this.threshold);
   }
 }
 
@@ -85,9 +89,9 @@ export class AgentRateLimiter {
     this.windowMs = config.windowMs ?? 60_000;
   }
 
-  /** ⚠️ críticos sempre passam e NÃO contam nos tetos. */
-  allow(agentId: AgentId, severity: ContributionSeverity, now: number): boolean {
-    if (severity === 'critical') return true;
+  /** ⚠️ críticos e chamadas diretas sempre passam e NÃO contam nos tetos. */
+  allow(agentId: AgentId, severity: ContributionSeverity, now: number, directAddress?: boolean): boolean {
+    if (severity === 'critical' || directAddress) return true;
     const times = (this.delivered.get(agentId) ?? []).filter((t) => now - t < this.windowMs);
     this.globalDelivered = this.globalDelivered.filter((t) => now - t < this.windowMs);
     // teto global do board: com 8 conselheiros ativos, o limite por agente
@@ -194,11 +198,12 @@ export class PauseGate {
   }
 
   /**
-   * ⚠️ críticos passam IMEDIATAMENTE; não-críticos só passam se a conversa
-   * está em pausa natural — senão ficam retidos até o próximo flush (FR12).
+   * ⚠️ críticos e chamadas diretas passam IMEDIATAMENTE; os demais só passam
+   * se a conversa está em pausa natural — senão ficam retidos até o próximo
+   * flush (FR12).
    */
   submit(candidate: Candidate, now: number): Candidate | null {
-    if (candidate.severity === 'critical') return candidate;
+    if (candidate.severity === 'critical' || candidate.directAddress) return candidate;
     if (now - this.lastSpeechAt >= this.pauseMs) return candidate;
     this.held.push(candidate);
     return null;
@@ -255,7 +260,9 @@ export class BoardGatekeeper {
   }
 
   submit(candidate: Candidate, now: number): GateDecision {
-    if (!this.relevance.passes(candidate.score, candidate.severity)) return { kind: 'rejected-score' };
+    if (!this.relevance.passes(candidate.score, candidate.severity, candidate.directAddress)) {
+      return { kind: 'rejected-score' };
+    }
 
     const dedup = this.deduplicator.submit(candidate);
     if (dedup.kind === 'duplicate') return { kind: 'duplicate' };
@@ -264,7 +271,7 @@ export class BoardGatekeeper {
     const released = this.pauseGate.submit(current, now);
     if (!released) return { kind: 'held-for-pause' };
 
-    if (!this.rateLimiter.allow(released.agentId, released.severity, now)) {
+    if (!this.rateLimiter.allow(released.agentId, released.severity, now, released.directAddress)) {
       this.queue.enqueue(released);
       return { kind: 'rate-limited' };
     }
@@ -275,12 +282,12 @@ export class BoardGatekeeper {
   release(now: number): Candidate[] {
     const out: Candidate[] = [];
     for (const candidate of this.pauseGate.flushIfPaused(now)) {
-      if (this.rateLimiter.allow(candidate.agentId, candidate.severity, now)) out.push(candidate);
+      if (this.rateLimiter.allow(candidate.agentId, candidate.severity, now, candidate.directAddress)) out.push(candidate);
       else this.queue.enqueue(candidate);
     }
     while (this.queue.size > 0) {
       const next = this.queue.dequeue()!;
-      if (this.rateLimiter.allow(next.agentId, next.severity, now)) out.push(next);
+      if (this.rateLimiter.allow(next.agentId, next.severity, now, next.directAddress)) out.push(next);
       else {
         this.queue.enqueue(next);
         break;

@@ -263,6 +263,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               closed={closed}
               agents={roomAgents}
               historicalCounts={historicalCounts}
+              voiceRecognitionEnabled={companyProfile.voiceRecognitionEnabled}
               endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
               startForm={
                 <form action={startDemoBoardAction}>

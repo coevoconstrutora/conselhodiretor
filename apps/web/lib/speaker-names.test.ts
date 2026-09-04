@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createSpeakerNameTracker } from './speaker-names';
+import { createSpeakerNameTracker, unresolvedSpeakerNum } from './speaker-names';
 
 describe('createSpeakerNameTracker — nomeia quem fala por autoapresentação', () => {
   it('troca "Locutor N" pelo nome quando a fala se autoapresenta ("sou o/a Nome")', () => {
@@ -89,5 +89,20 @@ describe('createSpeakerNameTracker — nomeia quem fala por autoapresentação',
     tracker.apply('Locutor 1: sou a Marina, da área Jurídica.');
     tracker.override('1', 'Mariana'); // corrige só o nome, sem passar área
     expect(tracker.listKnown()).toEqual([{ speakerNum: '1', name: 'Mariana', area: 'Jurídica' }]);
+  });
+});
+
+describe('unresolvedSpeakerNum — Etapa "Reconhecimento de voz ao vivo"', () => {
+  it('extrai o número quando o rótulo ainda é "Locutor N" cru', () => {
+    expect(unresolvedSpeakerNum('Locutor 3: vamos revisar o orçamento.')).toBe('3');
+  });
+
+  it('null quando o locutor já tem nome resolvido', () => {
+    expect(unresolvedSpeakerNum('Marina: vamos revisar o orçamento.')).toBeNull();
+  });
+
+  it('null em string vazia ou sem o prefixo esperado', () => {
+    expect(unresolvedSpeakerNum('')).toBeNull();
+    expect(unresolvedSpeakerNum('algo qualquer sem locutor')).toBeNull();
   });
 });

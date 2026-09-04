@@ -21,6 +21,16 @@ export interface AgentTriggerDef {
   readonly severityHint: ContributionSeverity;
   /** Peso-base de relevância do gatilho (insumo do Scorer). */
   readonly baseWeight: number;
+  /**
+   * Chamada DIRETA pelo nome/cargo do conselheiro (ex.: "CFO, o que você
+   * acha?"), não um assunto do domínio — furou fila real em produção: sem
+   * isso, um conselheiro chamado diretamente sem usar jargão do próprio
+   * escopo nunca gera sequer uma tentativa de resposta. Mesmo bypass de
+   * rate-limit/pausa que `severity: 'critical'` já tem (`gate.ts`), mas SEM
+   * usar `critical` — isso mudaria a cor/urgência do card pra algo que não
+   * é risco de negócio.
+   */
+  readonly directAddress?: boolean;
 }
 
 export interface TriggerMatch {
@@ -278,6 +288,88 @@ export const FUTURISTA_TRIGGERS: readonly AgentTriggerDef[] = [
   },
 ];
 
+/**
+ * Chamada DIRETA por nome/cargo (não confundir com os tópicos de domínio
+ * acima) — Etapa "Conselheiro responder quando chamado". Termos que uma
+ * pessoa realmente diria em voz alta pra endereçar aquele conselheiro.
+ * `legal` de propósito NÃO inclui a palavra solta "legal" — colide com
+ * "que legal!" em português coloquial; usa só termos inequívocos do cargo.
+ */
+export const DIRECT_ADDRESS_TRIGGERS: readonly AgentTriggerDef[] = [
+  {
+    id: 'engenharia-chamada-direta',
+    agentId: 'engenharia',
+    pattern: /\b(engenharia|engenheiro|engenheira)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'vendas-chamada-direta',
+    agentId: 'vendas',
+    pattern: /\bvendas\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'mercado-chamada-direta',
+    agentId: 'mercado',
+    pattern: /\b(mercado|intelig[êe]ncia de mercado)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'arquitetura-chamada-direta',
+    agentId: 'arquitetura',
+    pattern: /\b(arquitetura|arquiteto|arquiteta)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'legal-chamada-direta',
+    agentId: 'legal',
+    pattern: /\b(jur[íi]dico|advogad[oa]|compliance|[áa]rea legal)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'cs-chamada-direta',
+    agentId: 'cs',
+    pattern: /\b(customer success|p[óo]s-?venda|atendimento ao cliente)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'cfo-chamada-direta',
+    agentId: 'cfo',
+    pattern: /\b(CFO|financeiro|diretor financeiro|diretora financeira)\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+  {
+    id: 'futurista-chamada-direta',
+    agentId: 'futurista',
+    pattern: /\bfuturista\b/i,
+    typeHint: 'sugestao',
+    severityHint: 'normal',
+    baseWeight: 0.6,
+    directAddress: true,
+  },
+];
+
 export const ALL_TRIGGERS: readonly AgentTriggerDef[] = [
   ...ENGENHARIA_TRIGGERS,
   ...VENDAS_TRIGGERS,
@@ -287,6 +379,7 @@ export const ALL_TRIGGERS: readonly AgentTriggerDef[] = [
   ...CS_TRIGGERS,
   ...CFO_TRIGGERS,
   ...FUTURISTA_TRIGGERS,
+  ...DIRECT_ADDRESS_TRIGGERS,
 ];
 
 /**

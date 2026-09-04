@@ -1,13 +1,70 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { startLiveBoardAction, stopLiveBoardAction } from '@/lib/board-actions';
+import { startLiveBoardAction, stopLiveBoardAction, identifySpeakerByVoiceAction } from '@/lib/board-actions';
 import { ACTION_ERROR_MESSAGES } from '@/lib/action-result';
 import { checkMicrophone, createAudioSource, pickRecorderMime, type AudioSource } from '@/lib/microphone';
 import { captureTabAudio } from '@/lib/tab-audio';
 import { useBoardStore } from '@/lib/board-store';
+import { unresolvedSpeakerNum } from '@/lib/speaker-names';
 import { isTranscriptSilent } from '@/lib/pipeline-watchdog';
 import { resolveWsBase } from '@/lib/ws-url';
+
+/** Duração do clipe curto gravado pra reconhecimento de voz ao vivo. */
+const VOICE_ID_CLIP_MS = 5000;
+
+/**
+ * Reconhecimento de voz AO VIVO (Etapa homônima) — complementa a
+ * autoapresentação em texto: assim que a transcrição mostra um "Locutor N"
+ * ainda sem nome, grava um clipe curto e independente (2º `MediaRecorder` na
+ * MESMA stream — o navegador permite vários) e manda pra comparação com os
+ * perfis de voz já cadastrados da empresa. 1 tentativa por locutor por
+ * reunião (evita custo/latência repetidos); nunca interrompe a UI — falha
+ * silenciosamente, o "Locutor N" só continua sem nome, como hoje.
+ */
+function watchForUnresolvedSpeakers(meetingId: string, stream: MediaStream): () => void {
+  const attempted = new Set<string>();
+  let capturing = false;
+
+  const tryCapture = (speakerNum: string) => {
+    if (attempted.has(speakerNum) || capturing) return;
+    const mime = pickRecorderMime();
+    if (!mime.supported) return;
+    attempted.add(speakerNum);
+    capturing = true;
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, { mimeType: mime.mimeType });
+    } catch {
+      capturing = false;
+      return;
+    }
+    const chunks: BlobPart[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      capturing = false;
+      const blob = new Blob(chunks, { type: mime.mimeType });
+      if (blob.size > 0) {
+        void identifySpeakerByVoiceAction(meetingId, speakerNum, blob).catch(() => {});
+      }
+    };
+    recorder.start();
+    setTimeout(() => {
+      if (recorder.state !== 'inactive') recorder.stop();
+    }, VOICE_ID_CLIP_MS);
+  };
+
+  return useBoardStore.subscribe((state) => {
+    const latest = state.transcript.partial ?? state.transcript.finals[state.transcript.finals.length - 1];
+    if (!latest) return;
+    const speakerNum = unresolvedSpeakerNum(latest);
+    // exige um mínimo de fala já transcrita (prefixo + alguns caracteres) —
+    // evita disparar a captura em cima de um fragmento inicial vazio.
+    if (speakerNum && latest.length > `Locutor ${speakerNum}: `.length + 8) tryCapture(speakerNum);
+  });
+}
 
 /**
  * Consulta AO VIVO com microfone real (E3 final / Story 2.2 REUSE).
@@ -41,10 +98,13 @@ export function LiveMicButton({
   meetingId,
   token,
   wsBaseUrl,
+  voiceRecognitionEnabled = false,
 }: {
   meetingId: string;
   token: string;
   wsBaseUrl: string;
+  /** Etapa "Reconhecimento de voz ao vivo" — reusa o toggle já existente da empresa. */
+  voiceRecognitionEnabled?: boolean;
 }) {
   const [state, setState] = useState<LiveState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -204,11 +264,14 @@ export function LiveMicButton({
         }
       }
 
+      const stopVoiceIdWatcher = voiceRecognitionEnabled ? watchForUnresolvedSpeakers(meetingId, stream) : null;
+
       cleanupRef.current = () => {
         closedByUs = true;
         pumping = false;
         source.stop();
         ws.close();
+        stopVoiceIdWatcher?.();
       };
     } catch (err) {
       stopMic();
@@ -222,7 +285,7 @@ export function LiveMicButton({
       setError(err instanceof Error ? err.message : 'Falha ao iniciar a reunião ao vivo.');
       setState('error');
     }
-  }, [meetingId, token, wsBaseUrl, audioSource]);
+  }, [meetingId, token, wsBaseUrl, audioSource, voiceRecognitionEnabled]);
 
   return (
     <div className="flex flex-col items-end gap-1">
