@@ -2,8 +2,11 @@
 
 import { revalidatePath } from 'next/cache';
 import { closeMeeting, meetingBelongsToCompany } from '@conselho/meetings';
+import { listAgentReports } from '@conselho/meeting-report';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
+import { getEncryptionKey } from './crypto-key';
+import { generateReportsCore } from './report-actions';
 import {
   startDemoBoard,
   requestSynthesis,
@@ -144,6 +147,15 @@ export async function stopLiveBoardAction(meetingId: string): Promise<ActionResu
  * `stopLiveBoard` cobre as duas) e marca a reunião como fechada. A partir
  * daqui não dá mais para iniciar nada novo; transcrição e relatórios seguem
  * disponíveis. Nunca lança — botão de risco, precisa de feedback lido.
+ *
+ * Dispara a geração dos relatórios automaticamente em background (fire-and-
+ * forget — são ~10 chamadas de LLM em série, ~1 min+, não dá pra esperar
+ * aqui sem travar o clique de "Encerrar"). Só dispara se ainda não há
+ * relatório nenhum: se o usuário já gerou/editou manualmente antes de
+ * encerrar, encerrar não deve sobrescrever esse trabalho. O botão manual
+ * "Gerar/Regenerar relatórios" continua disponível como fallback se a
+ * geração automática falhar (erro só vai pro log do servidor, por design —
+ * não bloqueia o encerramento).
  */
 export async function endMeetingAction(meetingId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
@@ -158,6 +170,17 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
     await stopLiveBoard(meetingId);
     await closeMeeting(db, meetingId, user.companyId);
     revalidatePath(`/meetings/${meetingId}`);
+
+    const existingReports = await listAgentReports(db, meetingId, getEncryptionKey()).catch(() => []);
+    if (existingReports.length === 0) {
+      void generateReportsCore(meetingId, user)
+        .then((result) => {
+          if (!result.ok) console.error('[relatorios] geração automática pós-encerramento falhou:', result);
+          revalidatePath(`/meetings/${meetingId}`);
+        })
+        .catch((error) => console.error('[relatorios] geração automática pós-encerramento falhou:', error));
+    }
+
     return { ok: true };
   } catch (err) {
     console.error('[board] endMeeting falhou:', err);

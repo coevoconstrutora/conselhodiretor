@@ -25,8 +25,7 @@ export const ACTION_ERROR_MESSAGES: Record<ActionErrorCode, string> = {
   'stt-missing': 'O serviço de transcrição não está configurado no servidor — contate o suporte.',
   'no-transcript': 'Sem transcrição nesta sessão — inicie a reunião ao vivo antes de gerar os relatórios.',
   'invalid-input': 'Dados da requisição incompletos — recarregue a página e tente de novo.',
-  internal:
-    'Falha inesperada ao iniciar a reunião ao vivo — tente novamente; se persistir, abra o Diagnóstico.',
+  internal: 'Falha inesperada — tente novamente; se persistir, abra o Diagnóstico.',
 };
 
 /**

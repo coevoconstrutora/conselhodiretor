@@ -82,7 +82,7 @@ export function LiveMicButton({
     // pipeline (Deepgram/board) pode seguir vivo no servidor sem o médico saber.
     try {
       const result = await stopLiveBoardAction(meetingId);
-      if (!result.ok) setError(ACTION_ERROR_MESSAGES[result.code]);
+      if (!result.ok) setError(result.detail ?? ACTION_ERROR_MESSAGES[result.code]);
     } catch {
       setError('Não foi possível confirmar o encerramento no servidor — recarregue a página.');
     }
@@ -148,7 +148,7 @@ export function LiveMicButton({
       const result = await callAction(() => startLiveBoardAction(meetingId));
       if (!result.ok) {
         stopMic();
-        setError(ACTION_ERROR_MESSAGES[result.code]);
+        setError(result.detail ?? ACTION_ERROR_MESSAGES[result.code]);
         setState('error');
         return;
       }

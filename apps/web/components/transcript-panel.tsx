@@ -72,7 +72,7 @@ export function TranscriptPanel({ source }: { source: TranscriptSource }) {
   const state = panelState(snapshot);
 
   return (
-    <section aria-label="Transcrição da reunião" className="card-premium flex h-full flex-col">
+    <section aria-label="Transcrição da reunião" className="card-premium flex max-h-[560px] flex-col">
       <header className="flex items-center justify-between rounded-t-(--radius) border-b border-ink/10 bg-surface-muted/60 px-5 py-3">
         <h2 className="font-display text-base font-semibold text-ink">Transcrição</h2>
         <span
@@ -94,7 +94,7 @@ export function TranscriptPanel({ source }: { source: TranscriptSource }) {
         ref={scrollRef}
         onScroll={onScroll}
         role="log"
-        className="flex-1 space-y-2 overflow-y-auto p-5"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto p-5"
       >
         {/* dica de identificação por voz: some assim que a 1ª fala chega — não é
             instrução permanente, é só o empurrão certo na hora certa */}

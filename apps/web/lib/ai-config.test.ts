@@ -26,12 +26,14 @@ describe('ai-config — validação server-side (Etapa "IA por conselheiro")', (
     expect(isValidAiModel(null)).toBe(false);
   });
 
-  it('isValidReasoningEffort aceita só os 6 níveis suportados', () => {
-    for (const level of ['none', 'low', 'medium', 'high', 'xhigh', 'max']) {
+  it('isValidReasoningEffort aceita só os 5 níveis suportados pela Chat Completions API', () => {
+    for (const level of ['none', 'low', 'medium', 'high', 'xhigh']) {
       expect(isValidReasoningEffort(level)).toBe(true);
     }
     expect(isValidReasoningEffort('minimal')).toBe(false); // valor antigo, não suportado no gpt-5.6
     expect(isValidReasoningEffort('ultra')).toBe(false);
+    // 'max': API rejeita com 400 ("Unsupported value") — não é um nível válido (era um bug no catálogo)
+    expect(isValidReasoningEffort('max')).toBe(false);
   });
 
   it('isValidVoice aceita só as 9 vozes do endpoint de fala', () => {

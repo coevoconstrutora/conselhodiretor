@@ -636,18 +636,25 @@ export async function loadAndApplyProfileOverrides(db: SqlExecutor, companyId: s
       agentId: r.agent_id as AgentId,
       displayName: r.display_name,
       scope: r.scope,
-      iconKey: r.icon_key,
-      iconColor: r.icon_color,
-      professionalProfile: r.professional_profile,
-      decisionCriteria: r.decision_criteria,
-      riskPosture: r.risk_posture as RiskPosture | null,
-      riskPostureNotes: r.risk_posture_notes,
       briefing: r.briefing,
-      aiModel: r.ai_model,
-      reasoningEffort: r.reasoning_effort,
-      voice: r.voice,
-      voiceInstructions: r.voice_instructions,
-      speechRate: r.speech_rate,
+      // Revalida contra o catálogo (mesma `normalizeProfileFields` do save)
+      // em vez de confiar cru na linha do banco — mesmo raciocínio do
+      // `loadAndApplyPresidentConfig`: um catálogo (ex.: REASONING_EFFORTS)
+      // pode perder um valor que já foi salvo, e a linha antiga não pode
+      // voltar a quebrar chamadas de LLM pra sempre.
+      ...normalizeProfileFields({
+        iconKey: r.icon_key,
+        iconColor: r.icon_color,
+        professionalProfile: r.professional_profile,
+        decisionCriteria: r.decision_criteria,
+        riskPosture: r.risk_posture,
+        riskPostureNotes: r.risk_posture_notes,
+        aiModel: r.ai_model,
+        reasoningEffort: r.reasoning_effort,
+        voice: r.voice,
+        voiceInstructions: r.voice_instructions,
+        speechRate: r.speech_rate,
+      }),
     })),
   );
 }

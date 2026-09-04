@@ -40,14 +40,20 @@ export const REASONING_MODELS: readonly ReasoningModelOption[] = [
 
 export const DEFAULT_AI_MODEL = 'gpt-5.6-luna';
 
-/** Níveis de esforço de raciocínio — mesmos valores aceitos pela API da OpenAI (gpt-5.x). */
+/**
+ * Níveis de esforço de raciocínio — mesmos valores aceitos pela Chat
+ * Completions API da OpenAI (gpt-5.x) para `reasoning_effort`. NÃO
+ * acrescentar 'max' aqui: a API rejeita com 400 ("Unsupported value")
+ * qualquer valor fora de none/low/medium/high/xhigh — foi exatamente esse
+ * o bug que quebrava a síntese do Presidente em produção (Configuração do
+ * Presidente permitia "Máximo" na UI, a API sempre recusava).
+ */
 export const REASONING_EFFORTS: readonly SelectOption[] = [
   { value: 'none', label: 'Nenhum' },
   { value: 'low', label: 'Baixo' },
   { value: 'medium', label: 'Médio' },
   { value: 'high', label: 'Alto' },
   { value: 'xhigh', label: 'Muito alto' },
-  { value: 'max', label: 'Máximo' },
 ] as const;
 
 export const DEFAULT_REASONING_EFFORT = 'medium';

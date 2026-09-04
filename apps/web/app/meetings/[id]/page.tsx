@@ -30,6 +30,7 @@ import { buildAgentRoster } from '@/lib/agent-display';
 import { MeetingRoom } from '@/components/meeting-room';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
+import { PresidentSynthesisButton } from '@/components/president-synthesis-button';
 import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
@@ -49,6 +50,13 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   const authorized = meeting.recordingConfirmed;
   const closed = meeting.status === 'closed';
+  // "Encerrar reunião" dispara a geração dos relatórios automaticamente em
+  // background (board-actions.ts) — janela generosa (~10 chamadas de LLM em
+  // série) antes de assumir que falhou e voltar a mostrar o botão manual.
+  const AUTO_REPORTS_WINDOW_MS = 5 * 60 * 1000;
+  const autoReportsPending = Boolean(
+    closed && meeting.closedAt && Date.now() - meeting.closedAt.getTime() < AUTO_REPORTS_WINDOW_MS,
+  );
   const meetingDurationLabel = formatMeetingDuration(
     meeting.confirmedAt ?? meeting.createdAt,
     meeting.closedAt,
@@ -349,12 +357,22 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                           A visão de cada conselheiro sobre a reunião. Rascunhos editáveis, cifrados e auditados.
                         </p>
                       </div>
-                      <ReportsGeneratorForm meetingId={id} hasReports={reports.length > 0} />
+                      <ReportsGeneratorForm
+                        meetingId={id}
+                        hasReports={reports.length > 0}
+                        autoPending={autoReportsPending}
+                      />
                     </div>
                     {counselorReports.length === 0 ? (
                       <p className="rounded-[var(--radius)] border border-dashed border-ink/15 p-4 text-sm text-ink-muted">
-                        Nenhum relatório ainda — revise a transcrição e clique em &ldquo;Gerar relatórios do
-                        conselho&rdquo;.
+                        {autoReportsPending ? (
+                          'Encerrada agora — os relatórios estão sendo gerados automaticamente.'
+                        ) : (
+                          <>
+                            Nenhum relatório ainda — revise a transcrição e clique em &ldquo;Gerar relatórios do
+                            conselho&rdquo;.
+                          </>
+                        )}
                       </p>
                     ) : (
                       <div className="space-y-4">{counselorReports.map((report) => renderReportDetails(report))}</div>
@@ -366,6 +384,14 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                   <div className="space-y-4">
                     {presidentReport ? (
                       renderReportDetails(presidentReport)
+                    ) : counselorReports.length > 0 ? (
+                      <div className="rounded-[var(--radius)] border border-dashed border-ink/15 p-4">
+                        <p className="text-sm text-ink-muted">
+                          Síntese do Presidente ainda não gerada — pode ter falhado durante a geração
+                          automática dos relatórios.
+                        </p>
+                        <PresidentSynthesisButton meetingId={id} />
+                      </div>
                     ) : (
                       <p className="text-sm text-ink-muted">Síntese não disponível.</p>
                     )}
@@ -457,6 +483,15 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                   ) : (
                     <div className="mt-4 space-y-4">{reports.map((report) => renderReportDetails(report))}</div>
                   )}
+                  {counselorReports.length > 0 && !presidentReport ? (
+                    <div className="mt-4 rounded-[var(--radius)] border border-dashed border-ink/15 p-4">
+                      <p className="text-sm text-ink-muted">
+                        Síntese do Presidente ainda não gerada — pode ter falhado durante a geração
+                        automática dos relatórios.
+                      </p>
+                      <PresidentSynthesisButton meetingId={id} />
+                    </div>
+                  ) : null}
                   {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
                 </section>
 

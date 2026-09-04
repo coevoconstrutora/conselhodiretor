@@ -128,19 +128,26 @@ export async function loadAndApplyPresidentConfig(db: SqlExecutor, companyId: st
   );
   const row = res.rows[0];
   if (!row) return; // sem linha ⇒ getPresidentConfig() já cai nos defaults (Seção 21)
-  applyPresidentConfig(companyId, {
-    monitoringModel: row.monitoring_model,
-    monitoringReasoningEffort: row.monitoring_reasoning_effort,
-    synthesisModel: row.synthesis_model,
-    synthesisReasoningEffort: row.synthesis_reasoning_effort,
-    finalSynthesisReasoningEffort: row.final_synthesis_reasoning_effort,
-    interventionLevel: row.intervention_level as PresidentConfig['interventionLevel'],
-    consensusPolicy: row.consensus_policy,
-    canRequestCounselors: row.can_request_counselors,
-    canRegisterDecisions: row.can_register_decisions,
-    canOverrideSpecialist: row.can_override_specialist,
-    autoInterruption: row.auto_interruption,
-  });
+  // Revalida contra o catálogo (mesma `normalize()` do save) em vez de confiar
+  // cru na linha do banco — catálogos mudam (ex.: 'max' removido de
+  // REASONING_EFFORTS por não ser aceito pela API da OpenAI) e uma linha
+  // salva ANTES da mudança não pode voltar a quebrar a síntese pra sempre;
+  // isso autocura o valor antigo pro default sem precisar de migration.
+  applyPresidentConfig(
+    companyId,
+    normalize({
+      monitoringModel: row.monitoring_model,
+      monitoringReasoningEffort: row.monitoring_reasoning_effort,
+      synthesisModel: row.synthesis_model,
+      synthesisReasoningEffort: row.synthesis_reasoning_effort,
+      finalSynthesisReasoningEffort: row.final_synthesis_reasoning_effort,
+      interventionLevel: row.intervention_level,
+      canRequestCounselors: row.can_request_counselors,
+      canRegisterDecisions: row.can_register_decisions,
+      canOverrideSpecialist: row.can_override_specialist,
+      autoInterruption: row.auto_interruption,
+    }),
+  );
 }
 
 export { getPresidentConfig };
