@@ -27,6 +27,7 @@ export async function updatePresidentConfigAction(
       canRegisterDecisions: formData.get('canRegisterDecisions') === 'on',
       canOverrideSpecialist: formData.get('canOverrideSpecialist') === 'on',
       autoInterruption: formData.get('autoInterruption') === 'on',
+      speechToneAnalysisEnabled: formData.get('speechToneAnalysisEnabled') === 'on',
     };
     const db = await getDb();
     await savePresidentConfig(db, user.companyId, fields);

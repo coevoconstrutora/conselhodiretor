@@ -697,6 +697,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       canRegisterDecisions: true,
       canOverrideSpecialist: false,
       autoInterruption: false,
+      speechToneAnalysisEnabled: false,
     };
     const { stt, session, board, llm } = await setup({ now: () => (t += 3000), presidentConfig });
     stt.push('Recebemos uma ação judicial sobre o terreno.');
@@ -727,6 +728,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       canRegisterDecisions: true,
       canOverrideSpecialist: false,
       autoInterruption: false,
+      speechToneAnalysisEnabled: false,
     };
     const { stt, session, board, llm } = await setup({
       now: () => (t += 3000),

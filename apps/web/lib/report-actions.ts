@@ -16,7 +16,7 @@ import type { SqlExecutor } from '@conselho/db';
 import { getCurrentUser, canWrite, type CurrentUser } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
-import { getNoteInputs, runMeetingImprovementAnalysis } from './board-runtime';
+import { getNoteInputs, runMeetingImprovementAnalysis, runSpeechToneAnalysis } from './board-runtime';
 import { createLlm } from './llm';
 import { toActionResult, type ActionResult } from './action-result';
 import { loadAndApplyProfileOverrides } from './kb-sources';
@@ -159,6 +159,13 @@ async function synthesizePresidentReport(
   // bloqueia nem falha a geração da síntese.
   void runMeetingImprovementAnalysis(meetingId, user.companyId).catch((error) => {
     console.error('[melhorias] análise pós-reunião falhou:', error);
+  });
+
+  // Análise de fala (Etapa "Análise de fala dos presentes") — opt-in e
+  // isolada (ver runSpeechToneAnalysis); roda em paralelo à auto-análise,
+  // nunca bloqueia nem falha a geração da síntese.
+  void runSpeechToneAnalysis(meetingId, user.companyId).catch((error) => {
+    console.error('[fala] análise de tom pós-reunião falhou:', error);
   });
 }
 

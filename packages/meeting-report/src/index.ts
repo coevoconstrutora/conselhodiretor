@@ -2,6 +2,7 @@ export {
   saveTranscriptSegment,
   auditTranscriptPersistStart,
   listTranscriptFinals,
+  listTranscriptFinalsWithTiming,
   countTranscriptFinals,
   saveSynthesis,
   listSyntheses,
@@ -9,6 +10,7 @@ export {
   loadTranscriptReview,
   type BoardSynthesis,
   type TranscriptReview,
+  type TimedTranscriptSegment,
 } from './transcript';
 export {
   generateCounselorReport,
@@ -18,6 +20,13 @@ export {
   listAgentReports,
   type AgentReport,
 } from './reports';
+export {
+  generateSpeechTone,
+  saveSpeechTone,
+  listSpeechTone,
+  loadSpeechTone,
+  type ParticipantSpeechTone,
+} from './speech-tone';
 export {
   loadPreviousMeetingContext,
   buildPreviousMeetingContextBlock,

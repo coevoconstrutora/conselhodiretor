@@ -15,6 +15,8 @@ import {
   saveMeetingAnalysis,
   listMeetingDecisions,
   listMeetingActionItems,
+  generateSpeechTone,
+  saveSpeechTone,
 } from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
 import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
@@ -23,6 +25,7 @@ import {
   saveSynthesis,
   saveTranscriptSegment,
   listTranscriptFinals,
+  listTranscriptFinalsWithTiming,
   countTranscriptFinals,
   listSyntheses,
   auditTranscriptPersistStart,
@@ -38,7 +41,7 @@ import { createLlm } from './llm';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
 import { loadAndApplyPresidentConfig } from './president-config-store';
-import { reconcileMeetingSpeakers, computeParticipantMeetingAnalytics } from './meeting-speakers';
+import { reconcileMeetingSpeakers, computeParticipantMeetingAnalytics, groupTranscriptByParticipant } from './meeting-speakers';
 import { createSpeakerNameTracker, type SpeakerNameTracker, type KnownSpeaker } from './speaker-names';
 import { buildKeywordTrigger, type AgentTriggerDef } from '@conselho/engines';
 
@@ -367,10 +370,10 @@ function wireSessionBroadcast(
         .then((r) => (r.rows[0]?.max ?? -1) + 1)
         .catch(() => 0)
     : Promise.resolve(0);
-  const persistFinal = (text: string) => {
+  const persistFinal = (text: string, timing?: { startMs: number; endMs: number }) => {
     nextSeq = nextSeq.then(async (seq) => {
       try {
-        await saveTranscriptSegment(db, meetingId, seq, text, getEncryptionKey());
+        await saveTranscriptSegment(db, meetingId, seq, text, getEncryptionKey(), timing);
       } catch (error) {
         console.error('[board] falha ao persistir segmento:', error);
       }
@@ -389,7 +392,10 @@ function wireSessionBroadcast(
         lastFinalAt = Date.now();
         runtime.lastFinalAt.set(meetingId, lastFinalAt);
         runtime.telemetry.sttSegment(meetingId);
-        if (opts.persistTranscript) persistFinal(text);
+        if (opts.persistTranscript) {
+          const { startMs, endMs } = event.segment;
+          persistFinal(text, startMs !== undefined && endMs !== undefined ? { startMs, endMs } : undefined);
+        }
       }
       runtime.gateway.broadcastTranscript(meetingId, text, event.segment.isFinal);
       return;
@@ -730,6 +736,43 @@ export async function runMeetingImprovementAnalysis(meetingId: string, companyId
   }
 }
 
+/**
+ * "Tom da linguagem" por participante (Etapa "Análise de fala dos
+ * presentes") — ÚNICA exceção do produto à política de nunca inferir estado
+ * emocional/psicológico; por isso é opt-in (`speechToneAnalysisEnabled`,
+ * default false) e roda ISOLADA de `runMeetingImprovementAnalysis`: nunca
+ * toca a síntese do Presidente nem `participant_meeting_analytics`, só
+ * `participant_speech_tone` (lido na página do participante). Best-effort,
+ * uma chamada de LLM por participante, em série.
+ */
+export async function runSpeechToneAnalysis(meetingId: string, companyId: string): Promise<void> {
+  if (!getPresidentConfig(companyId).speechToneAnalysisEnabled) return;
+  try {
+    const db = await getDb();
+    const key = getEncryptionKey();
+    const texts = await listTranscriptFinals(db, meetingId, key);
+    const groups = await groupTranscriptByParticipant(db, meetingId, texts);
+    if (groups.length === 0) return;
+    const { llm, label } = createLlm({ maxTokens: 400 });
+    for (const group of groups) {
+      try {
+        const tone = await generateSpeechTone(
+          llm,
+          group.participantName,
+          group.utterances,
+          AUTO_ANALYSIS_MODEL,
+          AUTO_ANALYSIS_REASONING_EFFORT,
+        );
+        if (tone) await saveSpeechTone(db, meetingId, group.participantId, tone, key, label);
+      } catch (error) {
+        console.error(`[fala] análise de tom de "${group.participantName}" falhou:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('[fala] análise de tom da reunião falhou:', error);
+  }
+}
+
 /** Snapshot do pipeline para o modo diagnóstico (A5). Só booleanos/contadores
  * — NUNCA valores de secrets nem conteúdo clínico. */
 export interface PipelineStatusReport {
@@ -902,8 +945,14 @@ async function reconcileSpeakersOnClose(meetingId: string): Promise<void> {
   const db = await getDb();
   const companyId = await getMeetingCompanyId(db, meetingId);
   await reconcileMeetingSpeakers(db, meetingId, companyId, known);
-  const inputs = await getNoteInputs(meetingId);
-  if (inputs) await computeParticipantMeetingAnalytics(db, meetingId, inputs.finals, known);
+  // drena a fila de persistência antes de ler timing (mesmo cuidado de getNoteInputs
+  // — nada em voo escapa da análise) sem precisar das contribuições que getNoteInputs também traz.
+  await runtime.active.get(meetingId)?.flushTranscript().catch(() => {});
+  const segments = await listTranscriptFinalsWithTiming(db, meetingId, getEncryptionKey()).catch((error) => {
+    console.error('[participantes] falha ao ler transcript com timing:', error);
+    return [];
+  });
+  if (segments.length > 0) await computeParticipantMeetingAnalytics(db, meetingId, segments, known);
 }
 
 /** Encerra a reunião ao vivo (para STT e board; preserva transcript p/ os relatórios). */

@@ -20,6 +20,14 @@ export interface PresidentConfig {
   readonly canRegisterDecisions: boolean;
   readonly canOverrideSpecialist: boolean;
   readonly autoInterruption: boolean;
+  /**
+   * Etapa "Análise de fala dos presentes" — ÚNICA exceção deliberada à
+   * política de nunca inferir estado emocional/psicológico (pedido
+   * explícito do empresário). Desligado por padrão: gera uma leitura de
+   * ESTILO de linguagem por participante (não emocional), isolada em tabela
+   * própria e NUNCA usada na síntese do Presidente.
+   */
+  readonly speechToneAnalysisEnabled: boolean;
 }
 
 /** Defaults do pedido (Seção 21 — compatibilidade: nenhuma linha salva ainda cai aqui). */
@@ -35,6 +43,7 @@ export const DEFAULT_PRESIDENT_CONFIG: PresidentConfig = {
   canRegisterDecisions: true,
   canOverrideSpecialist: false,
   autoInterruption: false,
+  speechToneAnalysisEnabled: false,
 };
 
 const configByCompany = new Map<string, PresidentConfig>();

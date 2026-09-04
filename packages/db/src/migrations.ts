@@ -759,4 +759,44 @@ CREATE TABLE IF NOT EXISTS ai_experiment_meeting_result (
 CREATE INDEX IF NOT EXISTS idx_ai_experiment_meeting_result_experiment ON ai_experiment_meeting_result(experiment_id);
 `,
   },
+  {
+    name: '0029_speech_timing',
+    sql: `
+-- Análise de fala (Etapa "Análise de fala dos presentes"), parte 1/2: tempo
+-- REAL de fala e trocas abruptas de turno (proxy de interrupção) — evolui o
+-- proxy de "turnos" (contagem de segmentos, migration 0025) para duração de
+-- fato. start_ms/end_ms nullable: linhas antigas não têm timing e continuam
+-- lidas normalmente (fallback pro proxy de turnos). Continua só sinal
+-- OBJETIVO — nunca estado emocional/psicológico (mesma política de sempre).
+ALTER TABLE transcript_segment ADD COLUMN IF NOT EXISTS start_ms int;
+ALTER TABLE transcript_segment ADD COLUMN IF NOT EXISTS end_ms int;
+ALTER TABLE participant_meeting_analytics ADD COLUMN IF NOT EXISTS speaking_ms int NOT NULL DEFAULT 0;
+ALTER TABLE participant_meeting_analytics ADD COLUMN IF NOT EXISTS interruption_count int NOT NULL DEFAULT 0;
+`,
+  },
+  {
+    name: '0030_speech_tone_analysis',
+    sql: `
+-- Análise de fala, parte 2/2: "tom da linguagem" por participante — ÚNICA
+-- exceção deliberada à política de nunca inferir estado emocional/psicológico
+-- (pedido explícito do empresário). Por isso fica ISOLADA: tabela própria
+-- (nunca em participant_meeting_analytics), opt-in por empresa (desligado
+-- por padrão) e NUNCA alimenta a síntese do Presidente — só aparece na
+-- página do participante. Cifrada + auditada como qualquer texto gerado por
+-- IA sobre uma pessoa real (mesmo padrão de agent_report/meeting_improvement).
+ALTER TABLE president_config ADD COLUMN IF NOT EXISTS speech_tone_analysis_enabled boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS participant_speech_tone (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  meeting_id     uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  participant_id uuid NOT NULL REFERENCES participant(id) ON DELETE CASCADE,
+  content_enc    text NOT NULL,
+  model_version  text,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(meeting_id, participant_id)
+);
+CREATE INDEX IF NOT EXISTS idx_participant_speech_tone_meeting ON participant_speech_tone(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_participant_speech_tone_participant ON participant_speech_tone(participant_id);
+`,
+  },
 ];

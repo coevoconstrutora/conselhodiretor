@@ -23,3 +23,12 @@ export function formatMeetingDuration(start: Date, end: Date | null): string | n
   if (hours === 0) return `${minutes}min`;
   return `${hours}h ${minutes}min`;
 }
+
+/** "2min 05s" (ou só "45s" abaixo de 1min) — tempo real de fala de um participante. */
+export function formatSpeakingDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  return `${minutes}min ${seconds.toString().padStart(2, '0')}s`;
+}

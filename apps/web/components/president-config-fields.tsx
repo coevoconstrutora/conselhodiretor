@@ -126,7 +126,7 @@ export function PresidentConfigFields({ config }: { config: PresidentConfig }) {
             defaultValue={config.finalSynthesisReasoningEffort ?? 'xhigh'}
             className={selectCls}
           >
-            {REASONING_EFFORTS.filter((o) => ['medium', 'high', 'xhigh', 'max'].includes(o.value)).map((o) => (
+            {REASONING_EFFORTS.filter((o) => ['medium', 'high', 'xhigh'].includes(o.value)).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -202,6 +202,23 @@ export function PresidentConfigFields({ config }: { config: PresidentConfig }) {
             <span>Interrompe automaticamente para eventos críticos, mesmo fora do nível de intervenção configurado</span>
           </label>
         </div>
+      </div>
+
+      <div className="rounded-[var(--radius)] border border-ink/10 bg-surface-muted/40 p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Análise de fala (experimental)</h3>
+        <label className="mt-3 flex items-start gap-2 text-xs text-ink">
+          <input
+            type="checkbox"
+            name="speechToneAnalysisEnabled"
+            defaultChecked={config.speechToneAnalysisEnabled}
+            className="mt-0.5"
+          />
+          <span>
+            Gerar, por IA, uma leitura aproximada de ESTILO de linguagem por participante (direto/hesitante,
+            afirmativo/interrogativo) — nunca estado emocional ou psicológico. Fica só na página de cada
+            participante, nunca entra na síntese do Presidente. Desligado por padrão.
+          </span>
+        </label>
       </div>
 
       <div className="flex items-center justify-between gap-3">

@@ -23,6 +23,7 @@ export interface PresidentConfigFieldsInput {
   readonly canRegisterDecisions?: boolean;
   readonly canOverrideSpecialist?: boolean;
   readonly autoInterruption?: boolean;
+  readonly speechToneAnalysisEnabled?: boolean;
 }
 
 function normalize(fields: PresidentConfigFieldsInput): PresidentConfig {
@@ -51,6 +52,8 @@ function normalize(fields: PresidentConfigFieldsInput): PresidentConfig {
     canRegisterDecisions: fields.canRegisterDecisions ?? DEFAULT_PRESIDENT_CONFIG.canRegisterDecisions,
     canOverrideSpecialist: fields.canOverrideSpecialist ?? DEFAULT_PRESIDENT_CONFIG.canOverrideSpecialist,
     autoInterruption: fields.autoInterruption ?? DEFAULT_PRESIDENT_CONFIG.autoInterruption,
+    speechToneAnalysisEnabled:
+      fields.speechToneAnalysisEnabled ?? DEFAULT_PRESIDENT_CONFIG.speechToneAnalysisEnabled,
   };
 }
 
@@ -69,8 +72,8 @@ export async function savePresidentConfig(
            (company_id, monitoring_model, monitoring_reasoning_effort, synthesis_model,
             synthesis_reasoning_effort, final_synthesis_reasoning_effort, intervention_level,
             consensus_policy, can_request_counselors, can_register_decisions,
-            can_override_specialist, auto_interruption)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            can_override_specialist, auto_interruption, speech_tone_analysis_enabled)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          ON CONFLICT (company_id) DO UPDATE
            SET monitoring_model = EXCLUDED.monitoring_model,
                monitoring_reasoning_effort = EXCLUDED.monitoring_reasoning_effort,
@@ -83,6 +86,7 @@ export async function savePresidentConfig(
                can_register_decisions = EXCLUDED.can_register_decisions,
                can_override_specialist = EXCLUDED.can_override_specialist,
                auto_interruption = EXCLUDED.auto_interruption,
+               speech_tone_analysis_enabled = EXCLUDED.speech_tone_analysis_enabled,
                updated_at = now()`,
         [
           companyId,
@@ -97,6 +101,7 @@ export async function savePresidentConfig(
           c.canRegisterDecisions,
           c.canOverrideSpecialist,
           c.autoInterruption,
+          c.speechToneAnalysisEnabled,
         ],
       );
       return null;
@@ -119,10 +124,12 @@ export async function loadAndApplyPresidentConfig(db: SqlExecutor, companyId: st
     can_register_decisions: boolean;
     can_override_specialist: boolean;
     auto_interruption: boolean;
+    speech_tone_analysis_enabled: boolean;
   }>(
     `SELECT monitoring_model, monitoring_reasoning_effort, synthesis_model, synthesis_reasoning_effort,
             final_synthesis_reasoning_effort, intervention_level, consensus_policy,
-            can_request_counselors, can_register_decisions, can_override_specialist, auto_interruption
+            can_request_counselors, can_register_decisions, can_override_specialist, auto_interruption,
+            speech_tone_analysis_enabled
      FROM president_config WHERE company_id = $1`,
     [companyId],
   );
@@ -146,6 +153,7 @@ export async function loadAndApplyPresidentConfig(db: SqlExecutor, companyId: st
       canRegisterDecisions: row.can_register_decisions,
       canOverrideSpecialist: row.can_override_specialist,
       autoInterruption: row.auto_interruption,
+      speechToneAnalysisEnabled: row.speech_tone_analysis_enabled,
     }),
   );
 }

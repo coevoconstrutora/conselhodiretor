@@ -17,6 +17,11 @@ import { writeAudit, auditedClinicalWrite } from '@conselho/audit';
  * Persiste um segmento FINAL do transcript (cifrado). SEM writeAudit por
  * segmento de propósito (inundaria o audit_log — a sessão audita uma única
  * vez em transcript-persist-start).
+ *
+ * `timing` (Etapa "Análise de fala dos presentes"): offsets em ms desde o
+ * início da sessão STT, quando o Deepgram os fornece — base para tempo real
+ * de fala e trocas abruptas de turno (nunca estado emocional). Opcional:
+ * sessões antigas/sem timing continuam gravando normalmente.
  */
 export async function saveTranscriptSegment(
   db: SqlExecutor,
@@ -24,11 +29,12 @@ export async function saveTranscriptSegment(
   seq: number,
   text: string,
   encryptionKey: Buffer,
+  timing?: { startMs: number; endMs: number },
 ): Promise<void> {
   await db.query(
-    `INSERT INTO transcript_segment (meeting_id, seq, content_enc) VALUES ($1, $2, $3)
+    `INSERT INTO transcript_segment (meeting_id, seq, content_enc, start_ms, end_ms) VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (meeting_id, seq) DO NOTHING`,
-    [meetingId, seq, encryptField(text, encryptionKey)],
+    [meetingId, seq, encryptField(text, encryptionKey), timing?.startMs ?? null, timing?.endMs ?? null],
   );
 }
 
@@ -55,6 +61,34 @@ export async function listTranscriptFinals(
     [meetingId],
   );
   return res.rows.map((r) => decryptField(r.content_enc, encryptionKey));
+}
+
+export interface TimedTranscriptSegment {
+  readonly text: string;
+  readonly startMs: number | null;
+  readonly endMs: number | null;
+}
+
+/**
+ * Como `listTranscriptFinals`, mas com os offsets de tempo (Etapa "Análise
+ * de fala dos presentes") — usado só onde a duração real importa (tempo de
+ * fala/trocas abruptas de turno); os demais consumidores (relatórios,
+ * revisão) continuam em `listTranscriptFinals`, que é bem mais barato.
+ */
+export async function listTranscriptFinalsWithTiming(
+  db: SqlExecutor,
+  meetingId: string,
+  encryptionKey: Buffer,
+): Promise<TimedTranscriptSegment[]> {
+  const res = await db.query<{ content_enc: string; start_ms: number | null; end_ms: number | null }>(
+    'SELECT content_enc, start_ms, end_ms FROM transcript_segment WHERE meeting_id = $1 ORDER BY seq ASC',
+    [meetingId],
+  );
+  return res.rows.map((r) => ({
+    text: decryptField(r.content_enc, encryptionKey),
+    startMs: r.start_ms,
+    endMs: r.end_ms,
+  }));
 }
 
 /** Conta os segmentos persistidos SEM decifrar (poll do painel de diagnóstico). */

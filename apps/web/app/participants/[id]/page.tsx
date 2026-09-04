@@ -5,7 +5,7 @@ import { getParticipant } from '@/lib/participants';
 import { getParticipantVoiceStatus } from '@/lib/voice-profile';
 import { getActiveConsent } from '@/lib/biometric-consent';
 import { listParticipantMeetingHistory } from '@/lib/meeting-speakers';
-import { formatDateBR } from '@/lib/format';
+import { formatDateBR, formatSpeakingDuration } from '@/lib/format';
 import { ParticipantProfileForm } from '@/components/participant-admin';
 import { ParticipantVoiceSection } from '@/components/participant-voice-wizard';
 import { DashboardShell } from '@/components/dashboard-shell';
@@ -70,18 +70,33 @@ export default async function ParticipantProfilePage({ params }: { params: Promi
         ) : (
           <ul className="mt-3 divide-y divide-ink/10">
             {history.map((h) => (
-              <li key={h.meetingId} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-ink">{h.meetingTitle}</p>
-                  <p className="text-[11px] text-ink-muted">
-                    {h.closedAt ? formatDateBR(h.closedAt) : '—'}
-                    {h.speakingTurns !== null ? ` · ${h.speakingTurns} intervenções` : ''}
-                    {h.speechShare !== null ? ` · ${Math.round(h.speechShare * 100)}% da fala identificada` : ''}
-                  </p>
+              <li key={h.meetingId} className="py-2.5 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-ink">{h.meetingTitle}</p>
+                    <p className="text-[11px] text-ink-muted">
+                      {h.closedAt ? formatDateBR(h.closedAt) : '—'}
+                      {h.speakingMs ? ` · ${formatSpeakingDuration(h.speakingMs)} de fala` : h.speakingTurns !== null ? ` · ${h.speakingTurns} intervenções` : ''}
+                      {h.speechShare !== null ? ` · ${Math.round(h.speechShare * 100)}% da fala identificada` : ''}
+                      {h.interruptionCount ? (
+                        <span title="Aproximação por proximidade temporal entre falas — não é detecção real de sobreposição de áudio.">
+                          {` · ⚡ ${h.interruptionCount} troca(s) abrupta(s) de turno`}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink-muted">
+                    {STATUS_LABEL[h.identificationStatus] ?? h.identificationStatus}
+                  </span>
                 </div>
-                <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-ink-muted">
-                  {STATUS_LABEL[h.identificationStatus] ?? h.identificationStatus}
-                </span>
+                {h.speechTone ? (
+                  <details className="mt-2 rounded-[var(--radius)] border border-ink/10 bg-surface-muted/40 px-3 py-2">
+                    <summary className="cursor-pointer text-[11px] font-medium text-ink-muted">
+                      Tom da linguagem (IA, aproximado)
+                    </summary>
+                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-ink">{h.speechTone}</p>
+                  </details>
+                ) : null}
               </li>
             ))}
           </ul>
