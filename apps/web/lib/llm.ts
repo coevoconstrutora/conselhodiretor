@@ -23,6 +23,8 @@ export interface LlmOptions {
   readonly longForm?: boolean;
   readonly maxTokens?: number;
   readonly onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  /** Default do adapter é 60s — raciocínio alto (xhigh) em documentos longos pode passar disso. */
+  readonly timeoutMs?: number;
 }
 
 export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: string } {
@@ -41,6 +43,7 @@ export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: st
         ...(opts.longForm ? { longForm: true } : {}),
         ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
         ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+        ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
       }),
       label: `${model ?? 'gpt-5.6-luna'} (OpenAI)`,
     };
@@ -59,6 +62,7 @@ export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: st
         ...(opts.longForm ? { longForm: true } : {}),
         ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
         ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+        ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
       }),
       label: `${model ?? 'gemini-flash-latest'} (Gemini)`,
     };
@@ -77,6 +81,7 @@ export function createLlm(opts: LlmOptions = {}): { llm: ILlmProvider; label: st
         ...(opts.longForm ? { longForm: true } : {}),
         ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
         ...(opts.onUsage ? { onUsage: opts.onUsage } : {}),
+        ...(opts.timeoutMs ? { timeoutMs: opts.timeoutMs } : {}),
       }),
       label: `${anthropicModel ?? 'claude-sonnet-5'} (Anthropic)`,
     };

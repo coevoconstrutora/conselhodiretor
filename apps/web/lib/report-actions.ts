@@ -61,7 +61,10 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
     // cobre raciocínio interno + texto visível no MESMO teto — com esforço
     // alto o raciocínio sozinho consumia o teto inteiro e a resposta saía
     // vazia ("Resposta sem conteúdo"), sem erro da API (finish_reason: length).
-    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000 });
+    // timeoutMs maior pelo mesmo motivo: com 12000 tokens de teto e 'xhigh',
+    // a chamada passa fácil dos 60s default do adapter (timeout observado em
+    // produção logo após o aumento do teto).
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
 
     // roster REAL da empresa (padrão + custom) — nunca uma lista fixa, senão
     // um conselheiro custom nunca ganharia relatório (Etapa 20)
