@@ -186,7 +186,7 @@ export async function generatePresidentSynthesisAction(meetingId: string): Promi
     if (existing.length === 0) {
       return { ok: false, code: 'invalid-input', detail: 'Gere os relatórios dos conselheiros antes da síntese.' };
     }
-    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000 });
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
     await synthesizePresidentReport(db, meetingId, user, existing, llm, modelLabel, key);
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
