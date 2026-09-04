@@ -56,7 +56,12 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
     // Factory única (lib/llm.ts): Gemini > Anthropic, trocável por env.
     // longForm + teto alto: relatório completo em markdown escapado num campo
     // JSON de string — 1500 tokens cortava a resposta no meio (JSON inválido).
-    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 4000 });
+    // 4000 cortava a síntese do Presidente em produção com reasoningEffort
+    // 'xhigh'/'high': em modelos de raciocínio da OpenAI o `max_completion_tokens`
+    // cobre raciocínio interno + texto visível no MESMO teto — com esforço
+    // alto o raciocínio sozinho consumia o teto inteiro e a resposta saía
+    // vazia ("Resposta sem conteúdo"), sem erro da API (finish_reason: length).
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000 });
 
     // roster REAL da empresa (padrão + custom) — nunca uma lista fixa, senão
     // um conselheiro custom nunca ganharia relatório (Etapa 20)
@@ -178,7 +183,7 @@ export async function generatePresidentSynthesisAction(meetingId: string): Promi
     if (existing.length === 0) {
       return { ok: false, code: 'invalid-input', detail: 'Gere os relatórios dos conselheiros antes da síntese.' };
     }
-    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 4000 });
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000 });
     await synthesizePresidentReport(db, meetingId, user, existing, llm, modelLabel, key);
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
