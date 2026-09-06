@@ -15,9 +15,16 @@ type PanelState = 'idle' | 'starting' | 'active' | 'error';
  * ouvindo só o microfone/áudio da aba, como sempre. O bot nunca fala nem
  * grava — só entra e mostra quem está na chamada e a tela compartilhada.
  */
-export function MeetBotPanel({ meetingId }: { meetingId: string }) {
+export function MeetBotPanel({
+  meetingId,
+  initialMeetingUrl,
+}: {
+  meetingId: string;
+  /** Link já anexado no agendamento (Etapa "Campo de agendamento") — só um valor inicial editável. */
+  initialMeetingUrl?: string | null;
+}) {
   const participants = useBoardStore((s) => s.recallParticipants);
-  const [meetingUrl, setMeetingUrl] = useState('');
+  const [meetingUrl, setMeetingUrl] = useState(initialMeetingUrl ?? '');
   const [state, setState] = useState<PanelState>('idle');
   const [error, setError] = useState<string | null>(null);
 

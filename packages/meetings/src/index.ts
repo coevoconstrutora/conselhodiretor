@@ -3,6 +3,7 @@ export {
   listMeetings,
   getMeeting,
   getMeetingGuidance,
+  getMeetingUrl,
   confirmRecording,
   revokeRecording,
   closeMeeting,

@@ -28,6 +28,9 @@ export async function startMeetingAction(
   // Contexto da reunião anterior (Etapa "Histórico de reuniões") — só existe
   // no FormData quando o dono marcou o checkbox explicitamente (Seção 10).
   const previousContextMeetingId = String(formData.get('previousContextMeetingId') ?? '').trim() || null;
+  // Campo de agendamento (Etapa homônima) — só pré-preenche o painel do bot
+  // do Recall.ai na sala; entrar com um link diferente na hora continua ok.
+  const meetingUrl = String(formData.get('meetingUrl') ?? '').trim() || null;
 
   let guidance: MeetingGuidanceInput | null = null;
   const file = formData.get('guidanceFile');
@@ -49,6 +52,7 @@ export async function startMeetingAction(
     meetingTypeId,
     guidance,
     previousContextMeetingId,
+    meetingUrl,
   );
   redirect(`/meetings/${meetingId}`);
 }

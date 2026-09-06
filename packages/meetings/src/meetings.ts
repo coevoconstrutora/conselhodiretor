@@ -60,9 +60,16 @@ export async function createMeeting(
    * do formulário — Seção 14 do pedido: nunca atribuir sozinho).
    */
   previousContextMeetingId?: string | null,
+  /**
+   * Link do Meet/Zoom/Teams anexado no AGENDAMENTO (Etapa "Campo de
+   * agendamento") — só pré-preenche o painel do bot na sala; entrar numa
+   * reunião já iniciada com um link diferente continua funcionando igual.
+   */
+  meetingUrl?: string | null,
 ): Promise<string> {
   const titleEnc = encryptField(title, encryptionKey);
   const guidanceEnc = guidance ? encryptField(guidance.content, encryptionKey) : null;
+  const meetingUrlEnc = meetingUrl ? encryptField(meetingUrl, encryptionKey) : null;
   let validPreviousId: string | null = null;
   if (previousContextMeetingId) {
     const check = await db.query<{ id: string }>(
@@ -72,9 +79,18 @@ export async function createMeeting(
     validPreviousId = check.rows[0]?.id ?? null;
   }
   const res = await db.query<{ id: string }>(
-    `INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id, guidance_enc, guidance_filename, previous_context_meeting_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [userId, companyId, titleEnc, meetingTypeId ?? null, guidanceEnc, guidance?.filename ?? null, validPreviousId],
+    `INSERT INTO meeting (user_id, company_id, title_enc, meeting_type_id, guidance_enc, guidance_filename, previous_context_meeting_id, meeting_url_enc)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [
+      userId,
+      companyId,
+      titleEnc,
+      meetingTypeId ?? null,
+      guidanceEnc,
+      guidance?.filename ?? null,
+      validPreviousId,
+      meetingUrlEnc,
+    ],
   );
   return res.rows[0]!.id;
 }
@@ -98,6 +114,31 @@ export async function getMeetingGuidance(
   if (!row?.guidance_enc) return null;
   try {
     return { content: decryptField(row.guidance_enc, encryptionKey), filename: row.guidance_filename ?? 'arquivo' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Link do Meet/Zoom/Teams anexado no agendamento — `null` se não houver, se
+ * a reunião não pertencer à empresa, ou se a chave não decifrar (mesmo
+ * degradê silencioso de `getMeetingGuidance`: é só um atalho de UI, nunca
+ * crítico).
+ */
+export async function getMeetingUrl(
+  db: SqlExecutor,
+  meetingId: string,
+  companyId: string,
+  encryptionKey: Buffer,
+): Promise<string | null> {
+  const res = await db.query<{ meeting_url_enc: string | null }>(
+    'SELECT meeting_url_enc FROM meeting WHERE id = $1 AND company_id = $2',
+    [meetingId, companyId],
+  );
+  const row = res.rows[0];
+  if (!row?.meeting_url_enc) return null;
+  try {
+    return decryptField(row.meeting_url_enc, encryptionKey);
   } catch {
     return null;
   }

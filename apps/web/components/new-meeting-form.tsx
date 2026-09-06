@@ -113,6 +113,21 @@ export function NewMeetingForm({
       ) : null}
       <label className="block">
         <span className="text-sm font-medium text-ink">
+          Link do Google Meet/Zoom/Teams <span className="font-normal text-ink-muted">(opcional)</span>
+        </span>
+        <input
+          name="meetingUrl"
+          type="url"
+          placeholder="https://meet.google.com/xxx-xxxx-xxx"
+          className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+        />
+        <span className="mt-1 block text-xs text-ink-muted">
+          Se preenchido, já vem pronto no painel "🤖 Bot em reunião externa" da sala — você ainda pode
+          trocar por outro link na hora.
+        </span>
+      </label>
+      <label className="block">
+        <span className="text-sm font-medium text-ink">
           Pauta/roteiro <span className="font-normal text-ink-muted">(opcional)</span>
         </span>
         <input
@@ -127,8 +142,8 @@ export function NewMeetingForm({
         </span>
       </label>
       <p className="text-xs text-ink-muted">
-        O título e a pauta são cifrados em repouso. A gravação só liga depois que você confirmar
-        que os participantes estão de acordo.
+        O título, o link da reunião e a pauta são cifrados em repouso. A gravação só liga depois que
+        você confirmar que os participantes estão de acordo.
       </p>
       {state?.error ? (
         <p className="text-xs font-medium text-attn-critical">⚠ {state.error}</p>

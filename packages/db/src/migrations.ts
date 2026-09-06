@@ -819,4 +819,14 @@ CREATE TABLE IF NOT EXISTS recall_bot (
 CREATE INDEX IF NOT EXISTS idx_recall_bot_bot_id ON recall_bot(bot_id);
 `,
   },
+  {
+    name: '0032_meeting_url',
+    sql: `
+-- Link do Meet/Zoom/Teams anexado no AGENDAMENTO da reunião (Etapa "Campo de
+-- agendamento") — pré-preenche o painel do bot do Recall.ai na sala; o dono
+-- ainda pode colar um link diferente na hora (entrar numa reunião já
+-- iniciada continua funcionando igual). Cifrado como o título/pauta.
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS meeting_url_enc text;
+`,
+  },
 ];
