@@ -1,9 +1,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { IncomingMessage, Server as HttpServer } from 'node:http';
+import type { IncomingMessage, IncomingHttpHeaders, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { SqlExecutor } from '@conselho/db';
 import { validateSession } from '@conselho/auth';
 import type { BoardContributionEvent } from '@conselho/board';
+import { verifyRecallRequest } from './recall-verify';
 
 /** Fonte de eventos do conselho (FullBoardOrchestrator). */
 export interface BoardEventSource {
@@ -13,6 +14,24 @@ import {
   BOARD_PROTOCOL_VERSION,
   type BoardServerMessage,
 } from '@conselho/shared-types';
+
+/** Recall.ai (Etapa "Ver participantes/tela compartilhada") — nomes de evento
+ * de participante que o bot manda, mapeados pro tipo aditivo do protocolo. */
+export const RECALL_PARTICIPANT_EVENTS: Record<
+  string,
+  'join' | 'leave' | 'webcam_on' | 'webcam_off' | 'screenshare_on' | 'screenshare_off'
+> = {
+  'participant_events.join': 'join',
+  'participant_events.leave': 'leave',
+  'participant_events.webcam_on': 'webcam_on',
+  'participant_events.webcam_off': 'webcam_off',
+  'participant_events.screenshare_on': 'screenshare_on',
+  'participant_events.screenshare_off': 'screenshare_off',
+};
+
+function headerValue(h: string | string[] | undefined): string | null {
+  return Array.isArray(h) ? (h[0] ?? null) : (h ?? null);
+}
 
 /**
  * WebSocket Gateway do board (Story 3.2 — ADR-003).
@@ -80,7 +99,7 @@ export class BoardGateway {
           /* socket já fechado */
         }
       });
-      void this.onConnection(socket, request.url ?? '');
+      void this.onConnection(socket, request.url ?? '', request.headers);
     });
 
     // heartbeat (ADR-003): detecta conexões mortas sem derrubar a sessão
@@ -165,6 +184,102 @@ export class BoardGateway {
     }
   }
 
+  /** Relay de eventos/vídeo do bot do Recall.ai (Etapa "Ver participantes/tela
+   * compartilhada") pros clientes já conectados em /board da mesma reunião —
+   * janela de visualização, nunca entra no protocolo de transcrição/board. */
+  private broadcastRecallMessage(meetingId: string, message: BoardServerMessage): void {
+    const payload = JSON.stringify(message);
+    for (const socket of this.clients.get(meetingId) ?? []) {
+      if (socket.readyState === WebSocket.OPEN) socket.send(payload);
+    }
+  }
+
+  /**
+   * Upgrade do `/recall-media` — NÃO é um cliente autenticado por sessão de
+   * usuário (como /board e /audio): é o PRÓPRIO Recall.ai conectando pra
+   * entregar vídeo/eventos em tempo real. Autenticado por HMAC (mesmo
+   * esquema do webhook), nunca por token de sessão.
+   */
+  private onRecallConnection(socket: WebSocket, params: URLSearchParams, headers: IncomingHttpHeaders): void {
+    const meetingId = params.get('meetingId');
+    if (!meetingId) {
+      socket.close(4400, 'meetingId obrigatório');
+      return;
+    }
+    const secret = process.env.RECALL_WEBHOOK_SECRET;
+    const verified =
+      !!secret &&
+      verifyRecallRequest(
+        secret,
+        {
+          id: headerValue(headers['webhook-id']),
+          timestamp: headerValue(headers['webhook-timestamp']),
+          signature: headerValue(headers['webhook-signature']),
+        },
+        null,
+      );
+    if (!verified) {
+      socket.close(4401, 'assinatura inválida');
+      return;
+    }
+    socket.on('message', (data) => this.handleRecallMessage(meetingId, data.toString()));
+  }
+
+  /** Parseia UMA mensagem JSON do bot (vídeo ou evento de participante) e relay pro /board. */
+  private handleRecallMessage(meetingId: string, raw: string): void {
+    let parsed: { event?: string; data?: { data?: Record<string, unknown> } };
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return; // nunca derruba a conexão por uma mensagem malformada
+    }
+    const eventType = parsed.event;
+    const inner = parsed.data?.data;
+    if (!eventType || !inner) return;
+
+    if (eventType === 'video_separate_h264.data') {
+      const participant = inner.participant as { id?: number } | undefined;
+      if (typeof participant?.id !== 'number' || typeof inner.buffer !== 'string') return;
+      this.broadcastRecallMessage(meetingId, {
+        v: BOARD_PROTOCOL_VERSION,
+        type: 'recallVideo',
+        participantId: participant.id,
+        videoType: inner.type === 'screenshare' ? 'screenshare' : 'webcam',
+        bufferB64: inner.buffer,
+        at: this.now(),
+      });
+      return;
+    }
+    const mapped = RECALL_PARTICIPANT_EVENTS[eventType];
+    if (mapped) {
+      const participant = inner.participant as { id?: number; name?: string | null } | undefined;
+      if (typeof participant?.id !== 'number') return;
+      this.broadcastRecallParticipantEvent(meetingId, participant.id, participant.name ?? null, mapped);
+    }
+  }
+
+  /**
+   * Evento de participante do bot do Recall.ai — público porque chega por
+   * DOIS caminhos: o handler interno de vídeo/eventos da WS acima, e a rota
+   * de webhook HTTP (apps/web/app/api/recall-webhook), que roda fora deste
+   * pacote e não tem acesso aos métodos privados.
+   */
+  broadcastRecallParticipantEvent(
+    meetingId: string,
+    participantId: number,
+    name: string | null,
+    event: 'join' | 'leave' | 'webcam_on' | 'webcam_off' | 'screenshare_on' | 'screenshare_off',
+  ): void {
+    this.broadcastRecallMessage(meetingId, {
+      v: BOARD_PROTOCOL_VERSION,
+      type: 'recallParticipant',
+      participantId,
+      name,
+      event,
+      at: this.now(),
+    });
+  }
+
   /** Registra o destino do áudio do mic real (runtime conecta ao STT). */
   registerAudioSink(
     meetingId: string,
@@ -189,9 +304,15 @@ export class BoardGateway {
     return this.clients.get(meetingId)?.size ?? 0;
   }
 
-  private async onConnection(socket: WebSocket, url: string): Promise<void> {
+  private async onConnection(socket: WebSocket, url: string, headers: IncomingHttpHeaders): Promise<void> {
     const parsed = new URL(url, 'http://localhost');
     const pathname = parsed.pathname;
+
+    if (pathname === '/recall-media') {
+      this.onRecallConnection(socket, parsed.searchParams, headers);
+      return;
+    }
+
     if (pathname !== '/board' && pathname !== '/audio') {
       socket.close(4404, 'path desconhecido');
       return;

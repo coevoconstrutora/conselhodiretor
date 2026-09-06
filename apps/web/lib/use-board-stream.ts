@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import type { BoardServerMessage } from '@conselho/shared-types';
 import { useBoardStore, toContributionItem } from './board-store';
+import { publishRecallVideo } from './recall-video-bus';
 import { resolveWsBase } from './ws-url';
 
 /**
@@ -41,6 +42,7 @@ export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = 
   const setSttStatus = useBoardStore((s) => s.setSttStatus);
   const setWsConnected = useBoardStore((s) => s.setWsConnected);
   const setWsGaveUp = useBoardStore((s) => s.setWsGaveUp);
+  const updateRecallParticipant = useBoardStore((s) => s.updateRecallParticipant);
   const enabled = opts.enabled ?? true;
 
   useEffect(() => {
@@ -82,6 +84,19 @@ export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = 
             setSttStatus(message.stt); // saúde do pipeline (A3)
             return;
           }
+          if (message.v === 1 && message.type === 'recallParticipant') {
+            updateRecallParticipant(message.participantId, message.name, message.event);
+            return;
+          }
+          if (message.v === 1 && message.type === 'recallVideo') {
+            // fora do Zustand de propósito (alta frequência) — ver recall-video-bus.ts
+            publishRecallVideo(message.participantId, {
+              videoType: message.videoType,
+              bufferB64: message.bufferB64,
+              at: message.at,
+            });
+            return;
+          }
           const item = toContributionItem(message);
           if (item) addContribution(item);
         } catch {
@@ -114,6 +129,7 @@ export function useBoardStream(meetingId: string, opts: UseBoardStreamOptions = 
     setSttStatus,
     setWsConnected,
     setWsGaveUp,
+    updateRecallParticipant,
     opts.baseUrl,
     opts.token,
     opts.socketFactory,

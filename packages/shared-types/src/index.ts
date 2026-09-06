@@ -78,6 +78,27 @@ export type BoardServerMessage =
       readonly stt: 'live' | 'degraded' | 'ended';
       readonly lastFinalAt: number | null;
       readonly at: number;
+    }
+  | {
+      /** Etapa "Ver participantes/tela compartilhada do Meet" — evento de
+       * participante relayado do bot do Recall.ai (janela de visualização
+       * separada da transcrição/board — nunca alimenta os conselheiros). */
+      readonly v: typeof BOARD_PROTOCOL_VERSION;
+      readonly type: 'recallParticipant';
+      readonly participantId: number;
+      readonly name: string | null;
+      readonly event: 'join' | 'leave' | 'webcam_on' | 'webcam_off' | 'screenshare_on' | 'screenshare_off';
+      readonly at: number;
+    }
+  | {
+      /** Frame de vídeo H.264 (base64) relayado do bot do Recall.ai — só
+       * visualização ao vivo, nunca persistido em disco/banco. */
+      readonly v: typeof BOARD_PROTOCOL_VERSION;
+      readonly type: 'recallVideo';
+      readonly participantId: number;
+      readonly videoType: 'webcam' | 'screenshare';
+      readonly bufferB64: string;
+      readonly at: number;
     };
 
 /** Mensagens cliente→servidor (skeleton: só pong; comandos silenciar/foco são E7). */

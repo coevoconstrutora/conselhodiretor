@@ -74,6 +74,7 @@ describe('Migrations — schema base', () => {
       '0028_ai_experiments',
       '0029_speech_timing',
       '0030_speech_tone_analysis',
+      '0031_recall_bot',
     ]);
   });
 

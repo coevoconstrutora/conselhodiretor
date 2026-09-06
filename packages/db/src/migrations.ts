@@ -799,4 +799,24 @@ CREATE INDEX IF NOT EXISTS idx_participant_speech_tone_meeting ON participant_sp
 CREATE INDEX IF NOT EXISTS idx_participant_speech_tone_participant ON participant_speech_tone(participant_id);
 `,
   },
+  {
+    name: '0031_recall_bot',
+    sql: `
+-- Bot do Recall.ai (Etapa "Ver participantes/tela compartilhada do Meet") —
+-- janela de VISUALIZAÇÃO separada do pipeline de transcrição/board (que
+-- continua vindo do microfone/áudio da aba, sem mudança). 1 bot por
+-- reunião: liga num link externo (Google Meet etc.), manda vídeo/eventos de
+-- participante em tempo real via webhook+websocket, nunca fala nem grava.
+-- meeting_url_enc cifrado (é o link da reunião externa, dado sensível).
+CREATE TABLE IF NOT EXISTS recall_bot (
+  meeting_id     uuid PRIMARY KEY REFERENCES meeting(id) ON DELETE CASCADE,
+  bot_id         text NOT NULL UNIQUE,
+  meeting_url_enc text NOT NULL,
+  status         text NOT NULL DEFAULT 'joining', -- joining|in_call|call_ended|error
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  ended_at       timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_recall_bot_bot_id ON recall_bot(bot_id);
+`,
+  },
 ];

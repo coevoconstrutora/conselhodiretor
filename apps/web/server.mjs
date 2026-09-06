@@ -2,8 +2,10 @@
  * Custom server de PRODUÇÃO (A6 — WS na mesma porta do HTTP).
  *
  * Por quê: redes restritivas de clínica/hospital bloqueiam portas fora de 443.
- * Este server serve o Next E roteia os upgrades de WebSocket de /board e /audio
- * para o BoardGateway (modo detached), tudo pela porta do [http_service] do Fly.
+ * Este server serve o Next E roteia os upgrades de WebSocket de /board, /audio
+ * e /recall-media (Etapa "Ver participantes/tela compartilhada do Meet" —
+ * é o Recall.ai conectando, não o navegador) para o BoardGateway (modo
+ * detached), tudo pela porta do [http_service] do Fly.
  *
  * Handshake via globalThis.__conselhoBoardUpgrade: este arquivo é JS puro fora
  * do bundle do Next — não pode importar board-runtime (TS + `server-only`).
@@ -30,7 +32,10 @@ const server = createServer((req, res) => handle(req, res));
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '/', 'http://localhost');
   const boardUpgrade = globalThis.__conselhoBoardUpgrade;
-  if ((pathname === '/board' || pathname === '/audio') && typeof boardUpgrade === 'function') {
+  if (
+    (pathname === '/board' || pathname === '/audio' || pathname === '/recall-media') &&
+    typeof boardUpgrade === 'function'
+  ) {
     boardUpgrade(req, socket, head);
     return;
   }

@@ -28,6 +28,7 @@ import {
 import { formatMeetingDuration, formatDateTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { MeetingRoom } from '@/components/meeting-room';
+import { MeetBotPanel } from '@/components/meet-bot-panel';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { PresidentSynthesisButton } from '@/components/president-synthesis-button';
@@ -288,6 +289,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 </form>
               }
             />
+
+            {!closed && canWrite(user) ? <MeetBotPanel meetingId={id} /> : null}
 
             {/* Pauta/roteiro anexado na criação (Etapa "guia de reunião") — só
                 referência para quem conduz a reunião; os conselheiros já a

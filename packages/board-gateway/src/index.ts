@@ -1,1 +1,2 @@
-export { BoardGateway, type BoardGatewayOptions, type BoardEventSource } from './gateway';
+export { BoardGateway, type BoardGatewayOptions, type BoardEventSource, RECALL_PARTICIPANT_EVENTS } from './gateway';
+export { verifyRecallRequest, type RecallSignatureHeaders } from './recall-verify';

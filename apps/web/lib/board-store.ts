@@ -54,6 +54,10 @@ interface BoardState {
    * Fonte de verdade do indicador "falando" (sincroniza com a voz de verdade,
    * em vez de uma janela de tempo fixa desde que o card apareceu). */
   speakingAgentId: string | null;
+  /** Etapa "Ver participantes/tela compartilhada do Meet" — roster do bot do
+   * Recall.ai (janela de visualização, nunca alimenta o board dos conselheiros).
+   * Vídeo em si NÃO fica aqui (alta frequência — ver recall-video-bus.ts). */
+  recallParticipants: ReadonlyMap<number, RecallParticipantState>;
 
   addContribution(item: BoardContributionItem): void;
   setSpeakingAgent(agentId: string | null): void;
@@ -66,7 +70,19 @@ interface BoardState {
   undoDismiss(): void;
   toggleSilence(agentId: string): void;
   toggleFocusMode(): void;
+  updateRecallParticipant(
+    participantId: number,
+    name: string | null,
+    event: 'join' | 'leave' | 'webcam_on' | 'webcam_off' | 'screenshare_on' | 'screenshare_off',
+  ): void;
   clear(): void;
+}
+
+export interface RecallParticipantState {
+  readonly participantId: number;
+  readonly name: string | null;
+  readonly webcamOn: boolean;
+  readonly screenshareOn: boolean;
 }
 
 export const useBoardStore = create<BoardState>((set) => ({
@@ -80,6 +96,7 @@ export const useBoardStore = create<BoardState>((set) => ({
   transcript: { finals: [], partial: null },
   pipeline: { stt: 'idle', wsConnected: false, wsGaveUp: false, lastTranscriptAt: null },
   speakingAgentId: null,
+  recallParticipants: new Map(),
 
   setSpeakingAgent: (agentId) => set({ speakingAgentId: agentId }),
 
@@ -144,6 +161,29 @@ export const useBoardStore = create<BoardState>((set) => ({
   toggleFocusMode: () =>
     set((state) => (state.focusMode ? { focusMode: false, heldByFocus: 0 } : { focusMode: true })),
 
+  updateRecallParticipant: (participantId, name, event) =>
+    set((state) => {
+      const recallParticipants = new Map(state.recallParticipants);
+      if (event === 'leave') {
+        recallParticipants.delete(participantId);
+        return { recallParticipants };
+      }
+      const current = recallParticipants.get(participantId) ?? {
+        participantId,
+        name,
+        webcamOn: false,
+        screenshareOn: false,
+      };
+      recallParticipants.set(participantId, {
+        ...current,
+        name: name ?? current.name,
+        webcamOn: event === 'webcam_on' ? true : event === 'webcam_off' ? false : current.webcamOn,
+        screenshareOn:
+          event === 'screenshare_on' ? true : event === 'screenshare_off' ? false : current.screenshareOn,
+      });
+      return { recallParticipants };
+    }),
+
   clear: () =>
     set({
       contributions: [],
@@ -156,6 +196,7 @@ export const useBoardStore = create<BoardState>((set) => ({
       transcript: { finals: [], partial: null },
       pipeline: { stt: 'idle', wsConnected: false, wsGaveUp: false, lastTranscriptAt: null },
       speakingAgentId: null,
+      recallParticipants: new Map(),
     }),
 }));
 
