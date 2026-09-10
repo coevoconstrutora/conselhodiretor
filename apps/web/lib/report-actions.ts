@@ -274,6 +274,53 @@ export async function generateSecretaryMinutesAction(meetingId: string): Promise
   }
 }
 
+/**
+ * Botão de fallback "Gerar decisões e ações" (abas Decisões/Ações, quando
+ * vazias): reextrai da síntese do Presidente já salva, sem repetir
+ * relatórios nem síntese. Cobre tanto a primeira extração ter falhado
+ * quanto o caso legítimo de a reunião não ter nada a extrair (reroda e
+ * confirma vazio). Itens já editados à mão (Etapa "Acompanhamento")
+ * sobrevivem — `saveMeetingOutcome` casa por similaridade de texto.
+ */
+export async function generateMeetingOutcomeAction(meetingId: string): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem gerar decisões/ações.' };
+  if (!meetingId) return { ok: false, code: 'invalid-input' };
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
+  }
+  try {
+    const db = await getDb();
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
+    const key = getEncryptionKey();
+    const presidentReport = (await listAgentReports(db, meetingId, key)).find((r) => r.agentId === PRESIDENT_AGENT_ID);
+    if (!presidentReport) {
+      return { ok: false, code: 'invalid-input', detail: 'Gere a síntese do Presidente antes das decisões/ações.' };
+    }
+    await loadAndApplyPresidentConfig(db, user.companyId);
+    const presidentConfig = getPresidentConfig(user.companyId);
+    const { llm } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
+    const outcome = await extractMeetingOutcome(
+      llm,
+      presidentReport.content,
+      presidentConfig.synthesisModel,
+      presidentConfig.synthesisReasoningEffort,
+    );
+    if (!outcome) {
+      return { ok: false, code: 'internal', detail: 'O modelo não conseguiu extrair decisões/ações — tente novamente.' };
+    }
+    await saveMeetingOutcome(db, meetingId, outcome, key);
+    revalidatePath(`/meetings/${meetingId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error('[relatorios] gerar decisões/ações falhou:', err);
+    return toActionResult(err);
+  }
+}
+
 /** Salva a edição humana de um relatório (baixo risco — form simples, lança). */
 export async function saveAgentReportAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();

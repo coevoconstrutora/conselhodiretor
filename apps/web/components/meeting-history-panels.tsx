@@ -10,6 +10,7 @@ import type { AgentId } from '@conselho/providers';
 import type { ParticipantSignal } from '@/lib/participant-signals';
 import { formatDateBR, formatTimeBR, formatSpeakingDuration } from '@/lib/format';
 import { updateDecisionStatusAction, updateActionItemStatusAction } from '@/lib/decision-actions';
+import { GenerateOutcomeButton } from './generate-outcome-button';
 
 /**
  * Conteúdo das abas "Contribuições" / "Decisões" / "Ações" da reunião
@@ -86,7 +87,12 @@ export function DecisionsPanel({
   canEdit: boolean;
 }) {
   if (decisions.length === 0) {
-    return <p className="text-sm text-ink-muted">Nenhuma decisão identificada nesta reunião.</p>;
+    return (
+      <div>
+        <p className="text-sm text-ink-muted">Nenhuma decisão identificada nesta reunião.</p>
+        {canEdit ? <GenerateOutcomeButton meetingId={meetingId} /> : null}
+      </div>
+    );
   }
   return (
     <div className="overflow-x-auto">
@@ -184,7 +190,12 @@ export function ActionsPanel({
   canEdit: boolean;
 }) {
   if (actionItems.length === 0) {
-    return <p className="text-sm text-ink-muted">Nenhuma ação identificada nesta reunião.</p>;
+    return (
+      <div>
+        <p className="text-sm text-ink-muted">Nenhuma ação identificada nesta reunião.</p>
+        {canEdit ? <GenerateOutcomeButton meetingId={meetingId} /> : null}
+      </div>
+    );
   }
   return (
     <div className="overflow-x-auto">
