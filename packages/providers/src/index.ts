@@ -5,6 +5,7 @@ export {
   DEFAULT_AGENT_IDS,
   DEFAULT_COUNSELOR_AGENT_IDS,
   PRESIDENT_AGENT_ID,
+  SECRETARY_AGENT_ID,
 } from './types';
 export type {
   AgentId,

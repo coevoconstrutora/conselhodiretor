@@ -14,6 +14,7 @@ export const AGENT_EMOJI: Record<string, string> = {
   cfo: '💰',
   futurista: '🔭',
   presidente: '⭐',
+  secretaria: '📝',
 };
 
 const DEFAULT_EMOJI = '🧑‍💼';
@@ -58,9 +59,17 @@ export interface AgentDisplayInfo {
   readonly briefing: string;
 }
 
+/** Ordem de exibição: especialistas primeiro, Presidente depois, Secretária por último. */
+function agentDisplayRank(agentId: string): number {
+  if (agentId === 'presidente') return 1;
+  if (agentId === 'secretaria') return 2;
+  return 0;
+}
+
 /**
- * Roster ordenado pra UI: Presidente sempre por último (ele só sintetiza,
- * nunca é "mais um especialista"), resto na ordem do registry.
+ * Roster ordenado pra UI: Presidente e Secretária sempre por último (nenhum
+ * dos dois é "mais um especialista" — um sintetiza, a outra registra a ata),
+ * resto na ordem do registry.
  */
 export function buildAgentRoster(
   profiles: Record<
@@ -77,7 +86,7 @@ export function buildAgentRoster(
   >,
 ): AgentDisplayInfo[] {
   return Object.values(profiles)
-    .sort((a, b) => (a.agentId === 'presidente' ? 1 : b.agentId === 'presidente' ? -1 : 0))
+    .sort((a, b) => agentDisplayRank(a.agentId) - agentDisplayRank(b.agentId))
     .map((p) => {
       const { name, area } = splitNameArea(p.displayName);
       return {

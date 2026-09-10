@@ -42,6 +42,9 @@ function historicalLabel(
   isPresident: boolean,
   historicalCounts: ReadonlyMap<string, number> | undefined,
 ): { state: string; label: string } {
+  // Secretária nunca é "acionada" (sem triggers) — a ata dela mora na aba
+  // dedicada, não nesta contagem de contribuições ao vivo.
+  if (agentId === 'secretaria') return { state: 'registrou-ata', label: 'redigiu a ata' };
   if (!historicalCounts) return { state: 'encerrado', label: 'encerrado' };
   const count = historicalCounts.get(agentId) ?? 0;
   if (isPresident) {

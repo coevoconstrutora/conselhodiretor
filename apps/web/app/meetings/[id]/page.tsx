@@ -32,6 +32,7 @@ import { MeetBotPanel } from '@/components/meet-bot-panel';
 import { EndMeetingButton } from '@/components/end-meeting-button';
 import { ReportsGeneratorForm } from '@/components/reports-generator-form';
 import { PresidentSynthesisButton } from '@/components/president-synthesis-button';
+import { SecretaryMinutesButton } from '@/components/secretary-minutes-button';
 import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
@@ -65,7 +66,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const profiles = getAgentProfiles(user.companyId);
   const activeAgentIds = await getMeetingActiveAgentIds(db, id);
   const roomAgents = buildAgentRoster(profiles).filter(
-    (a) => a.id === 'presidente' || !activeAgentIds || activeAgentIds.includes(a.id),
+    (a) => a.id === 'presidente' || a.id === 'secretaria' || !activeAgentIds || activeAgentIds.includes(a.id),
   );
 
   await getCompanyKnowledgeStore(user.companyId);
@@ -102,7 +103,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const actionItems = closed && authorized ? await loadMeetingActionItems(id) : [];
   const meetingAnalysis = closed && authorized ? await loadMeetingAnalysis(id) : null;
   const presidentReport = reports.find((r) => r.agentId === 'presidente') ?? null;
-  const counselorReports = reports.filter((r) => r.agentId !== 'presidente');
+  const secretaryReport = reports.find((r) => r.agentId === 'secretaria') ?? null;
+  const counselorReports = reports.filter((r) => r.agentId !== 'presidente' && r.agentId !== 'secretaria');
   const historicalCounts = closed
     ? new Map<string, number>([
         ...contributionCounts,
@@ -116,10 +118,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       <details
         key={report.agentId}
         className="rounded-[var(--radius)] border border-ink/10 bg-surface"
-        open={report.agentId === 'presidente'}
+        open={report.agentId === 'presidente' || report.agentId === 'secretaria'}
       >
         <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-ink">
-          {report.agentId === 'presidente' ? '⭐ ' : ''}
+          {report.agentId === 'presidente' ? '⭐ ' : report.agentId === 'secretaria' ? '📝 ' : ''}
           {profiles[report.agentId]?.displayName ?? report.agentId}
           <span className="ml-2 text-[11px] font-normal text-ink-muted">
             atualizado {formatDateTimeBR(report.updatedAt)}
@@ -353,7 +355,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 contribuicoes={<ContributionsPanel contributions={contributions} profiles={profiles} />}
                 decisoes={<DecisionsPanel decisions={decisions} />}
                 acoes={<ActionsPanel actionItems={actionItems} />}
-                ata={
+                relatorios={
                   <div>
                     <div className="mb-4 flex items-center justify-between">
                       <div>
@@ -420,6 +422,30 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                         </ul>
                       </div>
                     ) : null}
+                  </div>
+                }
+                ata={
+                  <div>
+                    <p className="mb-4 text-xs text-ink-muted">
+                      A ata oficial da reunião — decisões tomadas, metas estabelecidas e ações a
+                      realizar — redigida pela Secretária a partir da transcrição, dos relatórios
+                      dos conselheiros e da síntese do Presidente.
+                    </p>
+                    {secretaryReport ? (
+                      renderReportDetails(secretaryReport)
+                    ) : presidentReport ? (
+                      <div className="rounded-[var(--radius)] border border-dashed border-ink/15 p-4">
+                        <p className="text-sm text-ink-muted">
+                          Ata ainda não gerada — pode ter falhado durante a geração automática após
+                          a síntese do Presidente.
+                        </p>
+                        <SecretaryMinutesButton meetingId={id} />
+                      </div>
+                    ) : (
+                      <p className="text-sm text-ink-muted">
+                        Ata não disponível — gere a síntese do Presidente primeiro.
+                      </p>
+                    )}
                   </div>
                 }
               />

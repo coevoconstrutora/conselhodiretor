@@ -44,7 +44,7 @@ export async function runAutoConfiguratorAction(
   const db = await getDb();
   await loadAndApplyProfileOverrides(db, user.companyId);
   const profile = getAgentProfiles(user.companyId)[agentId];
-  if (!profile || agentId === 'presidente') return { error: 'Conselheiro inválido.' };
+  if (!profile || agentId === 'presidente' || agentId === 'secretaria') return { error: 'Conselheiro inválido.' };
 
   try {
     const { llm } = createLlm({ maxTokens: 900 });
@@ -172,7 +172,7 @@ export async function runBoardAutoConfiguratorAction(
   const results: BoardConfiguratorSummary[] = [];
   for (const agentId of selected) {
     const profile = profiles[agentId];
-    if (!profile || agentId === 'presidente') continue;
+    if (!profile || agentId === 'presidente' || agentId === 'secretaria') continue;
     try {
       const result = await runAutoConfigurator(db, llm, user.companyId, agentId, 'completo', includeHistory);
       results.push({

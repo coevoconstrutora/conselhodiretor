@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
-import { PRESIDENT_AGENT_ID } from '@conselho/providers';
+import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID } from '@conselho/providers';
 import { requireCurrentUser, canWrite } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
@@ -18,7 +18,7 @@ export default async function CounselorsPage() {
   await loadAndApplyProfileOverrides(db, user.companyId);
   const profiles = getAgentProfiles(user.companyId);
   const counselors: CounselorSummary[] = Object.values(profiles)
-    .filter((p) => p.agentId !== PRESIDENT_AGENT_ID)
+    .filter((p) => p.agentId !== PRESIDENT_AGENT_ID && p.agentId !== SECRETARY_AGENT_ID)
     .map((p) => ({
       agentId: p.agentId,
       displayName: p.displayName,
@@ -39,17 +39,25 @@ export default async function CounselorsPage() {
         </>
       }
     >
-      <section className="mt-8 flex items-center justify-between gap-3">
+      <section className="mt-8 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-ink-muted">
-          O Presidente do Conselho não aparece na lista abaixo — ele não é um especialista, é
-          governança e síntese.
+          O Presidente do Conselho e a Secretária não aparecem na lista abaixo — não são
+          especialistas: um é governança e síntese, a outra redige a ata ao final.
         </p>
-        <Link
-          href="/counselors/presidente"
-          className="shrink-0 rounded-[var(--radius)] border border-ink/15 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted"
-        >
-          ⚙️ Configurar Presidente
-        </Link>
+        <div className="flex shrink-0 gap-2">
+          <Link
+            href="/counselors/presidente"
+            className="rounded-[var(--radius)] border border-ink/15 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            ⚙️ Configurar Presidente
+          </Link>
+          <Link
+            href="/counselors/secretaria"
+            className="rounded-[var(--radius)] border border-ink/15 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted"
+          >
+            ⚙️ Configurar Secretária
+          </Link>
+        </div>
       </section>
 
       <section className="mt-6">

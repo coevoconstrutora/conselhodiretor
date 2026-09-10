@@ -8,12 +8,23 @@
 > Derivado da arquitetura do NutriMed (auditada em 2026-07-06), com as dívidas conhecidas
 > corrigidas na origem.
 
-## Os 9 agentes (slugs de `AgentId` em @conselho/providers)
+## Os 9 agentes + Secretária (slugs de `AgentId` em @conselho/providers)
 
 `engenharia` · `vendas` · `mercado` · `arquitetura` · `legal` · `cs` · `cfo` · `futurista` ·
 `presidente` (só sintetiza — não tem triggers). Perfis/escopos: `packages/kb/src/reasoner.ts`
-(`AGENT_PROFILES`). Triggers regex por agente: `packages/engines/src/triggers.ts`.
+(`DEFAULT_AGENT_PROFILES`). Triggers regex por agente: `packages/engines/src/triggers.ts`.
 KB seed: `docs/agents-knowledge-seed.md` (seção `## <slug>` por agente; re-ingestão versionada).
+
+`secretaria` (`SECRETARY_AGENT_ID`, Etapa "Secretária") — 10º papel, presente na reunião mas
+sem KB própria e sem triggers (nunca opina/delibera ao vivo, fora do `BoardGatekeeper` e do
+`relevanceRouter` — mesmo tratamento do Presidente em `packages/board/src/full-board.ts`).
+Ao final, com a síntese do Presidente já pronta, redige a ATA
+(`generateSecretaryMinutes`, `packages/meeting-report/src/reports.ts`) a partir da
+transcrição + 8 relatórios + síntese — decisões tomadas, metas estabelecidas e ações a
+realizar. Persistida na mesma tabela `agent_report` (`agent_id = 'secretaria'`), aba
+dedicada "📝 Ata" em `/meetings/[id]` (fallback manual: `generateSecretaryMinutesAction`).
+Excluída de tudo que trata "conselheiro" no sentido estrito: KB (`kb-sources.ts`),
+experimentos de IA, Auto Configurador, seleção de conselheiros por tipo de reunião.
 
 ## Monorepo (17 pacotes)
 
@@ -40,7 +51,7 @@ packages/telemetry       custo/gate/latência + purgeExpired(TTL 24h)
 Comandos: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` · `pnpm dev` ·
 `pnpm create-user -- --email ... --nome ... --senha ... [--desativar-demo]` (usuário dono;
 rodar com o dev PARADO em dev local — PGlite é single-process).
-Suíte: 178 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
+Suíte: 375 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
 DATABASE_URL, salvo ALLOW_DEMO_LOGIN=true): `demo@conselho.test` / `conselho123`.
 
 **Docs de produto (para revenda/instalação por terceiros):**
@@ -66,7 +77,7 @@ imobiliário; NÃO persiste transcript) ou "🎙️ Reunião ao vivo" (mic → W
 transcript persistido cifrado) → contribuições auditadas com anti-repetição (histórico +
 skip + dedup semântico + CaseState + case review 90s) → síntese do Presidente (auto/择demanda)
 → 📝 revisão do transcript → 📊 "Gerar relatórios do conselho" (8 relatórios em série +
-síntese do Presidente; cifrados + auditados atomicamente; editáveis).
+síntese do Presidente + ata da Secretária; cifrados + auditados atomicamente; editáveis).
 
 ## Correções estruturais vs. NutriMed (aplicadas na origem)
 
@@ -113,6 +124,12 @@ síntese do Presidente; cifrados + auditados atomicamente; editáveis).
 2. Upload de PDF/Word no NotebookLM (extração via Claude — hoje: .txt/.md/.csv ou colar texto).
 3. Enriquecer as bases via UI (/counselors) com conteúdo real do empresário.
 4. Middleware global de auth do Next (hoje: `getCurrentUser()` manual por página, como no NutriMed).
-5. Export dos relatórios (PDF/Word) e envio por e-mail.
-6. Deploy (Fly.io/outro) quando o empresário aprovar o piloto local.
-7. 🔐 Rotacionar a ANTHROPIC_API_KEY usada nos testes (passou pelo chat) antes de demo pública.
+5. 🔐 Rotacionar a ANTHROPIC_API_KEY usada nos testes (passou pelo chat) antes de demo pública.
+6. Área restrita de custos (Fly.io/Recall.ai/Deepgram/LLM) — em andamento.
+7. "Resetar conselheiros" — voltar TODOS os agentes ao perfil mínimo padrão, para
+   testes/reconfiguração (já existe `resetAgentProfiles` em `@conselho/kb`, sem UI/ação
+   ligada ainda — precisa decidir escopo: só `agent_profile`, ou também KB/custom).
+
+~~Export dos relatórios (PDF/Word) e envio por e-mail~~ — feito (`report-export.ts` +
+`email.ts`). ~~Deploy~~ — feito: app `conselho-diretor` já rodando em produção no Fly.io
+(`conselho-diretor.fly.dev`).

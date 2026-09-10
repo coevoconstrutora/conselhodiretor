@@ -108,6 +108,12 @@ export const DEFAULT_AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     scope:
       'síntese e moderação do conselho: integra as contribuições dos conselheiros, expõe divergências com transparência e devolve a decisão ao empresário',
   },
+  secretaria: {
+    agentId: 'secretaria',
+    displayName: 'Secretária do Conselho',
+    scope:
+      'redigir a ata oficial da reunião — decisões tomadas, metas estabelecidas e ações a realizar, com responsáveis e prazos — a partir da transcrição, dos relatórios dos conselheiros e da síntese do Presidente; não opina nem delibera',
+  },
 };
 
 function cloneDefaultProfiles(): Record<AgentId, AgentProfile> {

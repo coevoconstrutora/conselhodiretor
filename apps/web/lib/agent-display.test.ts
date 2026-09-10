@@ -10,6 +10,10 @@ describe('getAgentEmoji', () => {
   it('cai no genérico para um agentId custom desconhecido', () => {
     expect(getAgentEmoji('rh-e-cultura')).toBe('🧑‍💼');
   });
+
+  it('devolve o emoji curado da Secretária', () => {
+    expect(getAgentEmoji('secretaria')).toBe('📝');
+  });
 });
 
 describe('buildQuickBriefing', () => {
@@ -57,6 +61,16 @@ describe('buildAgentRoster', () => {
     };
     const roster = buildAgentRoster(profiles);
     expect(roster.map((r) => r.id)).toEqual(['cfo', 'custom', 'presidente']);
+  });
+
+  it('coloca a Secretária depois do Presidente, por último de todos', () => {
+    const profiles = {
+      secretaria: { agentId: 'secretaria', displayName: 'Secretária do Conselho', scope: 'ata' },
+      presidente: { agentId: 'presidente', displayName: 'Presidente do Conselho', scope: 'síntese' },
+      cfo: { agentId: 'cfo', displayName: 'CFO — Funding', scope: 'fluxo de caixa' },
+    };
+    const roster = buildAgentRoster(profiles);
+    expect(roster.map((r) => r.id)).toEqual(['cfo', 'presidente', 'secretaria']);
   });
 
   it('prefere o briefing gerado por IA sobre o corte cru do escopo, quando presente', () => {

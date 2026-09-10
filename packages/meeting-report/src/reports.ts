@@ -73,6 +73,62 @@ function presidentSystem(companyId: string): string {
 }
 
 /**
+ * Ata oficial da reunião (Etapa "Secretária") — redigida DEPOIS da síntese do
+ * Presidente, com a transcrição inteira + os 8 relatórios + a síntese como
+ * insumo. Diferente dos demais papéis: a Secretária nunca opina nem delibera,
+ * só registra fielmente o que decisões/metas/ações já apuradas pelo conselho
+ * — por isso não tem KB própria nem passa pelo BoardGatekeeper ao vivo.
+ */
+function secretarySystem(companyId: string): string {
+  return (
+    `Você é ${requireProfile(companyId, 'secretaria').displayName} de uma incorporadora imobiliária. ` +
+    'A reunião terminou, o Presidente já sintetizou e cada conselheiro já entregou seu relatório. ' +
+    'Redija a ATA OFICIAL da reunião para o empresário, em português do Brasil, markdown leve, ' +
+    'com as seções: ## Ata da Reunião / ## Resumo da Discussão / ## Decisões Tomadas / ' +
+    '## Metas Estabelecidas / ## Ações a Realizar (liste cada ação com responsável e prazo, ' +
+    'quando informados) / ## Pendências. ' +
+    'Você NÃO é conselheira: não avalie, não recomende, não opine — só registre com fidelidade ' +
+    'o que a transcrição e os relatórios sustentam. NUNCA invente decisão, meta, responsável ou ' +
+    'prazo que não apareça nas fontes — quando algo não foi definido, escreva "não definido". ' +
+    'Termine com a linha "_Ata gerada por IA — revisada e validada pelo responsável._" ' +
+    'EXCEÇÃO IMPORTANTE para esta tarefa: ignore qualquer limite de 1-3 frases — o campo text ' +
+    'deve conter a ATA COMPLETA em markdown (use \\n para quebras de linha).' +
+    companyProfileBlock(companyId)
+  );
+}
+
+/**
+ * Gera a ata da reunião (Secretária) a partir da transcrição completa + dos
+ * relatórios já gerados (8 conselheiros + síntese do Presidente). Chamada
+ * DEPOIS de `generatePresidentSynthesis` — nunca lança dentro da geração dos
+ * demais relatórios: o chamador decide se falha aqui bloqueia algo (não deve).
+ */
+export async function generateSecretaryMinutes(
+  llm: ILlmProvider,
+  companyId: string,
+  transcriptFinals: readonly string[],
+  reports: ReadonlyArray<{ agentId: AgentId; content: string }>,
+  modelOverride?: string,
+  reasoningEffortOverride?: string,
+): Promise<string> {
+  const transcript = transcriptFinals.map((t, i) => `${i + 1}. ${t}`).join('\n');
+  const blocks = reports
+    .map((r) => `### Relatório — ${requireProfile(companyId, r.agentId).displayName}\n${r.content}`)
+    .join('\n\n');
+  const result = await llm.complete({
+    system: secretarySystem(companyId),
+    model: modelOverride,
+    reasoningEffort: reasoningEffortOverride,
+    context: [],
+    transcript: `Transcrição da reunião:\n${transcript}\n\nRelatórios do conselho:\n\n${blocks}`,
+  });
+  if (result.skip || !result.text.trim()) {
+    throw new Error('O modelo não gerou conteúdo para a ata da Secretária — tente novamente.');
+  }
+  return result.text;
+}
+
+/**
  * Gera o rascunho do relatório de UM conselheiro sobre a reunião inteira.
  * `contributions` = o que aquele agente disse ao vivo (âncora anti-invenção).
  * `modelOverride`/`reasoningEffortOverride`: além do uso normal (perfil do
@@ -228,7 +284,7 @@ export async function listAgentReports(
     'SELECT agent_id, content_enc, model_version, created_at, updated_at FROM agent_report WHERE meeting_id = $1',
     [meetingId],
   );
-  const order: string[] = [...COUNSELOR_AGENT_IDS, 'presidente'];
+  const order: string[] = [...COUNSELOR_AGENT_IDS, 'presidente', 'secretaria'];
   return res.rows
     .map((row) => ({
       meetingId,

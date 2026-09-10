@@ -15,6 +15,7 @@ export {
 export {
   generateCounselorReport,
   generatePresidentSynthesis,
+  generateSecretaryMinutes,
   saveAgentReport,
   loadAgentReport,
   listAgentReports,

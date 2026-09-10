@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { PRESIDENT_AGENT_ID, type AgentId } from '@conselho/providers';
+import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID, type AgentId } from '@conselho/providers';
 import { getAgentProfiles } from '@conselho/kb';
 import type { MeetingTypeRow } from '@conselho/db';
 import { getCurrentUser, canWrite } from './auth';
@@ -10,9 +10,11 @@ import { loadAndApplyProfileOverrides } from './kb-sources';
 
 /**
  * Tipos de reunião ("Comitê Geral", "Comitê de Engenharia", ...) — escopam
- * quais conselheiros participam de uma reunião. O Presidente NUNCA entra na
- * lista: ele só sintetiza no final, não reage a gatilho, então não é um
- * "participante" no sentido desta feature.
+ * quais conselheiros participam de uma reunião. O Presidente e a Secretária
+ * NUNCA entram na lista: nenhum dos dois reage a gatilho ao vivo (o
+ * Presidente só sintetiza, a Secretária só redige a ata no final), então não
+ * são "participantes" no sentido desta feature — estão sempre presentes,
+ * independente do tipo de reunião.
  */
 
 export interface MeetingTypeSummary {
@@ -45,7 +47,9 @@ async function parseAgentIds(db: Awaited<ReturnType<typeof getDb>>, companyId: s
   await loadAndApplyProfileOverrides(db, companyId);
   const roster = new Set(Object.keys(getAgentProfiles(companyId)));
   const selected = formData.getAll('agentIds').map(String);
-  return selected.filter((id): id is AgentId => id !== PRESIDENT_AGENT_ID && roster.has(id));
+  return selected.filter(
+    (id): id is AgentId => id !== PRESIDENT_AGENT_ID && id !== SECRETARY_AGENT_ID && roster.has(id),
+  );
 }
 
 export type MeetingTypeActionState = { error?: string; ok?: string } | null;

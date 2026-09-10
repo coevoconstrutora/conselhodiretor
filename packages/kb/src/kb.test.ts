@@ -171,9 +171,20 @@ describe('AgentReasoner + prompts restritos', () => {
     expect(llm.lastRequest!.system).toContain('NUNCA opine fora do seu escopo');
   });
 
-  it('DEFAULT_AGENT_PROFILES cobre os 9 agentes do Conselho', () => {
+  it('DEFAULT_AGENT_PROFILES cobre os 9 agentes do Conselho + a Secretária', () => {
     expect(Object.keys(DEFAULT_AGENT_PROFILES).sort()).toEqual(
-      ['arquitetura', 'cfo', 'cs', 'engenharia', 'futurista', 'legal', 'mercado', 'presidente', 'vendas'].sort(),
+      [
+        'arquitetura',
+        'cfo',
+        'cs',
+        'engenharia',
+        'futurista',
+        'legal',
+        'mercado',
+        'presidente',
+        'secretaria',
+        'vendas',
+      ].sort(),
     );
   });
 });

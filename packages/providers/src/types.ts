@@ -19,6 +19,15 @@ export type AgentId = string;
 /** Id reservado do sintetizador — nunca é um "participante" comum. */
 export const PRESIDENT_AGENT_ID = 'presidente';
 
+/**
+ * Id reservado da Secretária — presente na reunião mas nunca opina nem
+ * delibera (sem triggers, nunca passa pelo BoardGatekeeper). Ao final da
+ * reunião, redige a ata a partir da transcrição + relatórios dos
+ * conselheiros + síntese do Presidente. Não é um "conselheiro" (sem base de
+ * conhecimento própria, fora dos experimentos/auto-configurador).
+ */
+export const SECRETARY_AGENT_ID = 'secretaria';
+
 /** Os 9 conselheiros padrão, na ordem de exibição — semente de empresa nova. */
 export const DEFAULT_AGENT_IDS: readonly AgentId[] = [
   'engenharia', // Engenharia e Lean Construction

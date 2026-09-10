@@ -99,7 +99,8 @@ export async function createExperimentAction(
   if (targetType === 'counselor') {
     await loadAndApplyProfileOverrides(db, user.companyId);
     const profile = getAgentProfiles(user.companyId)[targetAgentIdRaw];
-    if (!profile || targetAgentIdRaw === 'presidente') return { error: 'Conselheiro inválido.' };
+    if (!profile || targetAgentIdRaw === 'presidente' || targetAgentIdRaw === 'secretaria')
+      return { error: 'Conselheiro inválido.' };
     targetAgentId = targetAgentIdRaw as AgentId;
     baselineModel = profile.aiModel ?? DEFAULT_AI_MODEL;
     baselineReasoningEffort = profile.reasoningEffort ?? DEFAULT_REASONING_EFFORT;

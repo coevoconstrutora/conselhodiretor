@@ -159,6 +159,8 @@ export async function addTextSourceAction(
     const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
+    if (agentId === 'secretaria')
+      return { error: 'A Secretária não tem base própria — ela lê a transcrição e os relatórios para redigir a ata.' };
     const title = String(formData.get('title') ?? '').trim();
     const content = String(formData.get('content') ?? '').trim();
     if (!title) return { error: 'Dê um título à fonte (ex.: "Política de contingência 2026").' };
@@ -188,6 +190,8 @@ export async function addUrlSourceAction(
     const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
+    if (agentId === 'secretaria')
+      return { error: 'A Secretária não tem base própria — ela lê a transcrição e os relatórios para redigir a ata.' };
     const url = String(formData.get('url') ?? '').trim();
     if (!url) return { error: 'Informe a URL.' };
     const rescanDaysRaw = String(formData.get('rescanDays') ?? '').trim();
@@ -225,6 +229,8 @@ export async function addFileSourceAction(
     const agentId = await parseAgentId(db, user.companyId, formData.get('agentId'));
     if (agentId === 'presidente')
       return { error: 'O Presidente não tem base própria — ele sintetiza os demais.' };
+    if (agentId === 'secretaria')
+      return { error: 'A Secretária não tem base própria — ela lê a transcrição e os relatórios para redigir a ata.' };
     const file = formData.get('file');
     if (!(file instanceof File) || file.size === 0)
       return { error: 'Selecione um arquivo .txt, .md, .csv, .pdf ou .docx.' };
@@ -261,9 +267,9 @@ export async function deleteSourceAction(formData: FormData): Promise<void> {
   revalidatePath(`/counselors/${agentId}`);
 }
 
-/** Garante que só conselheiros com KB (todos exceto o Presidente) aceitam fontes. */
+/** Garante que só conselheiros com KB (todos exceto Presidente e Secretária) aceitam fontes. */
 export async function isCounselorWithKb(agentId: AgentId): Promise<boolean> {
-  return agentId !== 'presidente';
+  return agentId !== 'presidente' && agentId !== 'secretaria';
 }
 
 /**

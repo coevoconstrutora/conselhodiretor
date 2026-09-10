@@ -4,13 +4,14 @@ import { revalidatePath } from 'next/cache';
 import {
   generateCounselorReport,
   generatePresidentSynthesis,
+  generateSecretaryMinutes,
   saveAgentReport,
   listAgentReports,
   extractMeetingOutcome,
   saveMeetingOutcome,
 } from '@conselho/meeting-report';
 import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
-import { PRESIDENT_AGENT_ID, type AgentId, type ILlmProvider } from '@conselho/providers';
+import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID, type AgentId, type ILlmProvider } from '@conselho/providers';
 import { getAgentProfiles } from '@conselho/kb';
 import type { SqlExecutor } from '@conselho/db';
 import { getCurrentUser, canWrite, type CurrentUser } from './auth';
@@ -70,7 +71,7 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
     // um conselheiro custom nunca ganharia relatório (Etapa 20)
     await loadAndApplyProfileOverrides(db, user.companyId);
     const counselorAgentIds = Object.keys(getAgentProfiles(user.companyId)).filter(
-      (id) => id !== PRESIDENT_AGENT_ID,
+      (id) => id !== PRESIDENT_AGENT_ID && id !== SECRETARY_AGENT_ID,
     ) as AgentId[];
 
     // 1 relatório por conselheiro, em série (evita rajada de N chamadas simultâneas)
@@ -84,7 +85,7 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
       reports.push({ agentId, content });
     }
 
-    await synthesizePresidentReport(db, meetingId, user, reports, llm, modelLabel, key);
+    await synthesizePresidentReport(db, meetingId, user, reports, llm, modelLabel, key, inputs.finals);
 
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
@@ -120,6 +121,7 @@ async function synthesizePresidentReport(
   llm: ILlmProvider,
   modelLabel: string,
   key: Buffer,
+  transcriptFinals: readonly string[],
 ): Promise<void> {
   // "raciocínio da síntese final" da Configuração do Presidente (tipicamente
   // xhigh/max, só aqui, 1x por reunião).
@@ -152,6 +154,26 @@ async function synthesizePresidentReport(
     await saveMeetingOutcome(db, meetingId, outcome, key).catch((error) =>
       console.error('[relatorios] salvar decisões/ações falhou:', error),
     );
+  }
+
+  // Ata da Secretária (Etapa "Secretária") — última peça da cadeia: transcrição
+  // + relatórios + síntese já existem. Nunca bloqueia nem derruba a geração
+  // da síntese; falha aqui só deixa a aba "Ata" sem conteúdo.
+  try {
+    const minutes = await generateSecretaryMinutes(
+      llm,
+      user.companyId,
+      transcriptFinals,
+      [...reports, { agentId: PRESIDENT_AGENT_ID, content: synthesis }],
+      presidentConfig.synthesisModel,
+      presidentConfig.synthesisReasoningEffort,
+    );
+    await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, minutes, key, {
+      action: 'generate',
+      modelVersion: modelLabel,
+    });
+  } catch (error) {
+    console.error('[relatorios] ata da secretária falhou:', error);
   }
 
   // Auto-análise (Etapa "Auto-análise e melhoria contínua") — só AGORA
@@ -189,16 +211,65 @@ export async function generatePresidentSynthesisAction(meetingId: string): Promi
       return { ok: false, code: 'invalid-input' };
     }
     const key = getEncryptionKey();
-    const existing = (await listAgentReports(db, meetingId, key)).filter((r) => r.agentId !== PRESIDENT_AGENT_ID);
+    const existing = (await listAgentReports(db, meetingId, key)).filter(
+      (r) => r.agentId !== PRESIDENT_AGENT_ID && r.agentId !== SECRETARY_AGENT_ID,
+    );
     if (existing.length === 0) {
       return { ok: false, code: 'invalid-input', detail: 'Gere os relatórios dos conselheiros antes da síntese.' };
     }
+    const inputs = await getNoteInputs(meetingId);
     const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
-    await synthesizePresidentReport(db, meetingId, user, existing, llm, modelLabel, key);
+    await synthesizePresidentReport(db, meetingId, user, existing, llm, modelLabel, key, inputs?.finals ?? []);
     revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
   } catch (err) {
     console.error('[relatorios] síntese do Presidente falhou:', err);
+    return toActionResult(err);
+  }
+}
+
+/**
+ * Botão de fallback "Gerar ata da Secretária" (aba Ata): cobre o caso em que a
+ * síntese do Presidente existe mas a ata falhou (a geração automática já
+ * tenta isso ao final de `synthesizePresidentReport`, mas nunca bloqueia —
+ * então pode faltar). Regenera só a ata, sem repetir síntese nem relatórios.
+ */
+export async function generateSecretaryMinutesAction(meetingId: string): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, code: 'unauthenticated' };
+  if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem gerar relatórios.' };
+  if (!meetingId) return { ok: false, code: 'invalid-input' };
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return { ok: false, code: 'internal', detail: 'Nenhuma chave de LLM (OPENAI_API_KEY/GEMINI_API_KEY/ANTHROPIC_API_KEY) no servidor.' };
+  }
+  try {
+    const db = await getDb();
+    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+      return { ok: false, code: 'invalid-input' };
+    }
+    const key = getEncryptionKey();
+    const allReports = await listAgentReports(db, meetingId, key);
+    const presidentReport = allReports.find((r) => r.agentId === PRESIDENT_AGENT_ID);
+    if (!presidentReport) {
+      return { ok: false, code: 'invalid-input', detail: 'Gere a síntese do Presidente antes da ata.' };
+    }
+    const inputs = await getNoteInputs(meetingId);
+    await loadAndApplyPresidentConfig(db, user.companyId);
+    const presidentConfig = getPresidentConfig(user.companyId);
+    const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
+    const minutes = await generateSecretaryMinutes(
+      llm,
+      user.companyId,
+      inputs?.finals ?? [],
+      allReports.filter((r) => r.agentId !== SECRETARY_AGENT_ID),
+      presidentConfig.synthesisModel,
+      presidentConfig.synthesisReasoningEffort,
+    );
+    await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, minutes, key, { action: 'generate', modelVersion: modelLabel });
+    revalidatePath(`/meetings/${meetingId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error('[relatorios] ata da secretária falhou:', err);
     return toActionResult(err);
   }
 }

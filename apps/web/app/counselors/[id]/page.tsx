@@ -43,7 +43,8 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   if (!profile) notFound();
   const agentId = id as AgentId;
   const isPresident = agentId === 'presidente';
-  const sources = isPresident ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
+  const isSecretary = agentId === 'secretaria';
+  const sources = isPresident || isSecretary ? [] : await listKbSources(db, user.companyId, agentId, getEncryptionKey());
   const totalChars = sources.reduce((acc, s) => acc + s.chars, 0);
   const { scopeCan, scopeCannot } = await loadScopeSplit(db, user.companyId, agentId);
   if (isPresident) await loadAndApplyPresidentConfig(db, user.companyId);
@@ -52,7 +53,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   // Revisão automática de fontes por LINK vencidas — não bloqueia o render
   // (best-effort; processo fica de pé no Fly Machine, então isso completa
   // em background mesmo depois da resposta ir pro navegador).
-  if (!isPresident) {
+  if (!isPresident && !isSecretary) {
     void (async () => {
       try {
         const key = getEncryptionKey();
@@ -96,7 +97,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
               conselheiro não opina. Mudanças valem imediatamente.
             </p>
           </div>
-          {!isPresident ? <AutoConfiguratorPanel agentId={agentId} /> : null}
+          {!isPresident && !isSecretary ? <AutoConfiguratorPanel agentId={agentId} /> : null}
         </div>
         <ProfileForm
           agentId={agentId}
@@ -143,6 +144,20 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
             </p>
           </section>
         </>
+      ) : isSecretary ? (
+        <section className="card-premium mt-6 p-6">
+          <h2 className="font-display text-base font-semibold text-ink">
+            <span className="blueprint-index mr-2 text-brand/70">02/</span>
+            Base de conhecimento
+          </h2>
+          <p className="mt-2 text-sm text-ink-muted">
+            A Secretária não tem base própria: o papel dela é <strong>registrar</strong> a
+            reunião — ao final, ela lê a transcrição, os relatórios dos conselheiros e a síntese
+            do Presidente para redigir a ata (decisões, metas e ações), na aba{' '}
+            <strong>Ata</strong> da reunião. Para influenciar a ata, ajuste os relatórios ou a
+            síntese — não há conhecimento a alimentar aqui.
+          </p>
+        </section>
       ) : (
         <>
           {/* Fontes atuais */}

@@ -684,7 +684,7 @@ export async function rebuildAgentKnowledge(
   agentId: AgentId,
   encryptionKey: Buffer,
 ): Promise<{ chunkCount: number; sourceCount: number }> {
-  if (agentId === 'presidente') return { chunkCount: 0, sourceCount: 0 }; // só sintetiza
+  if (agentId === 'presidente' || agentId === 'secretaria') return { chunkCount: 0, sourceCount: 0 }; // sem base própria
 
   const chunks: KbChunk[] = [];
 

@@ -322,10 +322,12 @@ export class FullBoardOrchestrator {
     // Roteador de relevância (Etapa "Orquestração") — ADITIVO: só cobre
     // agentes que os triggers regex NÃO pegaram neste segmento, e só quando
     // o segmento parece valer a pena (proteção de custo — Seção 16 do
-    // pedido). Presidente nunca entra aqui, ele só sintetiza.
+    // pedido). Presidente e Secretária nunca entram aqui — nenhum dos dois
+    // opina ao vivo (o Presidente só sintetiza, a Secretária só redige a ata
+    // no final).
     if (this.relevanceRouter && isRouterEligible(text, triggeredAgents.size > 0)) {
       const roster: CounselorRelevanceInput[] = Object.values(this.profiles)
-        .filter((p) => p.agentId !== 'presidente' && !triggeredAgents.has(p.agentId))
+        .filter((p) => p.agentId !== 'presidente' && p.agentId !== 'secretaria' && !triggeredAgents.has(p.agentId))
         .filter((p) => !this.activeAgentIds || this.activeAgentIds.has(p.agentId))
         .map((p) => ({ agentId: p.agentId, displayName: p.displayName, scope: p.scope }));
       const scores = await this.relevanceRouter.route(text, roster);
@@ -387,7 +389,12 @@ export class FullBoardOrchestrator {
     this.lastCaseReviewAt = now;
     try {
       const scopes = Object.values(this.profiles)
-        .filter((p) => p.agentId !== 'presidente' && (!this.activeAgentIds || this.activeAgentIds.has(p.agentId)))
+        .filter(
+          (p) =>
+            p.agentId !== 'presidente' &&
+            p.agentId !== 'secretaria' &&
+            (!this.activeAgentIds || this.activeAgentIds.has(p.agentId)),
+        )
         .map((p) => `- ${p.agentId} (${p.displayName}): ${p.scope}`)
         .join('\n');
       const said = this.history
