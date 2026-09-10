@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react';
 import {
   updateCounselorProfileAction,
+  updateSecretaryProfileAction,
   addTextSourceAction,
   addUrlSourceAction,
   addFileSourceAction,
@@ -126,6 +127,53 @@ export function ProfileForm({
       />
       <ScopeTextarea name="scopeCan" label="O que pode opinar" defaultValue={scopeCan} required />
       <ScopeTextarea name="scopeCannot" label="O que não pode opinar" defaultValue={scopeCannot} />
+      <div className="flex items-center justify-between gap-3">
+        <Feedback state={state} />
+        <button type="submit" disabled={pending} className={buttonCls}>
+          {pending ? 'Salvando…' : '💾 Salvar perfil'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Perfil da Secretária — SÓ nome e ícone. Ela não é conselheira: não avalia,
+ * não recomenda, não opina, só registra a ata ao final da reunião — por isso
+ * nenhum campo de escopo/perfil profissional/critérios de decisão/postura de
+ * risco/modelo de IA/voz aparece aqui (nenhum é lido por quem gera a ata).
+ */
+export function SecretaryProfileForm({
+  agentId,
+  displayName,
+  iconKey,
+  iconColor,
+}: {
+  agentId: string;
+  displayName: string;
+  iconKey: string | null;
+  iconColor: string | null;
+}) {
+  const [state, formAction, pending] = useActionState(updateSecretaryProfileAction, null);
+  return (
+    <form action={formAction} className="space-y-3">
+      <input type="hidden" name="agentId" value={agentId} />
+      <label className="block">
+        <span className="text-xs font-semibold text-ink">Nome exibido</span>
+        <input name="displayName" defaultValue={displayName} required className={inputCls} />
+      </label>
+      <div>
+        <span className="text-xs font-semibold text-ink">Ícone</span>
+        <div className="mt-1">
+          <IconPicker
+            name="iconKey"
+            colorName="iconColor"
+            defaultValue={iconKey}
+            defaultColor={iconColor}
+            emojiFallback={getAgentEmoji(agentId)}
+          />
+        </div>
+      </div>
       <div className="flex items-center justify-between gap-3">
         <Feedback state={state} />
         <button type="submit" disabled={pending} className={buttonCls}>

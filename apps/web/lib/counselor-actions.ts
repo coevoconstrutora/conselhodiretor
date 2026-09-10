@@ -1,8 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { type AgentId } from '@conselho/providers';
-import { getAgentProfiles } from '@conselho/kb';
+import { type AgentId, SECRETARY_AGENT_ID } from '@conselho/providers';
+import { getAgentProfiles, DEFAULT_AGENT_PROFILES } from '@conselho/kb';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
@@ -102,6 +102,42 @@ export async function updateCounselorProfileAction(
     return { ok: 'Perfil atualizado — já vale para as próximas contribuições.' };
   } catch (err) {
     console.error('[conselheiros] editar perfil falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao salvar o perfil.' };
+  }
+}
+
+/**
+ * Edita a Secretária — SÓ nome e ícone. Ela não é conselheira (não avalia,
+ * não recomenda, não opina — só registra a ata), então não tem escopo,
+ * perfil profissional, critérios de decisão, postura de risco, modelo de IA
+ * nem voz para configurar (nenhum desses campos é lido por
+ * `generateSecretaryMinutes`). O campo `scope` no banco fica fixo no valor
+ * de fábrica — nunca exposto nem editável aqui.
+ */
+export async function updateSecretaryProfileAction(
+  _prev: CounselorActionState,
+  formData: FormData,
+): Promise<CounselorActionState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!canWrite(user)) return { error: 'Convidados não podem editar conselheiros.' };
+  try {
+    const displayName = String(formData.get('displayName') ?? '').trim();
+    if (displayName.length < 3) return { error: 'O nome precisa de pelo menos 3 caracteres.' };
+    const iconKey = String(formData.get('iconKey') ?? '').trim() || null;
+    const iconColor = String(formData.get('iconColor') ?? '').trim() || null;
+    const db = await getDb();
+    const fixedScope = DEFAULT_AGENT_PROFILES[SECRETARY_AGENT_ID]!.scope;
+    await saveAgentProfile(db, user.companyId, SECRETARY_AGENT_ID, displayName, fixedScope, '', {
+      iconKey,
+      iconColor,
+    });
+    revalidatePath(`/counselors/${SECRETARY_AGENT_ID}`);
+    revalidatePath('/counselors');
+    revalidatePath('/');
+    return { ok: 'Perfil da Secretária atualizado.' };
+  } catch (err) {
+    console.error('[conselheiros] editar perfil da secretária falhou:', err);
     return { error: err instanceof Error ? err.message : 'Falha inesperada ao salvar o perfil.' };
   }
 }

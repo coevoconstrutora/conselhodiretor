@@ -19,7 +19,7 @@ import { AutoConfiguratorPanel } from '@/components/auto-configurator';
 import { getAgentEmoji } from '@/lib/agent-display';
 import { AgentIcon } from '@/lib/agent-icons';
 import { formatDateBR } from '@/lib/format';
-import { ProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
+import { ProfileForm, SecretaryProfileForm, AddTextForm, AddUrlForm, AddFileForm } from '@/components/counselor-manager';
 import { CounselorBriefingCard } from '@/components/counselor-briefing';
 import { DashboardShell } from '@/components/dashboard-shell';
 
@@ -70,7 +70,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
 
   return (
     <DashboardShell pageTitle={profile.displayName}>
-      <CounselorBriefingCard agentId={agentId} briefing={profile.briefing ?? null} />
+      {!isSecretary ? <CounselorBriefingCard agentId={agentId} briefing={profile.briefing ?? null} /> : null}
 
       <div className="mt-2 flex items-center gap-2">
         <AgentIcon
@@ -93,29 +93,39 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
               Perfil
             </h2>
             <p className="text-xs text-ink-muted">
-              O nome aparece nos cards e relatórios; o escopo vira REGRA no prompt — fora dele, o
-              conselheiro não opina. Mudanças valem imediatamente.
+              {isSecretary
+                ? 'Ela não opina — só nome e ícone são editáveis aqui. Mudanças valem imediatamente.'
+                : 'O nome aparece nos cards e relatórios; o escopo vira REGRA no prompt — fora dele, o conselheiro não opina. Mudanças valem imediatamente.'}
             </p>
           </div>
           {!isPresident && !isSecretary ? <AutoConfiguratorPanel agentId={agentId} /> : null}
         </div>
-        <ProfileForm
-          agentId={agentId}
-          displayName={profile.displayName}
-          scopeCan={scopeCan}
-          scopeCannot={scopeCannot}
-          iconKey={profile.iconKey ?? null}
-          iconColor={profile.iconColor ?? null}
-          professionalProfile={profile.professionalProfile ?? null}
-          decisionCriteria={profile.decisionCriteria ?? null}
-          riskPosture={profile.riskPosture ?? null}
-          riskPostureNotes={profile.riskPostureNotes ?? null}
-          aiModel={profile.aiModel ?? null}
-          reasoningEffort={profile.reasoningEffort ?? null}
-          voice={profile.voice ?? null}
-          voiceInstructions={profile.voiceInstructions ?? null}
-          speechRate={profile.speechRate ?? null}
-        />
+        {isSecretary ? (
+          <SecretaryProfileForm
+            agentId={agentId}
+            displayName={profile.displayName}
+            iconKey={profile.iconKey ?? null}
+            iconColor={profile.iconColor ?? null}
+          />
+        ) : (
+          <ProfileForm
+            agentId={agentId}
+            displayName={profile.displayName}
+            scopeCan={scopeCan}
+            scopeCannot={scopeCannot}
+            iconKey={profile.iconKey ?? null}
+            iconColor={profile.iconColor ?? null}
+            professionalProfile={profile.professionalProfile ?? null}
+            decisionCriteria={profile.decisionCriteria ?? null}
+            riskPosture={profile.riskPosture ?? null}
+            riskPostureNotes={profile.riskPostureNotes ?? null}
+            aiModel={profile.aiModel ?? null}
+            reasoningEffort={profile.reasoningEffort ?? null}
+            voice={profile.voice ?? null}
+            voiceInstructions={profile.voiceInstructions ?? null}
+            speechRate={profile.speechRate ?? null}
+          />
+        )}
       </section>
 
       {isPresident && presidentConfig ? (
