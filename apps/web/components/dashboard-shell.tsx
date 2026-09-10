@@ -37,6 +37,7 @@ export async function DashboardShell({
     ...(canWrite(user) ? [{ href: '/improvements', label: '🧠 Melhorias' }] : []),
     ...(isAdmin(user) ? [{ href: '/users', label: 'Usuários' }] : []),
     ...(user.isSuperAdmin ? [{ href: '/admin/companies', label: 'Empresas' }] : []),
+    ...(user.isSuperAdmin ? [{ href: '/admin/costs', label: '💰 Custos' }] : []),
   ];
 
   return (

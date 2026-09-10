@@ -51,7 +51,7 @@ packages/telemetry       custo/gate/latência + purgeExpired(TTL 24h)
 Comandos: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` · `pnpm dev` ·
 `pnpm create-user -- --email ... --nome ... --senha ... [--desativar-demo]` (usuário dono;
 rodar com o dev PARADO em dev local — PGlite é single-process).
-Suíte: 375 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
+Suíte: 384 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
 DATABASE_URL, salvo ALLOW_DEMO_LOGIN=true): `demo@conselho.test` / `conselho123`.
 
 **Docs de produto (para revenda/instalação por terceiros):**
@@ -125,11 +125,19 @@ síntese do Presidente + ata da Secretária; cifrados + auditados atomicamente; 
 3. Enriquecer as bases via UI (/counselors) com conteúdo real do empresário.
 4. Middleware global de auth do Next (hoje: `getCurrentUser()` manual por página, como no NutriMed).
 5. 🔐 Rotacionar a ANTHROPIC_API_KEY usada nos testes (passou pelo chat) antes de demo pública.
-6. Área restrita de custos (Fly.io/Recall.ai/Deepgram/LLM) — em andamento.
-7. "Resetar conselheiros" — voltar TODOS os agentes ao perfil mínimo padrão, para
-   testes/reconfiguração (já existe `resetAgentProfiles` em `@conselho/kb`, sem UI/ação
-   ligada ainda — precisa decidir escopo: só `agent_profile`, ou também KB/custom).
-
 ~~Export dos relatórios (PDF/Word) e envio por e-mail~~ — feito (`report-export.ts` +
 `email.ts`). ~~Deploy~~ — feito: app `conselho-diretor` já rodando em produção no Fly.io
-(`conselho-diretor.fly.dev`).
+(`conselho-diretor.fly.dev`). ~~"Resetar conselheiros"~~ — feito (`/counselors`,
+`resetDefaultCounselorProfiles`, só isSuperAdmin).
+
+**Área de custos (`/admin/costs`, só isSuperAdmin) — `apps/web/lib/costs/`:**
+Anthropic (Usage & Cost Admin API — precisa de `ANTHROPIC_ADMIN_API_KEY`, chave Admin
+SEPARADA da chave de chat) e OpenAI (Costs API — `OPENAI_ADMIN_API_KEY`, idem) trazem
+custo REAL faturado. Deepgram (billing breakdown, reusa `DEEPGRAM_API_KEY`) idem.
+Recall.ai só expõe MINUTOS de bot (`/api/v1/billing/usage/`), nunca US$ — o painel
+estima (minutos × `RECALL_HOURLY_RATE_USD`). Fly.io NÃO tem NENHUMA API de
+billing/fatura pública (confirmado em fly.io/docs/about/billing) — o painel estima
+pelas máquinas ativas (Fly Machines API) × tarifa pública, sem banda/volumes/região
+(`FLY_API_TOKEN`). Cada provedor sem a chave configurada aparece como "indisponível"
+sem quebrar o resto do painel — nenhuma chave admin foi gerada/testada de verdade ainda
+(pendência: validar com credenciais reais).

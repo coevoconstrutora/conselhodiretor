@@ -6,6 +6,11 @@ export function formatDateTimeBR(date: Date): string {
   return date.toLocaleString('pt-BR', { timeZone: TIME_ZONE });
 }
 
+/** Custos de infraestrutura (área de custos) são sempre em USD — provedores cobram em dólar. */
+export function formatUsd(amount: number): string {
+  return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
 export function formatDateBR(date: Date): string {
   return date.toLocaleDateString('pt-BR', { timeZone: TIME_ZONE });
 }
