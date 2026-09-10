@@ -14,6 +14,7 @@ export {
   applyAgentProfileOverrides,
   removeAgentProfile,
   resetAgentProfiles,
+  resetDefaultAgentProfiles,
   type AgentProfile,
   type RiskPosture,
   type ReasonInput,

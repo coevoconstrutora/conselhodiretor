@@ -7,6 +7,7 @@ import { getDb } from '@/lib/db';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { CreateCounselorForm, CounselorsList, type CounselorSummary } from '@/components/counselors-admin';
 import { BoardAutoConfigurator } from '@/components/board-auto-configurator';
+import { ResetCounselorsButton } from '@/components/reset-counselors-button';
 import { DashboardShell } from '@/components/dashboard-shell';
 
 /** Gestão de membros do conselho: os padrão do produto + os CUSTOM desta empresa. */
@@ -57,6 +58,7 @@ export default async function CounselorsPage() {
           >
             ⚙️ Configurar Secretária
           </Link>
+          {user.isSuperAdmin ? <ResetCounselorsButton /> : null}
         </div>
       </section>
 

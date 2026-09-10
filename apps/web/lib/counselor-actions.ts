@@ -20,6 +20,7 @@ import {
   loadScopeSplit,
   createCustomCounselor,
   deleteCustomCounselor,
+  resetDefaultCounselorProfiles,
   saveAgentBriefing,
   SCOPE_FIELD_MAX,
   PROFESSIONAL_PROFILE_MAX,
@@ -332,4 +333,33 @@ export async function deleteCounselorAction(formData: FormData): Promise<void> {
   await deleteCustomCounselor(db, user.companyId, agentId);
   revalidatePath('/counselors');
   revalidatePath('/');
+}
+
+export type ResetCounselorsState = { error?: string; ok?: string } | null;
+
+/**
+ * "Resetar conselheiros para o padrão" — volta os 9 conselheiros + Presidente
+ * + Secretária ao perfil de fábrica (nome, escopo, perfil profissional,
+ * critérios, postura de risco, modelo/raciocínio, voz). Conselheiros CUSTOM e
+ * a base de conhecimento (kb_source) NÃO são tocados. Restrito ao dono da
+ * plataforma: descarta customização do board inteiro de uma empresa de uma
+ * vez, então não é uma ação de configuração de rotina.
+ */
+export async function resetDefaultCounselorsAction(
+  _prev: ResetCounselorsState,
+  _formData: FormData,
+): Promise<ResetCounselorsState> {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Sessão expirada — faça login novamente.' };
+  if (!user.isSuperAdmin) return { error: 'Só o dono da plataforma pode resetar os conselheiros.' };
+  try {
+    const db = await getDb();
+    await resetDefaultCounselorProfiles(db, user.companyId);
+    revalidatePath('/counselors');
+    revalidatePath('/');
+    return { ok: 'Conselheiros padrão resetados para o perfil de fábrica.' };
+  } catch (err) {
+    console.error('[conselheiros] resetar padrão falhou:', err);
+    return { error: err instanceof Error ? err.message : 'Falha inesperada ao resetar os conselheiros.' };
+  }
 }

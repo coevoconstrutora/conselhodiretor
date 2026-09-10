@@ -272,6 +272,24 @@ export function resetAgentProfiles(companyId: string): void {
   profilesByCompany.delete(companyId);
 }
 
+/**
+ * Reseta SÓ os agentes padrão (os 9 + Secretária) desta empresa de volta ao
+ * perfil de fábrica (`DEFAULT_AGENT_PROFILES`) — nome, escopo, perfil
+ * profissional, critérios de decisão, postura de risco, modelo/raciocínio,
+ * voz e briefing. Preserva conselheiros CUSTOM intactos (não são tocados) e
+ * NÃO mexe na base de conhecimento (`kb_source`, outra tabela). Útil para
+ * voltar o board a um estado mínimo conhecido antes de testar/reconfigurar.
+ * Não mexe no banco: quem chama também precisa `DELETE FROM agent_profile
+ * WHERE company_id = $1 AND agent_id = ANY(...)` (esta função só limpa o
+ * cache dos agentes padrão).
+ */
+export function resetDefaultAgentProfiles(companyId: string): void {
+  const profiles = getAgentProfiles(companyId);
+  for (const agentId of Object.keys(DEFAULT_AGENT_PROFILES)) {
+    profiles[agentId] = { ...DEFAULT_AGENT_PROFILES[agentId]! };
+  }
+}
+
 /** Remove um conselheiro CUSTOM da memória desta empresa (nunca os padrão). */
 export function removeAgentProfile(companyId: string, agentId: AgentId): void {
   const profiles = getAgentProfiles(companyId);

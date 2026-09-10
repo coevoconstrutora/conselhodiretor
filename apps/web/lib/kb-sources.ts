@@ -10,6 +10,7 @@ import {
   applyAgentProfileOverrides,
   removeAgentProfile,
   getAgentProfiles,
+  resetDefaultAgentProfiles,
   DEFAULT_AGENT_PROFILES,
   type NamespacedKnowledgeStore,
   type RiskPosture,
@@ -603,6 +604,30 @@ export async function deleteCustomCounselor(db: SqlExecutor, companyId: string, 
     },
   );
   removeAgentProfile(companyId, agentId);
+}
+
+/**
+ * Reseta SÓ os agentes padrão (os 9 conselheiros + Presidente + Secretária)
+ * de volta ao perfil de fábrica — nome, escopo, perfil profissional,
+ * critérios de decisão, postura de risco, modelo/raciocínio, voz e
+ * briefing. Conselheiros CUSTOM e a base de conhecimento (`kb_source`) NÃO
+ * são tocados. Uso: voltar o board a um estado mínimo conhecido antes de
+ * testar/reconfigurar (ação restrita ao dono da plataforma).
+ */
+export async function resetDefaultCounselorProfiles(db: SqlExecutor, companyId: string): Promise<void> {
+  const defaultAgentIds = Object.keys(DEFAULT_AGENT_PROFILES);
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'agent-profile-reset-defaults', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query('DELETE FROM agent_profile WHERE company_id = $1 AND agent_id = ANY($2::text[])', [
+        companyId,
+        defaultAgentIds,
+      ]);
+      return null;
+    },
+  );
+  resetDefaultAgentProfiles(companyId);
 }
 
 /** Carrega e APLICA os perfis personalizados da EMPRESA (boot/1º acesso + após edição). */

@@ -2,7 +2,14 @@ import { describe, it, expect } from 'vitest';
 import type { KbChunk, LlmCompletionRequest, AgentContribution } from '@conselho/providers';
 import { NamespacedKnowledgeStore } from './store';
 import { ingest, chunkContent, seedSources } from './ingest';
-import { AgentReasoner, buildAgentSystem, DEFAULT_AGENT_PROFILES } from './reasoner';
+import {
+  AgentReasoner,
+  buildAgentSystem,
+  DEFAULT_AGENT_PROFILES,
+  getAgentProfiles,
+  applyAgentProfileOverrides,
+  resetDefaultAgentProfiles,
+} from './reasoner';
 
 const TEST_COMPANY = 'test-company';
 
@@ -186,5 +193,27 @@ describe('AgentReasoner + prompts restritos', () => {
         'vendas',
       ].sort(),
     );
+  });
+});
+
+describe('resetDefaultAgentProfiles — "Resetar conselheiros para o padrão"', () => {
+  const RESET_COMPANY = 'test-company-reset'; // isolado do TEST_COMPANY dos demais describes
+
+  it('volta nome/escopo/config editados dos agentes padrão ao perfil de fábrica, sem tocar conselheiros custom', () => {
+    applyAgentProfileOverrides(RESET_COMPANY, [
+      { agentId: 'cfo', displayName: 'CFO Editado', scope: 'escopo editado', aiModel: 'gpt-5' },
+      { agentId: 'rh-custom', displayName: 'RH e Cultura', scope: 'clima organizacional' },
+    ]);
+    const before = getAgentProfiles(RESET_COMPANY);
+    expect(before.cfo!.displayName).toBe('CFO Editado');
+    expect(before['rh-custom']).toBeDefined();
+
+    resetDefaultAgentProfiles(RESET_COMPANY);
+
+    const after = getAgentProfiles(RESET_COMPANY);
+    expect(after.cfo).toEqual(DEFAULT_AGENT_PROFILES.cfo);
+    expect(after.secretaria).toEqual(DEFAULT_AGENT_PROFILES.secretaria);
+    expect(after['rh-custom']).toBeDefined(); // custom preservado
+    expect(after['rh-custom']!.displayName).toBe('RH e Cultura');
   });
 });
