@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { formatDateBR } from '@/lib/format';
 import type { VoiceProfileStatus } from '@/lib/voice-profile';
 import {
@@ -14,6 +14,23 @@ import {
 const SAMPLE_COUNT = 3;
 const MIN_SECONDS = 6;
 const TARGET_SECONDS = 15;
+
+/**
+ * Roteiro de leitura por amostra — NÃO é frase secreta (aparece na tela,
+ * qualquer pessoa pode ler as mesmas frases; não serve pra autenticar, só
+ * pra biometria de timbre). Antes a gravação era 100% livre ("descreva seu
+ * dia de trabalho"), o que dava amostras curtas demais ou silêncio — com um
+ * texto pra ler, a duração fica previsível (6-15s) e cobre sons variados
+ * (vogais abertas/fechadas, nasais, números) pro embedding de voz.
+ */
+function buildSampleScripts(participantName: string): readonly string[] {
+  const firstName = participantName.trim().split(/\s+/)[0] || participantName;
+  return [
+    `Meu nome é ${firstName}, e hoje é um bom dia para conversarmos sobre o andamento dos projetos da empresa.`,
+    'Prefiro tomar decisões com base em números concretos, prazos bem definidos e uma comunicação clara com a equipe.',
+    'Nas próximas semanas vamos revisar o orçamento, o cronograma da obra e as prioridades de cada departamento.',
+  ];
+}
 
 const buttonCls =
   'rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50';
@@ -75,6 +92,14 @@ function VoiceEnrollmentWizard({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef<number>(0);
+
+  // `step` só parte de `consentGranted` na MONTAGEM (useState não reage a
+  // props novas) — sem isto, conceder consentimento deixava o wizard preso
+  // na tela de consentimento até fechar e reabrir (só um reload pegava o
+  // `consentGranted` atualizado do Server Component).
+  useEffect(() => {
+    if (consentState?.ok && step === 'consent') setStep('record');
+  }, [consentState, step]);
 
   async function startRecording(index: number) {
     setError(null);
@@ -182,11 +207,14 @@ function VoiceEnrollmentWizard({
     );
   }
 
+  const scripts = buildSampleScripts(participantName);
+
   return (
     <div className="space-y-3 rounded-[var(--radius)] border border-ink/10 p-4">
       <p className="text-sm text-ink">
-        Grave {SAMPLE_COUNT} amostras falando naturalmente (ex.: descreva seu dia de trabalho) — sem
-        frase secreta, {MIN_SECONDS}-{TARGET_SECONDS}s cada.
+        Leia cada frase em voz alta e natural enquanto grava — garante um tempo de gravação ideal
+        ({MIN_SECONDS}-{TARGET_SECONDS}s) e cobre sons variados da sua voz. Não é uma senha: qualquer
+        pessoa pode ler as mesmas frases.
       </p>
       <div className="space-y-2">
         {Array.from({ length: SAMPLE_COUNT }).map((_, i) => {
@@ -194,8 +222,18 @@ function VoiceEnrollmentWizard({
           const quality = sample ? sampleQualityLabel(sample.durationMs) : null;
           const isRecording = recordingIndex === i;
           return (
-            <div key={i} className="flex items-center gap-3 rounded-[var(--radius)] border border-ink/10 p-2.5">
-              <span className="w-20 shrink-0 text-xs font-semibold text-ink">Amostra {i + 1}</span>
+            <div key={i} className="space-y-1.5 rounded-[var(--radius)] border border-ink/10 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-ink">Amostra {i + 1}</span>
+                {sample && quality ? (
+                  <span className={`text-xs font-medium ${quality.ok ? 'text-success' : 'text-attn-critical'}`}>
+                    {quality.label} ({Math.round(sample.durationMs / 1000)}s)
+                  </span>
+                ) : null}
+              </div>
+              <p className="rounded-[var(--radius)] bg-surface-muted/60 p-2 text-sm italic leading-relaxed text-ink">
+                “{scripts[i]}”
+              </p>
               {isRecording ? (
                 <button type="button" onClick={stopRecording} className={secondaryButtonCls}>
                   ⏹ Parar
@@ -210,11 +248,6 @@ function VoiceEnrollmentWizard({
                   {sample ? '🎙 Regravar' : '🎙 Gravar'}
                 </button>
               )}
-              {sample && quality ? (
-                <span className={`text-xs font-medium ${quality.ok ? 'text-success' : 'text-attn-critical'}`}>
-                  {quality.label} ({Math.round(sample.durationMs / 1000)}s)
-                </span>
-              ) : null}
             </div>
           );
         })}

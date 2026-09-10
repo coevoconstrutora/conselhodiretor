@@ -200,13 +200,14 @@ export async function computeParticipantMeetingAnalytics(
  */
 export async function listMeetingParticipantSignals(db: SqlExecutor, meetingId: string): Promise<ParticipantSignal[]> {
   const res = await db.query<{
+    participant_id: string;
     name: string;
     speaking_turns: number;
     speech_share: number | null;
     speaking_ms: number;
     interruption_count: number;
   }>(
-    `SELECT p.name, a.speaking_turns, a.speech_share, a.speaking_ms, a.interruption_count
+    `SELECT p.id AS participant_id, p.name, a.speaking_turns, a.speech_share, a.speaking_ms, a.interruption_count
      FROM participant_meeting_analytics a
      JOIN participant p ON p.id = a.participant_id
      WHERE a.meeting_id = $1
@@ -214,6 +215,7 @@ export async function listMeetingParticipantSignals(db: SqlExecutor, meetingId: 
     [meetingId],
   );
   return res.rows.map((r) => ({
+    participantId: r.participant_id,
     name: r.name,
     speakingTurns: r.speaking_turns,
     speechShare: r.speech_share,

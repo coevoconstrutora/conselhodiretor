@@ -6,6 +6,8 @@
  */
 
 export interface ParticipantSignal {
+  /** ADITIVO — ausente em fixtures antigas; usado pra cruzar com o tom de fala (Etapa "Participantes"). */
+  readonly participantId?: string;
   readonly name: string;
   readonly speakingTurns: number;
   readonly speechShare: number | null;

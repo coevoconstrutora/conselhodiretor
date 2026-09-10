@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 const TABS = [
   { key: 'transcricao', label: 'Transcrição' },
   { key: 'contribuicoes', label: 'Contribuições' },
+  { key: 'participantes', label: '👥 Participantes' },
   { key: 'decisoes', label: 'Decisões' },
   { key: 'acoes', label: 'Ações' },
   { key: 'relatorios', label: 'Relatórios' },
@@ -24,6 +25,7 @@ type TabKey = (typeof TABS)[number]['key'];
 export function HistoricalMeetingTabs({
   transcricao,
   contribuicoes,
+  participantes,
   decisoes,
   acoes,
   relatorios,
@@ -31,7 +33,16 @@ export function HistoricalMeetingTabs({
   ata,
 }: Record<TabKey, ReactNode>) {
   const [active, setActive] = useState<TabKey>('transcricao');
-  const panels: Record<TabKey, ReactNode> = { transcricao, contribuicoes, decisoes, acoes, relatorios, sintese, ata };
+  const panels: Record<TabKey, ReactNode> = {
+    transcricao,
+    contribuicoes,
+    participantes,
+    decisoes,
+    acoes,
+    relatorios,
+    sintese,
+    ata,
+  };
 
   return (
     <section aria-label="Histórico da reunião" className="card-premium mt-6 p-6">

@@ -7,7 +7,8 @@ import type {
 } from '@conselho/meeting-report';
 import type { AgentProfile } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
-import { formatDateBR, formatTimeBR } from '@/lib/format';
+import type { ParticipantSignal } from '@/lib/participant-signals';
+import { formatDateBR, formatTimeBR, formatSpeakingDuration } from '@/lib/format';
 
 /**
  * Conteúdo das abas "Contribuições" / "Decisões" / "Ações" da reunião
@@ -151,6 +152,82 @@ export function ActionsPanel({ actionItems }: { actionItems: readonly MeetingAct
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * "Participantes" (Etapa "Análise de fala dos presentes") — tempo de fala,
+ * trocas abruptas de turno e (opt-in) tom de linguagem, lado a lado por
+ * participante. Os dados já são calculados ao encerrar a reunião
+ * (`computeParticipantMeetingAnalytics`); isto só exibe o que já existe —
+ * antes só aparecia espalhado, um por vez, no perfil de cada participante.
+ */
+export function ParticipantSignalsPanel({
+  signals,
+  speechTone,
+}: {
+  signals: readonly ParticipantSignal[];
+  /** participantId -> texto do tom de linguagem (vazio quando a análise está desligada ou ainda não rodou). */
+  speechTone: ReadonlyMap<string, string>;
+}) {
+  if (signals.length === 0) {
+    return (
+      <p className="text-sm text-ink-muted">
+        Nenhum sinal de participação calculado para esta reunião (precisa de transcrição com locutores
+        identificados).
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+            <tr>
+              <th className="px-3 py-2">Participante</th>
+              <th className="px-3 py-2">Tempo de fala</th>
+              <th className="px-3 py-2">Intervenções</th>
+              <th className="px-3 py-2">Fatia da fala</th>
+              <th className="px-3 py-2">Trocas abruptas de turno</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-ink/10">
+            {signals.map((s) => (
+              <tr key={s.participantId ?? s.name}>
+                <td className="px-3 py-2 font-medium text-ink">{s.name}</td>
+                <td className="px-3 py-2 text-ink-muted">
+                  {s.speakingMs > 0 ? formatSpeakingDuration(s.speakingMs) : '—'}
+                </td>
+                <td className="px-3 py-2 text-ink-muted">{s.speakingTurns}</td>
+                <td className="px-3 py-2 text-ink-muted">
+                  {s.speechShare !== null ? `${Math.round(s.speechShare * 100)}%` : '—'}
+                </td>
+                <td className="px-3 py-2 text-ink-muted">{s.interruptionCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="text-[11px] text-ink-muted">
+        "Trocas abruptas de turno" é uma aproximação por proximidade temporal (troca de locutor a ≤300ms
+        do fim da fala anterior) — nunca uma medição real de sobreposição de áudio.
+      </p>
+      {signals.some((s) => s.participantId && speechTone.get(s.participantId)) ? (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold text-ink">Tom de linguagem (IA, aproximado)</h3>
+          {signals.map((s) => {
+            const tone = s.participantId ? speechTone.get(s.participantId) : null;
+            if (!tone) return null;
+            return (
+              <details key={s.participantId} className="rounded-[var(--radius)] border border-ink/10 bg-surface p-3">
+                <summary className="cursor-pointer text-sm font-medium text-ink">{s.name}</summary>
+                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{tone}</p>
+              </details>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -5,12 +5,14 @@ import {
   listMeetingDecisions,
   listMeetingActionItems,
   loadLatestMeetingAnalysis,
+  listSpeechTone,
   type MeetingContributionRecord,
   type MeetingDecisionRecord,
   type MeetingActionItemRecord,
   type MeetingImprovement,
 } from '@conselho/meeting-report';
 import type { AgentId } from '@conselho/providers';
+import { listMeetingParticipantSignals, type ParticipantSignal } from './meeting-speakers';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 
@@ -52,6 +54,26 @@ export async function loadMeetingActionItems(meetingId: string): Promise<Meeting
     console.error('[historico] carregar ações falhou:', error);
     return [];
   });
+}
+
+/** Sinais objetivos de participação (Etapa "Participantes") — tempo de fala/intervenções/turnos por participante. */
+export async function loadMeetingParticipantSignals(meetingId: string): Promise<ParticipantSignal[]> {
+  const db = await getDb();
+  return listMeetingParticipantSignals(db, meetingId).catch((error) => {
+    console.error('[historico] carregar sinais de participação falhou:', error);
+    return [];
+  });
+}
+
+/** Tom de linguagem por participante (opt-in, Etapa "Análise de fala") — participantId -> texto. */
+export async function loadMeetingSpeechTone(meetingId: string): Promise<ReadonlyMap<string, string>> {
+  const db = await getDb();
+  return listSpeechTone(db, meetingId, getEncryptionKey())
+    .then((entries) => new Map(entries.map((e) => [e.participantId, e.content])))
+    .catch((error) => {
+      console.error('[historico] carregar tom de linguagem falhou:', error);
+      return new Map<string, string>();
+    });
 }
 
 /** Análise do Conselho (Seção 30) — carrega a VERSÃO MAIS RECENTE já salva, nunca regenera na abertura da página. */

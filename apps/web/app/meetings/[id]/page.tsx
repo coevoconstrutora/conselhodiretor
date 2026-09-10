@@ -18,6 +18,8 @@ import {
   loadMeetingDecisions,
   loadMeetingActionItems,
   loadMeetingAnalysis,
+  loadMeetingParticipantSignals,
+  loadMeetingSpeechTone,
 } from '@/lib/meeting-history';
 import {
   getCompanyKnowledgeStore,
@@ -37,7 +39,13 @@ import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
 import { HistoricalMeetingTabs } from '@/components/historical-meeting-tabs';
-import { ContributionsPanel, DecisionsPanel, ActionsPanel, AnalysisSummaryCard } from '@/components/meeting-history-panels';
+import {
+  ContributionsPanel,
+  DecisionsPanel,
+  ActionsPanel,
+  AnalysisSummaryCard,
+  ParticipantSignalsPanel,
+} from '@/components/meeting-history-panels';
 
 /** Sala de reunião: gate de gravação, board dos 9 conselheiros ao vivo,
  * revisão do transcript e relatórios finais por agente. */
@@ -102,6 +110,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const decisions = closed && authorized ? await loadMeetingDecisions(id) : [];
   const actionItems = closed && authorized ? await loadMeetingActionItems(id) : [];
   const meetingAnalysis = closed && authorized ? await loadMeetingAnalysis(id) : null;
+  const participantSignals = closed && authorized ? await loadMeetingParticipantSignals(id) : [];
+  const speechTone = closed && authorized ? await loadMeetingSpeechTone(id) : new Map<string, string>();
   const presidentReport = reports.find((r) => r.agentId === 'presidente') ?? null;
   const secretaryReport = reports.find((r) => r.agentId === 'secretaria') ?? null;
   const counselorReports = reports.filter((r) => r.agentId !== 'presidente' && r.agentId !== 'secretaria');
@@ -353,6 +363,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                   )
                 }
                 contribuicoes={<ContributionsPanel contributions={contributions} profiles={profiles} />}
+                participantes={<ParticipantSignalsPanel signals={participantSignals} speechTone={speechTone} />}
                 decisoes={<DecisionsPanel decisions={decisions} />}
                 acoes={<ActionsPanel actionItems={actionItems} />}
                 relatorios={
