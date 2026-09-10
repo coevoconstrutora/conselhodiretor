@@ -51,7 +51,7 @@ packages/telemetry       custo/gate/latência + purgeExpired(TTL 24h)
 Comandos: `pnpm lint` · `pnpm typecheck` · `pnpm test` · `pnpm build` · `pnpm dev` ·
 `pnpm create-user -- --email ... --nome ... --senha ... [--desativar-demo]` (usuário dono;
 rodar com o dev PARADO em dev local — PGlite é single-process).
-Suíte: 384 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
+Suíte: 389 testes PASS (+1 skip). Login demo (SÓ dev local — nunca seedado com
 DATABASE_URL, salvo ALLOW_DEMO_LOGIN=true): `demo@conselho.test` / `conselho123`.
 
 **Docs de produto (para revenda/instalação por terceiros):**
@@ -117,6 +117,21 @@ síntese do Presidente + ata da Secretária; cifrados + auditados atomicamente; 
   `thinkingBudget: 0` nas respostas curtas do board (Gemini 3 "pensa" por
   default e estouraria maxOutputTokens baixos).
 - Registro completo: `docs/HISTORICO.md`.
+
+## Itens monitorados (Decisões/Ações, migration 0033)
+
+`meeting_decision`/`meeting_action_item` ganharam `manually_edited boolean`
+(ações também ganharam `status` de verdade: `pendente`/`concluida` — a
+coluna já existia desde a 0026, mas nunca era lida/escrita). Dono edita
+status direto nas abas Decisões/Ações da reunião
+(`updateDecisionStatusAction`/`updateActionItemStatusAction`,
+`apps/web/lib/decision-actions.ts`). Regenerar relatórios reextrai tudo do
+zero (`saveMeetingOutcome`) — para não perder o que foi marcado à mão, cada
+item novo é casado por similaridade Jaccard de keywords (`@conselho/engines`,
+reaproveita a mesma lógica do dedup semântico do board) contra os itens já
+editados manualmente daquela reunião; havendo casamento (score ≥ 0.5), o
+status manual sobrevive em vez de ser sobrescrito pela extração nova. Sem
+painel cross-reunião por enquanto — só dentro de cada reunião.
 
 ## Pendências
 

@@ -2,6 +2,7 @@ import type { SqlExecutor } from '@conselho/db';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
 import { stripJsonFences, type ILlmProvider } from '@conselho/providers';
+import { keywordSet, jaccard } from '@conselho/engines';
 
 /**
  * Decision Ledger + Ações (Etapa "Histórico de reuniões", Seções 5/7) —
@@ -9,11 +10,49 @@ import { stripJsonFences, type ILlmProvider } from '@conselho/providers';
  * chamada de trabalho, não uma chamada nova por reunião aberta). Mesmo
  * padrão defensivo de parse do CaseState/CaseReview: JSON malformado nunca
  * derruba a geração dos relatórios — apenas fica sem Decisões/Ações.
+ *
+ * "Itens monitorados" (Etapa "Acompanhamento"): o dono pode marcar status À
+ * MÃO (`updateDecisionStatus`/`updateActionItemStatus`, `manuallyEdited`
+ * fica true). Regenerar relatórios reextrai tudo do zero via
+ * `saveMeetingOutcome` — para não perder o que foi marcado à mão, o item
+ * novo é casado por similaridade de texto (Jaccard sobre keywords, mesma
+ * lógica do dedup semântico do board) contra os itens JÁ editados
+ * manualmente daquela reunião; havendo casamento, o status manual sobrevive
+ * em vez de ser sobrescrito pela extração nova.
  */
 
 export type DecisionStatus = 'decidido' | 'recomendado' | 'pendente' | 'cancelado';
+export type ActionItemStatus = 'pendente' | 'concluida';
 
 const DECISION_STATUSES = new Set<DecisionStatus>(['decidido', 'recomendado', 'pendente', 'cancelado']);
+const ACTION_ITEM_STATUSES = new Set<ActionItemStatus>(['pendente', 'concluida']);
+
+/** Score mínimo (Jaccard sobre keywords normalizadas) pra considerar "o mesmo item" entre regenerações. */
+const MANUAL_MATCH_THRESHOLD = 0.5;
+
+interface ManuallyEditedItem<S extends string> {
+  readonly text: string;
+  readonly status: S;
+}
+
+/** Casa um item recém-extraído contra o pool de itens editados à mão — null se nenhum passar do limiar. */
+function findManualMatch<S extends string>(
+  candidateText: string,
+  pool: readonly ManuallyEditedItem<S>[],
+): S | null {
+  if (pool.length === 0) return null;
+  const candidateWords = keywordSet(candidateText);
+  let bestStatus: S | null = null;
+  let bestScore = MANUAL_MATCH_THRESHOLD;
+  for (const item of pool) {
+    const score = jaccard(candidateWords, keywordSet(item.text));
+    if (score >= bestScore) {
+      bestScore = score;
+      bestStatus = item.status;
+    }
+  }
+  return bestStatus;
+}
 
 export const DECISION_EXTRACTION_SYSTEM =
   'Você lê a síntese executiva final de uma reunião de conselho de uma incorporadora imobiliária e ' +
@@ -137,33 +176,93 @@ export async function saveMeetingOutcome(
     db,
     { triggeredBy: 'meeting-outcome-extracted', kbSources: [], modelVersion: 'unknown' },
     async (tx) => {
+      // Pool de status editados À MÃO (Etapa "Acompanhamento") — lido ANTES do
+      // DELETE, pra casar contra os itens recém-extraídos e preservar o que o
+      // dono já marcou (ex.: ação concluída) em vez de perder na regeneração.
+      const manualDecisions = await tx.query<{ content_enc: string; status: DecisionStatus }>(
+        'SELECT content_enc, status FROM meeting_decision WHERE meeting_id = $1 AND manually_edited = true',
+        [meetingId],
+      );
+      const manualDecisionPool: ManuallyEditedItem<DecisionStatus>[] = manualDecisions.rows.flatMap((r) => {
+        try {
+          const parsed = JSON.parse(decryptField(r.content_enc, encryptionKey)) as { topic: string; decision: string };
+          return [{ text: `${parsed.topic} ${parsed.decision}`, status: r.status }];
+        } catch {
+          return [];
+        }
+      });
+      const manualActions = await tx.query<{ content_enc: string; status: ActionItemStatus }>(
+        'SELECT content_enc, status FROM meeting_action_item WHERE meeting_id = $1 AND manually_edited = true',
+        [meetingId],
+      );
+      const manualActionPool: ManuallyEditedItem<ActionItemStatus>[] = manualActions.rows.flatMap((r) => {
+        try {
+          const parsed = JSON.parse(decryptField(r.content_enc, encryptionKey)) as { action: string };
+          return [{ text: parsed.action, status: r.status }];
+        } catch {
+          return [];
+        }
+      });
+
       await tx.query('DELETE FROM meeting_action_item WHERE meeting_id = $1', [meetingId]);
       await tx.query('DELETE FROM meeting_decision WHERE meeting_id = $1', [meetingId]);
       const topicToId = new Map<string, string>();
       for (const d of outcome.decisions) {
+        const manualStatus = findManualMatch(`${d.topic} ${d.decision}`, manualDecisionPool);
         const res = await tx.query<{ id: string }>(
-          `INSERT INTO meeting_decision (meeting_id, status, deadline, content_enc) VALUES ($1, $2, $3, $4) RETURNING id`,
+          `INSERT INTO meeting_decision (meeting_id, status, deadline, content_enc, manually_edited)
+           VALUES ($1, $2, $3, $4, $5) RETURNING id`,
           [
             meetingId,
-            d.status,
+            manualStatus ?? d.status,
             d.deadline,
             encryptField(JSON.stringify({ topic: d.topic, decision: d.decision, responsible: d.responsible, evidence: d.evidence }), encryptionKey),
+            manualStatus !== null,
           ],
         );
         topicToId.set(d.topic, res.rows[0]!.id);
       }
       for (const a of outcome.actionItems) {
         const decisionId = a.relatedDecisionTopic ? (topicToId.get(a.relatedDecisionTopic) ?? null) : null;
+        const manualStatus = findManualMatch(a.action, manualActionPool);
         await tx.query(
-          `INSERT INTO meeting_action_item (meeting_id, decision_id, deadline, content_enc) VALUES ($1, $2, $3, $4)`,
+          `INSERT INTO meeting_action_item (meeting_id, decision_id, deadline, content_enc, status, manually_edited)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
           [
             meetingId,
             decisionId,
             a.deadline,
             encryptField(JSON.stringify({ action: a.action, responsible: a.responsible }), encryptionKey),
+            manualStatus ?? 'pendente',
+            manualStatus !== null,
           ],
         );
       }
+      return null;
+    },
+  );
+}
+
+/** "Marcar concluída"/reabrir uma ação, ou mudar o status de uma decisão à mão — nunca sobrescrito na próxima regeneração sem casar por texto. */
+export async function updateDecisionStatus(db: SqlExecutor, decisionId: string, status: DecisionStatus): Promise<void> {
+  if (!DECISION_STATUSES.has(status)) throw new Error(`Status de decisão inválido: ${status}`);
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'decision-status-edit', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query('UPDATE meeting_decision SET status = $2, manually_edited = true WHERE id = $1', [decisionId, status]);
+      return null;
+    },
+  );
+}
+
+export async function updateActionItemStatus(db: SqlExecutor, actionItemId: string, status: ActionItemStatus): Promise<void> {
+  if (!ACTION_ITEM_STATUSES.has(status)) throw new Error(`Status de ação inválido: ${status}`);
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'action-item-status-edit', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query('UPDATE meeting_action_item SET status = $2, manually_edited = true WHERE id = $1', [actionItemId, status]);
       return null;
     },
   );
@@ -177,6 +276,8 @@ export interface MeetingDecisionRecord {
   readonly responsible: string;
   readonly deadline: Date | null;
   readonly evidence: string;
+  /** Status setado à mão (via `updateDecisionStatus`) — sobrevive à próxima regeneração se o texto casar. */
+  readonly manuallyEdited: boolean;
   readonly createdAt: Date;
 }
 
@@ -186,6 +287,9 @@ export interface MeetingActionItemRecord {
   readonly action: string;
   readonly responsible: string;
   readonly deadline: Date | null;
+  readonly status: ActionItemStatus;
+  /** Status setado à mão (via `updateActionItemStatus`) — sobrevive à próxima regeneração se o texto casar. */
+  readonly manuallyEdited: boolean;
   readonly createdAt: Date;
 }
 
@@ -199,10 +303,12 @@ export async function listMeetingDecisions(
     status: DecisionStatus;
     deadline: Date | string | null;
     content_enc: string;
+    manually_edited: boolean;
     created_at: Date | string;
-  }>('SELECT id, status, deadline, content_enc, created_at FROM meeting_decision WHERE meeting_id = $1 ORDER BY created_at ASC', [
-    meetingId,
-  ]);
+  }>(
+    'SELECT id, status, deadline, content_enc, manually_edited, created_at FROM meeting_decision WHERE meeting_id = $1 ORDER BY created_at ASC',
+    [meetingId],
+  );
   return res.rows.flatMap((r) => {
     try {
       const parsed = JSON.parse(decryptField(r.content_enc, encryptionKey)) as {
@@ -220,6 +326,7 @@ export async function listMeetingDecisions(
           responsible: parsed.responsible,
           deadline: r.deadline ? new Date(r.deadline) : null,
           evidence: parsed.evidence,
+          manuallyEdited: r.manually_edited,
           createdAt: new Date(r.created_at),
         },
       ];
@@ -239,9 +346,11 @@ export async function listMeetingActionItems(
     decision_id: string | null;
     deadline: Date | string | null;
     content_enc: string;
+    status: ActionItemStatus;
+    manually_edited: boolean;
     created_at: Date | string;
   }>(
-    'SELECT id, decision_id, deadline, content_enc, created_at FROM meeting_action_item WHERE meeting_id = $1 ORDER BY created_at ASC',
+    'SELECT id, decision_id, deadline, content_enc, status, manually_edited, created_at FROM meeting_action_item WHERE meeting_id = $1 ORDER BY created_at ASC',
     [meetingId],
   );
   return res.rows.flatMap((r) => {
@@ -254,6 +363,8 @@ export async function listMeetingActionItems(
           action: parsed.action,
           responsible: parsed.responsible,
           deadline: r.deadline ? new Date(r.deadline) : null,
+          status: r.status,
+          manuallyEdited: r.manually_edited,
           createdAt: new Date(r.created_at),
         },
       ];

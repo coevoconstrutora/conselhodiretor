@@ -373,6 +373,9 @@ importers:
       '@conselho/db':
         specifier: workspace:*
         version: link:../db
+      '@conselho/engines':
+        specifier: workspace:*
+        version: link:../engines
       '@conselho/kb':
         specifier: workspace:*
         version: link:../kb

@@ -364,8 +364,8 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                 }
                 contribuicoes={<ContributionsPanel contributions={contributions} profiles={profiles} />}
                 participantes={<ParticipantSignalsPanel signals={participantSignals} speechTone={speechTone} />}
-                decisoes={<DecisionsPanel decisions={decisions} />}
-                acoes={<ActionsPanel actionItems={actionItems} />}
+                decisoes={<DecisionsPanel decisions={decisions} meetingId={id} canEdit={canWrite(user)} />}
+                acoes={<ActionsPanel actionItems={actionItems} meetingId={id} canEdit={canWrite(user)} />}
                 relatorios={
                   <div>
                     <div className="mb-4 flex items-center justify-between">

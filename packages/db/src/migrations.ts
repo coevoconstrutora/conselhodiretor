@@ -829,4 +829,24 @@ CREATE INDEX IF NOT EXISTS idx_recall_bot_bot_id ON recall_bot(bot_id);
 ALTER TABLE meeting ADD COLUMN IF NOT EXISTS meeting_url_enc text;
 `,
   },
+  {
+    name: '0033_decisions_actions_tracking',
+    sql: `
+-- Decisões/Ações como "itens monitorados" (Etapa "Histórico de reuniões" —
+-- acompanhamento): o dono pode marcar status À MÃO (ex.: ação concluída,
+-- decisão que virou "decidido"). manually_edited distingue status setado por
+-- humano do status extraído pela IA — regenerar relatórios reextrai
+-- decisões/ações do zero (saveMeetingOutcome), mas quando o texto casa com
+-- um item já editado à mão, o status manual é preservado em vez de
+-- sobrescrito pela extração nova (ver packages/meeting-report/src/decisions.ts).
+ALTER TABLE meeting_decision ADD COLUMN IF NOT EXISTS manually_edited boolean NOT NULL DEFAULT false;
+ALTER TABLE meeting_action_item ADD COLUMN IF NOT EXISTS manually_edited boolean NOT NULL DEFAULT false;
+
+-- meeting_action_item.status já existia (migration 0026) mas nunca foi
+-- lido/escrito pelo código — agora vira "pendente"/"concluida" de verdade.
+ALTER TABLE meeting_action_item DROP CONSTRAINT IF EXISTS meeting_action_item_status_check;
+ALTER TABLE meeting_action_item ADD CONSTRAINT meeting_action_item_status_check
+  CHECK (status IN ('pendente', 'concluida'));
+`,
+  },
 ];

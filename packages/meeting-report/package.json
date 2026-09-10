@@ -19,6 +19,7 @@
     "@conselho/audit": "workspace:*",
     "@conselho/crypto": "workspace:*",
     "@conselho/db": "workspace:*",
+    "@conselho/engines": "workspace:*",
     "@conselho/kb": "workspace:*",
     "@conselho/providers": "workspace:*"
   },

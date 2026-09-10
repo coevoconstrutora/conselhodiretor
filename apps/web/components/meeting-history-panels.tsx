@@ -9,6 +9,7 @@ import type { AgentProfile } from '@conselho/kb';
 import type { AgentId } from '@conselho/providers';
 import type { ParticipantSignal } from '@/lib/participant-signals';
 import { formatDateBR, formatTimeBR, formatSpeakingDuration } from '@/lib/format';
+import { updateDecisionStatusAction, updateActionItemStatusAction } from '@/lib/decision-actions';
 
 /**
  * Conteúdo das abas "Contribuições" / "Decisões" / "Ações" da reunião
@@ -68,13 +69,28 @@ export function ContributionsPanel({
   );
 }
 
-export function DecisionsPanel({ decisions }: { decisions: readonly MeetingDecisionRecord[] }) {
+/**
+ * "Itens monitorados" (Etapa "Acompanhamento") — status editável direto na
+ * tabela, sem JS: `<select>` dentro de um `<form>` com botão de submit.
+ * Marca `manuallyEdited=true`, que sobrevive à próxima regeneração dos
+ * relatórios (a IA reextrai, mas o status manual é preservado quando o texto
+ * casa com o item editado — ver `saveMeetingOutcome`).
+ */
+export function DecisionsPanel({
+  decisions,
+  meetingId,
+  canEdit,
+}: {
+  decisions: readonly MeetingDecisionRecord[];
+  meetingId: string;
+  canEdit: boolean;
+}) {
   if (decisions.length === 0) {
     return <p className="text-sm text-ink-muted">Nenhuma decisão identificada nesta reunião.</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-sm">
+      <table className="w-full min-w-[720px] text-left text-sm">
         <thead className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
           <tr>
             <th className="px-3 py-2">Tópico</th>
@@ -89,7 +105,37 @@ export function DecisionsPanel({ decisions }: { decisions: readonly MeetingDecis
             <tr key={d.id}>
               <td className="px-3 py-2 font-medium text-ink">{d.topic}</td>
               <td className="px-3 py-2 text-ink">{d.decision}</td>
-              <td className="px-3 py-2">{DECISION_STATUS_LABEL[d.status] ?? d.status}</td>
+              <td className="px-3 py-2">
+                {canEdit ? (
+                  <form action={updateDecisionStatusAction} className="flex items-center gap-1.5">
+                    <input type="hidden" name="meetingId" value={meetingId} />
+                    <input type="hidden" name="decisionId" value={d.id} />
+                    <select
+                      name="status"
+                      defaultValue={d.status}
+                      className="rounded-[var(--radius)] border border-ink/15 bg-white px-1.5 py-1 text-xs text-ink"
+                    >
+                      {Object.entries(DECISION_STATUS_LABEL).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      className="rounded-[var(--radius)] border border-ink/15 px-2 py-1 text-[11px] font-semibold text-ink transition-colors hover:bg-surface-muted"
+                    >
+                      Salvar
+                    </button>
+                    {d.manuallyEdited ? <span className="text-[10px] text-ink-muted" title="Editado à mão">✎</span> : null}
+                  </form>
+                ) : (
+                  <span>
+                    {DECISION_STATUS_LABEL[d.status] ?? d.status}
+                    {d.manuallyEdited ? <span className="ml-1 text-[10px] text-ink-muted">✎</span> : null}
+                  </span>
+                )}
+              </td>
               <td className="px-3 py-2 text-ink-muted">{d.responsible || '—'}</td>
               <td className="px-3 py-2 text-ink-muted">{d.deadline ? formatDateBR(d.deadline) : '—'}</td>
             </tr>
@@ -128,28 +174,63 @@ export function AnalysisSummaryCard({ analysis }: { analysis: MeetingImprovement
   );
 }
 
-export function ActionsPanel({ actionItems }: { actionItems: readonly MeetingActionItemRecord[] }) {
+export function ActionsPanel({
+  actionItems,
+  meetingId,
+  canEdit,
+}: {
+  actionItems: readonly MeetingActionItemRecord[];
+  meetingId: string;
+  canEdit: boolean;
+}) {
   if (actionItems.length === 0) {
     return <p className="text-sm text-ink-muted">Nenhuma ação identificada nesta reunião.</p>;
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] text-left text-sm">
+      <table className="w-full min-w-[640px] text-left text-sm">
         <thead className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
           <tr>
             <th className="px-3 py-2">Ação</th>
             <th className="px-3 py-2">Responsável</th>
             <th className="px-3 py-2">Prazo</th>
+            <th className="px-3 py-2">Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-ink/10">
-          {actionItems.map((a) => (
-            <tr key={a.id}>
-              <td className="px-3 py-2 font-medium text-ink">{a.action}</td>
-              <td className="px-3 py-2 text-ink-muted">{a.responsible || '—'}</td>
-              <td className="px-3 py-2 text-ink-muted">{a.deadline ? formatDateBR(a.deadline) : '—'}</td>
-            </tr>
-          ))}
+          {actionItems.map((a) => {
+            const isDone = a.status === 'concluida';
+            const nextStatus = isDone ? 'pendente' : 'concluida';
+            return (
+              <tr key={a.id}>
+                <td className={`px-3 py-2 font-medium ${isDone ? 'text-ink-muted line-through' : 'text-ink'}`}>{a.action}</td>
+                <td className="px-3 py-2 text-ink-muted">{a.responsible || '—'}</td>
+                <td className="px-3 py-2 text-ink-muted">{a.deadline ? formatDateBR(a.deadline) : '—'}</td>
+                <td className="px-3 py-2">
+                  {canEdit ? (
+                    <form action={updateActionItemStatusAction} className="flex items-center gap-1.5">
+                      <input type="hidden" name="meetingId" value={meetingId} />
+                      <input type="hidden" name="actionItemId" value={a.id} />
+                      <input type="hidden" name="status" value={nextStatus} />
+                      <button
+                        type="submit"
+                        className={`rounded-[var(--radius)] border px-2 py-1 text-[11px] font-semibold transition-colors ${
+                          isDone
+                            ? 'border-ink/15 text-ink-muted hover:bg-surface-muted'
+                            : 'border-success/30 text-success hover:bg-success/10'
+                        }`}
+                      >
+                        {isDone ? '↺ Reabrir' : '✓ Concluir'}
+                      </button>
+                      {a.manuallyEdited ? <span className="text-[10px] text-ink-muted" title="Editado à mão">✎</span> : null}
+                    </form>
+                  ) : (
+                    <span className="text-xs text-ink-muted">{isDone ? '✓ Concluída' : '⏳ Pendente'}</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import { parseExtractedOutcome, extractMeetingOutcome } from './decisions';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { PGlite } from '@electric-sql/pglite';
+import { runMigrations, pgliteExecutor, type SqlExecutor } from '@conselho/db';
+import {
+  parseExtractedOutcome,
+  extractMeetingOutcome,
+  saveMeetingOutcome,
+  listMeetingDecisions,
+  listMeetingActionItems,
+  updateDecisionStatus,
+  updateActionItemStatus,
+  type ExtractedMeetingOutcome,
+} from './decisions';
 import type { ILlmProvider, TextCompletionRequest } from '@conselho/providers';
 
 describe('parseExtractedOutcome — parse defensivo (Etapa "Histórico de reuniões")', () => {
@@ -97,5 +109,115 @@ describe('extractMeetingOutcome — degradação graciosa (nunca derruba a gera�
     expect(received!.prompt).toContain('Decidimos selecionar o fornecedor B.');
     expect(received!.model).toBe('gpt-5.6-sol');
     expect(received!.reasoningEffort).toBe('high');
+  });
+});
+
+describe('saveMeetingOutcome — "itens monitorados" sobrevivem à regeneração (Etapa "Acompanhamento")', () => {
+  let db: PGlite;
+  let exec: SqlExecutor;
+  let companyId: string;
+  let meetingId: string;
+  const key = randomBytes(32);
+
+  function outcome(overrides: Partial<ExtractedMeetingOutcome> = {}): ExtractedMeetingOutcome {
+    return {
+      decisions: [
+        {
+          topic: 'Fornecedor de fachada',
+          decision: 'Selecionar o fornecedor B para o revestimento externo',
+          status: 'pendente',
+          responsible: 'Carlos',
+          deadline: null,
+          evidence: '',
+        },
+      ],
+      actionItems: [
+        { action: 'Assinar contrato com o fornecedor B', responsible: 'Jurídico', deadline: null, relatedDecisionTopic: null },
+      ],
+      ...overrides,
+    };
+  }
+
+  beforeAll(async () => {
+    db = new PGlite();
+    exec = pgliteExecutor(db);
+    await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    companyId = company.rows[0]!.id;
+    const user = await exec.query<{ id: string }>(
+      'INSERT INTO app_user (email, display_name, company_id) VALUES ($1, $2, $3) RETURNING id',
+      ['teste-decisions@coevo.test', 'Teste', companyId],
+    );
+    const meeting = await exec.query<{ id: string }>(
+      'INSERT INTO meeting (user_id, company_id, title_enc) VALUES ($1, $2, $3) RETURNING id',
+      [user.rows[0]!.id, companyId, 'x'],
+    );
+    meetingId = meeting.rows[0]!.id;
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  it('primeira geração: decisão/ação nascem com manuallyEdited=false e o status da extração', async () => {
+    await saveMeetingOutcome(exec, meetingId, outcome(), key);
+    const decisions = await listMeetingDecisions(exec, meetingId, key);
+    const actions = await listMeetingActionItems(exec, meetingId, key);
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]!.status).toBe('pendente');
+    expect(decisions[0]!.manuallyEdited).toBe(false);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]!.status).toBe('pendente');
+    expect(actions[0]!.manuallyEdited).toBe(false);
+  });
+
+  it('marcar ação como concluída à mão e regenerar (texto quase igual): status manual sobrevive', async () => {
+    const before = await listMeetingActionItems(exec, meetingId, key);
+    await updateActionItemStatus(exec, before[0]!.id, 'concluida');
+
+    // regenera com o MESMO conteúdo (simula reextração da IA) — a ação
+    // reaparece com texto quase idêntico, deve casar por similaridade e
+    // herdar o status 'concluida' em vez de voltar pra 'pendente'.
+    await saveMeetingOutcome(exec, meetingId, outcome(), key);
+
+    const after = await listMeetingActionItems(exec, meetingId, key);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.status).toBe('concluida');
+    expect(after[0]!.manuallyEdited).toBe(true);
+  });
+
+  it('ação totalmente diferente na regeneração: NÃO herda o status manual de um item não relacionado', async () => {
+    await saveMeetingOutcome(
+      exec,
+      meetingId,
+      outcome({
+        actionItems: [
+          { action: 'Revisar o cronograma da obra com a equipe de engenharia', responsible: '', deadline: null, relatedDecisionTopic: null },
+        ],
+      }),
+      key,
+    );
+    const after = await listMeetingActionItems(exec, meetingId, key);
+    expect(after).toHaveLength(1);
+    expect(after[0]!.status).toBe('pendente');
+    expect(after[0]!.manuallyEdited).toBe(false);
+  });
+
+  it('updateDecisionStatus marca manually_edited=true e sobrevive a uma regeneração com o mesmo texto', async () => {
+    await saveMeetingOutcome(exec, meetingId, outcome(), key);
+    const decisions = await listMeetingDecisions(exec, meetingId, key);
+    await updateDecisionStatus(exec, decisions[0]!.id, 'cancelado');
+
+    await saveMeetingOutcome(exec, meetingId, outcome(), key); // reextração "concordando" com status diferente (pendente)
+
+    const after = await listMeetingDecisions(exec, meetingId, key);
+    expect(after[0]!.status).toBe('cancelado');
+    expect(after[0]!.manuallyEdited).toBe(true);
+  });
+
+  it('updateDecisionStatus rejeita status inválido', async () => {
+    const decisions = await listMeetingDecisions(exec, meetingId, key);
+    // @ts-expect-error valor fora do union, testando a guarda em runtime
+    await expect(updateDecisionStatus(exec, decisions[0]!.id, 'nao-existe')).rejects.toThrow();
   });
 });
