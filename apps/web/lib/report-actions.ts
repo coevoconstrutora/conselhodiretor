@@ -87,7 +87,6 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
 
     await synthesizePresidentReport(db, meetingId, user, reports, llm, modelLabel, key, inputs.finals);
 
-    revalidatePath(`/meetings/${meetingId}`);
     return { ok: true };
   } catch (err) {
     console.error('[relatorios] geração falhou:', err);
@@ -95,12 +94,24 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
   }
 }
 
-/** Botão manual "Gerar/Regenerar relatórios" — reautentica (form pode ficar aberto por minutos). */
+/**
+ * Botão manual "Gerar/Regenerar relatórios" — reautentica (form pode ficar aberto por minutos).
+ *
+ * `revalidatePath` fica aqui (fora de `generateReportsCore`) porque este é o
+ * único chamador que roda dentro do request/Server Action de verdade —
+ * `endMeetingAction` chama `generateReportsCore` numa promise fire-and-forget
+ * que sobrevive ao fim do request original, e `revalidatePath` chamado ali
+ * quebra com "used ... during render" (Next.js exige o contexto síncrono da
+ * action). Foi exatamente esse throw, não a extração de decisões/ações em
+ * si, que aparecia como "geração falhou" nos logs.
+ */
 export async function generateReportsAction(meetingId: string): Promise<ActionResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, code: 'unauthenticated' };
   if (!canWrite(user)) return { ok: false, code: 'unauthenticated', detail: 'Convidados não podem gerar relatórios.' };
-  return generateReportsCore(meetingId, user);
+  const result = await generateReportsCore(meetingId, user);
+  if (result.ok) revalidatePath(`/meetings/${meetingId}`);
+  return result;
 }
 
 /**

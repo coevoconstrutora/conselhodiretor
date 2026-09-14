@@ -218,10 +218,18 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
 
     const existingReports = await listAgentReports(db, meetingId, getEncryptionKey()).catch(() => []);
     if (existingReports.length === 0) {
+      // Sem `revalidatePath` aqui: essa promise sobrevive ao fim deste
+      // request (fire-and-forget, de propósito — ver doc de
+      // `generateReportsCore`), e por rodar fora do request original o
+      // Next.js recusa `revalidatePath`/`revalidateTag` com "used ... during
+      // render", derrubando a chamada inteira. Foi esse throw — não a
+      // extração de decisões/ações em si — que aparecia como "geração
+      // automática pós-encerramento falhou" nos logs. A página é dinâmica
+      // (sem cache de rota); um reload depois que a geração terminar já
+      // busca os dados novos direto do banco.
       void generateReportsCore(meetingId, user)
         .then((result) => {
           if (!result.ok) console.error('[relatorios] geração automática pós-encerramento falhou:', result);
-          revalidatePath(`/meetings/${meetingId}`);
         })
         .catch((error) => console.error('[relatorios] geração automática pós-encerramento falhou:', error));
     }

@@ -133,7 +133,8 @@ export function parseExtractedOutcome(raw: string): ExtractedMeetingOutcome | nu
         })
       : [];
     return { decisions, actionItems };
-  } catch {
+  } catch (error) {
+    console.error('[relatorios] parse de decisões/ações falhou (resposta do LLM não é JSON válido):', error);
     return null;
   }
 }
@@ -155,12 +156,17 @@ export async function extractMeetingOutcome(
     const res = await llm.completeText({
       system: DECISION_EXTRACTION_SYSTEM,
       prompt: `Síntese final da reunião:\n\n${presidentSynthesisText}`,
-      maxTokens: 800,
+      // 800 cortava a resposta (JSON inválido) com reasoningEffort alto —
+      // em modelos de raciocínio o teto cobre raciocínio interno + texto
+      // visível junto (mesmo bug já visto na síntese do Presidente, ver
+      // apps/web/lib/report-actions.ts). 4000 é o piso que resolveu lá.
+      maxTokens: 4000,
       model: modelOverride,
       reasoningEffort: reasoningEffortOverride,
     });
     return parseExtractedOutcome(res.text);
-  } catch {
+  } catch (error) {
+    console.error('[relatorios] extração de decisões/ações falhou (chamada ao LLM):', error);
     return null;
   }
 }
