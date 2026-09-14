@@ -57,6 +57,8 @@ export async function startRecallBotAction(meetingId: string, meetingUrl: string
       body: JSON.stringify({
         meeting_url: meetingUrl.trim(),
         bot_name: 'Conselho',
+        // video_separate_h264 exige bot de 4 núcleos ou GPU — o bot padrão (1 core) é recusado (400).
+        variant: { google_meet: 'web_4_core' },
         recording_config: {
           video_mixed_layout: 'gallery_view_v2',
           video_separate_h264: {},
