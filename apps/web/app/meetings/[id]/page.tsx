@@ -115,6 +115,12 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
   const presidentReport = reports.find((r) => r.agentId === 'presidente') ?? null;
   const secretaryReport = reports.find((r) => r.agentId === 'secretaria') ?? null;
   const counselorReports = reports.filter((r) => r.agentId !== 'presidente' && r.agentId !== 'secretaria');
+  // Gate do botão "Baixar PPTX" (mesmo critério do endpoint) — deck de slides
+  // só faz sentido com o conselho completo, senão fica faltando conselheiro.
+  const counselorAgentCount = Object.keys(profiles).filter(
+    (agentId) => agentId !== 'presidente' && agentId !== 'secretaria',
+  ).length;
+  const pptxReady = presidentReport !== null && counselorReports.length >= counselorAgentCount;
   const historicalCounts = closed
     ? new Map<string, number>([
         ...contributionCounts,
@@ -397,7 +403,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                     ) : (
                       <div className="space-y-4">{counselorReports.map((report) => renderReportDetails(report))}</div>
                     )}
-                    {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
+                    {reports.length > 0 ? <ReportExportBar meetingId={id} pptxReady={pptxReady} /> : null}
                   </div>
                 }
                 sintese={
@@ -536,7 +542,7 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
                       <PresidentSynthesisButton meetingId={id} />
                     </div>
                   ) : null}
-                  {reports.length > 0 ? <ReportExportBar meetingId={id} /> : null}
+                  {reports.length > 0 ? <ReportExportBar meetingId={id} pptxReady={pptxReady} /> : null}
                 </section>
 
                 {/* Histórico de sínteses do Presidente durante a reunião */}

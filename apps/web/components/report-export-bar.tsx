@@ -8,8 +8,13 @@ const linkCls =
 const inputCls =
   'w-56 rounded-[var(--radius)] border border-ink/15 bg-white px-2.5 py-1.5 text-xs text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
 
-/** Exportar/enviar os relatórios já gerados — PDF/Word para baixar, PDF por e-mail. */
-export function ReportExportBar({ meetingId }: { meetingId: string }) {
+/**
+ * Exportar/enviar os relatórios já gerados — PDF/Word para baixar, PDF por
+ * e-mail. `pptxReady` (todos os conselheiros + síntese do Presidente
+ * gerados) controla o botão de slides — um deck com conselheiro faltando
+ * fica incompleto, então nem oferecemos o link (mesmo gate do endpoint).
+ */
+export function ReportExportBar({ meetingId, pptxReady }: { meetingId: string; pptxReady: boolean }) {
   const [state, formAction, pending] = useActionState<CounselorEmailState, FormData>(
     sendReportsEmailAction,
     null,
@@ -23,6 +28,18 @@ export function ReportExportBar({ meetingId }: { meetingId: string }) {
       <a href={`/api/meetings/${meetingId}/report-export?format=docx`} className={linkCls}>
         📝 Baixar Word
       </a>
+      {pptxReady ? (
+        <a href={`/api/meetings/${meetingId}/report-export?format=pptx`} className={linkCls}>
+          🖥️ Baixar PPTX
+        </a>
+      ) : (
+        <span
+          className={`${linkCls} cursor-not-allowed opacity-50`}
+          title="Disponível quando todos os relatórios dos conselheiros e a síntese do Presidente estiverem prontos."
+        >
+          🖥️ Baixar PPTX
+        </span>
+      )}
       <form action={formAction} className="flex items-center gap-2">
         <input type="hidden" name="meetingId" value={meetingId} />
         <input
