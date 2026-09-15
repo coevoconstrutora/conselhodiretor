@@ -156,11 +156,15 @@ export async function extractMeetingOutcome(
     const res = await llm.completeText({
       system: DECISION_EXTRACTION_SYSTEM,
       prompt: `Síntese final da reunião:\n\n${presidentSynthesisText}`,
-      // 800 cortava a resposta (JSON inválido) com reasoningEffort alto —
-      // em modelos de raciocínio o teto cobre raciocínio interno + texto
-      // visível junto (mesmo bug já visto na síntese do Presidente, ver
-      // apps/web/lib/report-actions.ts). 4000 é o piso que resolveu lá.
-      maxTokens: 4000,
+      // 800 (e depois 4000) cortava a resposta (JSON vazio, sem erro de
+      // API) com reasoningEffort 'high'/'xhigh' — em modelos de raciocínio
+      // o teto cobre raciocínio interno + texto visível junto, e reunião
+      // longa consome ainda mais raciocínio. 12000 é o valor usado em TODAS
+      // as outras chamadas deste mesmo nível de raciocínio (ver
+      // apps/web/lib/report-actions.ts, createLlm({ maxTokens: 12000 })) —
+      // confirmado em produção: falhou 2x com 4000 numa reunião longa
+      // (OpenAiLlmError 'Resposta sem conteúdo').
+      maxTokens: 12000,
       model: modelOverride,
       reasoningEffort: reasoningEffortOverride,
     });
