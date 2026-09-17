@@ -160,6 +160,7 @@ async function synthesizePresidentReport(
     synthesis,
     presidentConfig.synthesisModel,
     presidentConfig.synthesisReasoningEffort,
+    transcriptFinals,
   );
   if (outcome) {
     await saveMeetingOutcome(db, meetingId, outcome, key).catch((error) =>
@@ -314,11 +315,13 @@ export async function generateMeetingOutcomeAction(meetingId: string): Promise<A
     await loadAndApplyPresidentConfig(db, user.companyId);
     const presidentConfig = getPresidentConfig(user.companyId);
     const { llm } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });
+    const inputs = await getNoteInputs(meetingId);
     const outcome = await extractMeetingOutcome(
       llm,
       presidentReport.content,
       presidentConfig.synthesisModel,
       presidentConfig.synthesisReasoningEffort,
+      inputs?.finals ?? [],
     );
     if (!outcome) {
       return { ok: false, code: 'internal', detail: 'O modelo não conseguiu extrair decisões/ações — tente novamente.' };

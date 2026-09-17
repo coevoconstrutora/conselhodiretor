@@ -26,6 +26,24 @@ describe('createSpeakerNameTracker — nomeia quem fala por autoapresentação',
     expect(out).toBe('Marina: voltando ao ponto anterior sobre o contrato.');
   });
 
+  it('reconhece "quem fala é Nome", "quem tá/está falando é Nome" e "pode(m) me chamar de Nome"', () => {
+    expect(createSpeakerNameTracker().apply('Locutor 1: quem fala é Marina, da área Jurídica.')).toBe(
+      'Marina: quem fala é Marina, da área Jurídica.',
+    );
+    expect(createSpeakerNameTracker().apply('Locutor 1: quem tá falando é o Carlos.')).toBe(
+      'Carlos: quem tá falando é o Carlos.',
+    );
+    expect(createSpeakerNameTracker().apply('Locutor 1: quem está falando aqui é a Ana Paula.')).toBe(
+      'Ana Paula: quem está falando aqui é a Ana Paula.',
+    );
+    expect(createSpeakerNameTracker().apply('Locutor 1: pode me chamar de Vinícius.')).toBe(
+      'Vinícius: pode me chamar de Vinícius.',
+    );
+    expect(createSpeakerNameTracker().apply('Locutor 1: me chama de João, tá bom?')).toBe(
+      'João: me chama de João, tá bom?',
+    );
+  });
+
   it('sem autoapresentação, mantém "Locutor N" (não inventa nome)', () => {
     const tracker = createSpeakerNameTracker();
     const out = tracker.apply('Locutor 1: vamos revisar o orçamento da obra.');

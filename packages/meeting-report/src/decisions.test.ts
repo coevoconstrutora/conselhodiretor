@@ -110,6 +110,22 @@ describe('extractMeetingOutcome — degradação graciosa (nunca derruba a gera�
     expect(received!.model).toBe('gpt-5.6-sol');
     expect(received!.reasoningEffort).toBe('high');
   });
+
+  it('com transcriptFinals: inclui a transcrição no prompt (é lá que aparecem nomes de responsáveis)', async () => {
+    let received: TextCompletionRequest | null = null;
+    const llm: ILlmProvider = {
+      complete: async () => { throw new Error('não deveria chamar complete()'); },
+      completeText: async (req) => {
+        received = req;
+        return { text: '{"decisions":[],"actionItems":[]}' };
+      },
+    };
+    await extractMeetingOutcome(llm, 'Decidimos selecionar o fornecedor B.', undefined, undefined, [
+      'Vinícius: eu cuido da automação das certidões.',
+    ]);
+    expect(received!.prompt).toContain('Vinícius: eu cuido da automação das certidões.');
+    expect(received!.prompt).toContain('Decidimos selecionar o fornecedor B.');
+  });
 });
 
 describe('saveMeetingOutcome — "itens monitorados" sobrevivem à regeneração (Etapa "Acompanhamento")', () => {

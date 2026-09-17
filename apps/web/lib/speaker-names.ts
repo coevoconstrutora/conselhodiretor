@@ -47,12 +47,18 @@ const NAME_GROUP = '([a-zà-ÿ]+(?:\\s+[a-zà-ÿ]+){0,2})';
 // área só conta com uma palavra-chave explícita ("área/departamento/setor") — sem
 // isso, um "do lado de fora" ou "do outro prédio" viraria uma "área" inventada.
 const AREA_GROUP = '(?:,?\\s*d[aoe]s?\\s+(?:área|departamento|setor)\\s+(?:de\\s+)?([a-zà-ÿ]+(?:\\s+[a-zà-ÿ]+){0,2}))?';
+// "quem fala é Marina" costuma vir sem artigo (diferente de "sou o/a NOME") —
+// o artigo aqui é opcional pra cobrir as duas formas sem duplicar padrão.
+const OPTIONAL_ARTICLE = '(?:(?:a|o)\\s+)?';
 
-/** "sou o/a NOME [da área/do departamento/do setor ÁREA]" cobre a maior parte das autoapresentações em pt-BR. */
+/** "sou o/a NOME [da área/do departamento/do setor ÁREA]" e variantes cobrem a maior parte das autoapresentações em pt-BR. */
 const INTRO_PATTERNS: RegExp[] = [
   new RegExp(`\\bsou\\s+(?:a|o)\\s+${NAME_GROUP}${AREA_GROUP}`, 'i'),
   new RegExp(`\\b(?:aqui é|aqui quem fala é|aqui fala)\\s+(?:a|o)\\s+${NAME_GROUP}${AREA_GROUP}`, 'i'),
   new RegExp(`\\bmeu nome é\\s+${NAME_GROUP}${AREA_GROUP}`, 'i'),
+  new RegExp(`\\bquem\\s+fala\\s+é\\s+${OPTIONAL_ARTICLE}${NAME_GROUP}${AREA_GROUP}`, 'i'),
+  new RegExp(`\\bquem\\s+(?:tá|está|esta)\\s+falando(?:\\s+aqui)?\\s+é\\s+${OPTIONAL_ARTICLE}${NAME_GROUP}${AREA_GROUP}`, 'i'),
+  new RegExp(`\\b(?:pode(?:m)?\\s+me\\s+chamar\\s+de|me\\s+cham(?:a|em)\\s+de)\\s+${NAME_GROUP}${AREA_GROUP}`, 'i'),
 ];
 
 function titleCase(raw: string): string {

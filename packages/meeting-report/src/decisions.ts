@@ -55,13 +55,17 @@ function findManualMatch<S extends string>(
 }
 
 export const DECISION_EXTRACTION_SYSTEM =
-  'Você lê a síntese executiva final de uma reunião de conselho de uma incorporadora imobiliária e ' +
-  'extrai, de forma ESTRUTURADA, as decisões e ações mencionadas — sem inventar nada que o texto não ' +
-  'sustente. Regras: (1) DECIDIDO só quando o texto afirma que algo foi de fato decidido; ' +
-  '(2) RECOMENDADO quando um conselheiro sugeriu mas ninguém decidiu; (3) PENDENTE quando ainda ' +
-  'precisa de decisão; (4) CANCELADO quando o texto diz que algo foi descartado; nunca converta uma ' +
-  'recomendação em decisão. Responda APENAS com JSON válido (sem cercas de código), no formato: ' +
-  '{"decisions":[{"topic":"...","decision":"...","status":"decidido|recomendado|pendente|cancelado",' +
+  'Você lê a síntese executiva final de uma reunião de conselho de uma incorporadora imobiliária — e, ' +
+  'quando fornecida, a transcrição bruta da reunião — e extrai, de forma ESTRUTURADA, as decisões e ' +
+  'ações mencionadas — sem inventar nada que o texto não sustente. Regras: (1) DECIDIDO só quando o ' +
+  'texto afirma que algo foi de fato decidido; (2) RECOMENDADO quando um conselheiro sugeriu mas ' +
+  'ninguém decidiu; (3) PENDENTE quando ainda precisa de decisão; (4) CANCELADO quando o texto diz ' +
+  'que algo foi descartado; nunca converta uma recomendação em decisão. Para "responsible": a síntese ' +
+  'executiva raramente cita nomes de pessoas — SEMPRE cheque a transcrição em busca de quem foi ' +
+  'designado ou se ofereceu para cada ação/decisão (ex.: "fulano vai cuidar disso", "combinado, ' +
+  'eu assumo") antes de deixar o campo vazio. Responda APENAS com JSON válido (sem cercas de código), ' +
+  'no formato: {"decisions":[{"topic":"...","decision":"...",' +
+  '"status":"decidido|recomendado|pendente|cancelado",' +
   '"responsible":"...","deadline":"YYYY-MM-DD ou null","evidence":"..."}],' +
   '"actionItems":[{"action":"...","responsible":"...","deadline":"YYYY-MM-DD ou null",' +
   '"relatedDecisionTopic":"... ou null"}]}. ' +
@@ -144,18 +148,28 @@ export function parseExtractedOutcome(raw: string): ExtractedMeetingOutcome | nu
  * livre, mesmo modelo/raciocínio da síntese (já carregado pelo chamador).
  * Nunca lança: falha de LLM/parse devolve `null` (relatórios seguem sem
  * Decisões/Ações, nunca travam por causa disto).
+ *
+ * `transcriptFinals` (opcional): a síntese do Presidente é um resumo executivo
+ * e quase nunca cita nomes de pessoas — só a transcrição bruta tem isso. Sem
+ * ela, o campo "responsible" sai vazio quase sempre (mesma razão pela qual só
+ * a Ata da Secretária, que recebe a transcrição, consegue citar responsáveis).
  */
 export async function extractMeetingOutcome(
   llm: ILlmProvider,
   presidentSynthesisText: string,
   modelOverride?: string,
   reasoningEffortOverride?: string,
+  transcriptFinals?: readonly string[],
 ): Promise<ExtractedMeetingOutcome | null> {
   if (typeof llm.completeText !== 'function') return null;
   try {
+    const transcriptBlock =
+      transcriptFinals && transcriptFinals.length > 0
+        ? `Transcrição da reunião:\n${transcriptFinals.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\n`
+        : '';
     const res = await llm.completeText({
       system: DECISION_EXTRACTION_SYSTEM,
-      prompt: `Síntese final da reunião:\n\n${presidentSynthesisText}`,
+      prompt: `${transcriptBlock}Síntese final da reunião:\n\n${presidentSynthesisText}`,
       // 800 (e depois 4000) cortava a resposta (JSON vazio, sem erro de
       // API) com reasoningEffort 'high'/'xhigh' — em modelos de raciocínio
       // o teto cobre raciocínio interno + texto visível junto, e reunião
