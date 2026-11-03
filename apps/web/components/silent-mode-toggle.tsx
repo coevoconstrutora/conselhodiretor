@@ -55,13 +55,13 @@ export function SilentModeToggle({ meetingId }: { meetingId: string }) {
             ? 'O board só está gravando a transcrição — os conselheiros só opinam nos relatórios finais. Clique para voltar ao vivo.'
             : 'Silenciar o board: só grava a transcrição, os conselheiros só opinam nos relatórios finais (útil em reuniões tumultuadas).'
         }
-        className={`rounded-[var(--radius)] border px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+        className={`rounded-[var(--radius)] border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50 ${
           silent
             ? 'border-amber-300/40 bg-amber-400/10 text-amber-200'
             : 'border-white/25 text-white hover:bg-white/10'
         }`}
       >
-        {pending ? '…' : silent ? '🤫 só grava' : '🎙️ ao vivo'}
+        {pending ? '…' : silent ? '🤫 Silencioso: ligado' : '🤫 Modo silencioso'}
       </button>
       {state?.error ? <span className="text-xs text-red-300">⚠ {state.error}</span> : null}
     </form>

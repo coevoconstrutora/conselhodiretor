@@ -15,6 +15,16 @@ import { LiveMicButton } from './live-mic-button';
 import { PipelineStatusBadge } from './pipeline-status-badge';
 import { SilentModeToggle } from './silent-mode-toggle';
 
+/** Bloco rotulado da barra de comandos da sala. */
+function ToolbarGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="blueprint-index text-[10px] uppercase tracking-widest text-white/40">{label}</span>
+      <div className="flex flex-wrap items-start gap-2">{children}</div>
+    </div>
+  );
+}
+
 /**
  * Tela de Consulta (E7 — frontend-spec §4): grid 2 colunas — área principal
  * fluida (transcrição ao vivo) + painel lateral fixo do BOARD (faixa dos
@@ -116,26 +126,7 @@ export function MeetingRoom({
           </span>
         </h2>
         <div className="flex items-center gap-3">
-          {!closed ? (
-            <button
-              type="button"
-              aria-pressed={!(voiceMuted || focusMode)}
-              disabled={focusMode}
-              onClick={() => setVoiceMuted((m) => !m)}
-              title={
-                focusMode
-                  ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
-                  : voiceMuted
-                    ? 'Ativar voz dos conselheiros'
-                    : 'Silenciar voz dos conselheiros'
-              }
-              className="rounded-[var(--radius)] border border-white/25 px-2.5 py-1 text-xs text-white transition-colors hover:bg-white/10 disabled:opacity-50"
-            >
-              {voiceMuted || focusMode ? '🔇 voz' : '🔊 voz'}
-            </button>
-          ) : null}
           {!closed ? <PipelineStatusBadge /> : null}
-          {!closed ? <SilentModeToggle meetingId={meetingId} /> : null}
           {!closed ? (
             <span
               title="⚠️ atenção · 💡 sugestão · 🔍 hipótese · 📋 síntese"
@@ -179,31 +170,18 @@ export function MeetingRoom({
         </p>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
-        {!closed ? (
-          <button
-            type="button"
-            aria-pressed={focusMode}
-            onClick={toggleFocusMode}
-            className={`rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-colors ${
-              focusMode
-                ? 'bg-white text-surface-deep'
-                : 'border border-white/25 text-white hover:bg-white/10'
-            }`}
-          >
-            🔇 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
-          </button>
+      {/* Barra de comandos ÚNICA (antes: voz/ao vivo no cabeçalho, Modo Foco e
+          iniciar/encerrar embaixo). Três blocos, da esquerda p/ a direita na
+          ordem de uso: Captação (de onde vem o áudio + iniciar) → Conselho
+          (como o board se comporta) → Encerrar (ação de risco, isolada). */}
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 border-t border-white/10 pt-4">
+        {closed ? (
+          <span className="rounded-[var(--radius)] border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-white/60">
+            🔒 Reunião encerrada
+          </span>
         ) : (
-          <span />
-        )}
-        <div className="flex items-start gap-2">
-          {closed ? (
-            <span className="rounded-[var(--radius)] border border-white/20 bg-white/5 px-3 py-2 text-xs font-medium text-white/60">
-              🔒 Reunião encerrada
-            </span>
-          ) : (
-            <>
-              {synthesisForm}
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-4">
+            <ToolbarGroup label="Captação">
               {/* startForm (reunião simulada) está desabilitado na página — fase de
                   demo encerrada. Quando presente, o clique reinicia a demo no MESMO
                   meetingId (sem navegação): sem limpar, cards/transcrição da rodada
@@ -219,10 +197,44 @@ export function MeetingRoom({
                 wsBaseUrl={wsBaseUrl}
                 voiceRecognitionEnabled={voiceRecognitionEnabled}
               />
-            </>
-          )}
-          {endMeetingButton}
-        </div>
+            </ToolbarGroup>
+
+            <ToolbarGroup label="Conselho">
+              <button
+                type="button"
+                aria-pressed={!(voiceMuted || focusMode)}
+                disabled={focusMode}
+                onClick={() => setVoiceMuted((m) => !m)}
+                title={
+                  focusMode
+                    ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
+                    : voiceMuted
+                      ? 'Ativar voz dos conselheiros'
+                      : 'Silenciar voz dos conselheiros'
+                }
+                className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+              >
+                {voiceMuted || focusMode ? '🔇 Voz desligada' : '🔊 Voz'}
+              </button>
+              <button
+                type="button"
+                aria-pressed={focusMode}
+                onClick={toggleFocusMode}
+                title="Só pontos de atenção aparecem e a voz é desligada (tecla F)"
+                className={`rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-colors ${
+                  focusMode
+                    ? 'bg-white text-surface-deep'
+                    : 'border border-white/25 text-white hover:bg-white/10'
+                }`}
+              >
+                🎯 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
+              </button>
+              <SilentModeToggle meetingId={meetingId} />
+              {synthesisForm}
+            </ToolbarGroup>
+          </div>
+        )}
+        {endMeetingButton ? <div className="ml-auto">{endMeetingButton}</div> : null}
       </div>
     </section>
   );

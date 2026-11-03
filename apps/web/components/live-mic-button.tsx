@@ -287,64 +287,69 @@ export function LiveMicButton({
     }
   }, [meetingId, token, wsBaseUrl, audioSource, voiceRecognitionEnabled]);
 
+  const choosingSource = state === 'idle' || state === 'error';
+
   return (
-    <div className="flex flex-col items-end gap-1">
-      {state === 'live' ? (
-        <button
-          type="button"
-          onClick={() => void stop()}
-          className="rounded-[var(--radius)] bg-attn-critical px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
-        >
-          ⏹ Encerrar (ao vivo)
-        </button>
-      ) : (
-        <>
-          {state === 'idle' || state === 'error' ? (
-            <div className="flex items-center gap-1 text-[10px] text-white/70">
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="audioSource"
-                  checked={audioSource === 'mic'}
-                  onChange={() => setAudioSource('mic')}
-                />
-                Microfone
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="audioSource"
-                  checked={audioSource === 'tab'}
-                  onChange={() => setAudioSource('tab')}
-                />
-                Áudio da aba (Meet)
-              </label>
-            </div>
-          ) : null}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {state === 'live' ? (
           <button
             type="button"
-            onClick={() => void start()}
-            disabled={state === 'starting'}
-            className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+            onClick={() => void stop()}
+            title="Para o microfone/áudio e a transcrição. A reunião continua aberta — para encerrá-la use o botão à direita."
+            className="rounded-[var(--radius)] bg-attn-critical px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
           >
-            {state === 'starting'
-              ? '… preparando'
-              : audioSource === 'tab'
-                ? '🖥️ Reunião ao vivo (aba)'
-                : '🎙️ Reunião ao vivo'}
+            ⏹ Parar captação
           </button>
-          {audioSource === 'tab' && (state === 'idle' || state === 'error') ? (
-            <p className="max-w-[220px] text-right text-[10px] text-white/60">
-              No seletor do navegador, escolha a aba do Google Meet e marque
-              "Compartilhar áudio da aba".
-            </p>
-          ) : null}
-        </>
-      )}
-      {error ? <p className="max-w-[220px] text-right text-[10px] text-red-300">{error}</p> : null}
-      {warning && !error ? (
-        <p className="max-w-[220px] text-right text-[10px] text-amber-300">{warning}</p>
+        ) : (
+          <>
+            {choosingSource ? (
+              <div
+                role="radiogroup"
+                aria-label="Fonte do áudio"
+                className="inline-flex rounded-[var(--radius)] border border-white/20 p-0.5"
+              >
+                {(
+                  [
+                    ['mic', '🎙️ Microfone'],
+                    ['tab', '🖥️ Aba do Meet'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={audioSource === value}
+                    onClick={() => setAudioSource(value)}
+                    className={`rounded-[calc(var(--radius)-2px)] px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                      audioSource === value
+                        ? 'bg-white/15 text-white'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void start()}
+              disabled={state === 'starting'}
+              className="rounded-[var(--radius)] bg-white px-3 py-2 text-xs font-semibold text-surface-deep shadow-sm transition-colors hover:bg-white/90 disabled:opacity-50"
+            >
+              {state === 'starting' ? '… preparando' : '● Iniciar reunião ao vivo'}
+            </button>
+          </>
+        )}
+      </div>
+      {audioSource === 'tab' && choosingSource ? (
+        <p className="max-w-sm text-[11px] text-white/60">
+          No seletor do navegador, escolha a aba do Google Meet e marque "Compartilhar áudio da aba".
+        </p>
       ) : null}
+      {error ? <p className="max-w-sm text-[11px] text-red-300">{error}</p> : null}
+      {warning && !error ? <p className="max-w-sm text-[11px] text-amber-300">{warning}</p> : null}
       {state === 'stale-deploy' ? (
         <button
           type="button"
