@@ -9,7 +9,7 @@ import { requireCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-actions';
-import { startDemoBoardAction, requestSynthesisAction } from '@/lib/board-actions';
+import { requestSynthesisAction } from '@/lib/board-actions';
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
 import {
@@ -285,17 +285,6 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               historicalCounts={historicalCounts}
               voiceRecognitionEnabled={companyProfile.voiceRecognitionEnabled}
               endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
-              startForm={
-                <form action={startDemoBoardAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <button
-                    type="submit"
-                    className="rounded-[var(--radius)] bg-white px-3 py-2 text-xs font-semibold text-surface-deep shadow-sm transition-colors hover:bg-white/90"
-                  >
-                    ▶ Reunião simulada
-                  </button>
-                </form>
-              }
               synthesisForm={
                 <form action={requestSynthesisAction}>
                   <input type="hidden" name="meetingId" value={id} />

@@ -72,8 +72,7 @@ pela UI ("20% do VGV por SPE") citada pelo CFO na reunião seguinte.
 ## Fluxo vivo
 
 login → nova reunião → confirmar gravação (gate servidor, default NEGA) → `/meetings/[id]`:
-transcrição AO VIVO + faixa dos 9 conselheiros + feed → "▶ Reunião simulada" (roteiro
-imobiliário; NÃO persiste transcript) ou "🎙️ Reunião ao vivo" (mic → WS /audio → Deepgram;
+transcrição AO VIVO + faixa dos 9 conselheiros + feed → "🎙️ Reunião ao vivo" (mic → WS /audio → Deepgram;
 transcript persistido cifrado) → contribuições auditadas com anti-repetição (histórico +
 skip + dedup semântico + CaseState + case review 90s) → síntese do Presidente (auto/择demanda)
 → 📝 revisão do transcript → 📊 "Gerar relatórios do conselho" (8 relatórios em série +
@@ -95,7 +94,11 @@ síntese do Presidente + ata da Secretária; cifrados + auditados atomicamente; 
 - **Next NÃO lê o `.env` da raiz** — keys de runtime em `apps/web/.env.local` (gitignored).
 - **Mudou gateway/runtime/migrations? REINICIE o `pnpm dev`** — singletons em `globalThis`
   ignoram HMR; PGlite só aplica migration nova no boot.
-- **"▶ Reunião simulada" NÃO persiste transcript** (de propósito).
+- **"▶ Reunião simulada" está DESABILITADA** (botão removido da sala; `startDemoBoardAction`
+  lança erro via flag `DEMO_BOARD_ENABLED` em `board-actions.ts`). Quando ativa, não persiste transcript.
+- **Síntese final do Presidente NÃO é ata**: é dissertação opinativa/crítica (CEO experiente) só sobre
+  as sugestões dos conselheiros (`presidentSystem`, `meeting-report/src/reports.ts`) — sem rótulos
+  DECIDIDO/PENDENTE, sem listar ações/prazos. Decisões/metas/ações são da Secretária (ata).
 - **WS em produção = MESMA porta do HTTP** — `BOARD_WS_MODE=attached` + `apps/web/server.mjs`.
   Dev local: `next dev` + gateway na 3001 (`BOARD_WS_MODE=port`, default).
 - **Nunca usar heredoc bash com backticks/template literals** — escrever script e executar.

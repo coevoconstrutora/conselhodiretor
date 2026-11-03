@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateSecretaryMinutes } from './reports';
+import { generateSecretaryMinutes, generatePresidentSynthesis } from './reports';
 import { FakeLlmProvider } from '@conselho/providers';
 import type { ILlmProvider, LlmCompletionRequest, AgentContribution } from '@conselho/providers';
 
@@ -10,6 +10,26 @@ const REPORTS = [
   { agentId: 'legal', content: '## Minha leitura da reunião\nContrato do terreno X aprovado.' },
   { agentId: 'presidente', content: '## Resumo executivo\nDecisão: seguir com o terreno X.' },
 ];
+
+describe('generatePresidentSynthesis — dissertação crítica (não é ata)', () => {
+  it('o system prompt pede análise crítica só das sugestões dos conselheiros e proíbe virar ata', async () => {
+    let capturedSystem = '';
+    const llm: ILlmProvider = {
+      async complete(req: LlmCompletionRequest): Promise<AgentContribution> {
+        capturedSystem = req.system;
+        return { agentId: 'presidente', type: 'sintese', severity: 'normal', text: 'Síntese.' };
+      },
+    };
+    await generatePresidentSynthesis(llm, COMPANY_ID, REPORTS.slice(0, 2));
+    expect(capturedSystem).toContain('## Análise crítica das sugestões');
+    expect(capturedSystem).toContain('## Meu veredito');
+    expect(capturedSystem).toContain('Opine SOMENTE sobre sugestões');
+    expect(capturedSystem).toContain('NÃO é ata');
+    expect(capturedSystem).not.toContain('## Decisões em pauta');
+    expect(capturedSystem).not.toContain('## Próximos passos sugeridos');
+    expect(capturedSystem).toContain('a decisão é sua');
+  });
+});
 
 describe('generateSecretaryMinutes — ata da Secretária (Etapa "Secretária")', () => {
   it('gera a ata a partir da transcrição + relatórios, com o system prompt da Secretária', async () => {

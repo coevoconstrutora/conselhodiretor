@@ -19,8 +19,16 @@ import { embedAudioClip, findMatchingVoiceProfile, touchVoiceProfileLastUsed } f
 import { linkSpeakerByVoice } from './meeting-speakers';
 import { toActionResult, type ActionResult } from './action-result';
 
-/** Server action: inicia a demo do board (auth + gate de consentimento no caminho). */
+/**
+ * Server action: inicia a demo do board (auth + gate de consentimento no caminho).
+ * DESABILITADA — a fase de demo acabou e o botão "▶ Reunião simulada" saiu da UI.
+ * Para reativar: religar o botão em `meetings/[id]/page.tsx` (prop `startForm`)
+ * e trocar este flag por `true`.
+ */
+const DEMO_BOARD_ENABLED = false;
+
 export async function startDemoBoardAction(formData: FormData): Promise<void> {
+  if (!DEMO_BOARD_ENABLED) throw new Error('A reunião simulada está desabilitada.');
   const user = await getCurrentUser();
   if (!user) throw new Error('Não autenticado.');
   if (!canWrite(user)) throw new Error('Convidados não podem iniciar reuniões.');
