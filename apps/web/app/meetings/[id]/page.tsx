@@ -9,7 +9,6 @@ import { requireCurrentUser, canWrite, SESSION_COOKIE } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { confirmRecordingAction, revokeRecordingAction } from '@/lib/meeting-actions';
-import { requestSynthesisAction } from '@/lib/board-actions';
 import { saveTranscriptReviewAction } from '@/lib/transcript-actions';
 import { saveAgentReportAction, loadReports } from '@/lib/report-actions';
 import {
@@ -285,17 +284,6 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               historicalCounts={historicalCounts}
               voiceRecognitionEnabled={companyProfile.voiceRecognitionEnabled}
               endMeetingButton={!closed && canWrite(user) ? <EndMeetingButton meetingId={id} /> : null}
-              synthesisForm={
-                <form action={requestSynthesisAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <button
-                    type="submit"
-                    className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10"
-                  >
-                    📋 Síntese do Presidente
-                  </button>
-                </form>
-              }
             />
 
             {!closed && canWrite(user) ? (

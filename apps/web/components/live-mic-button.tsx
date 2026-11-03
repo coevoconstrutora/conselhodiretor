@@ -311,15 +311,16 @@ export function LiveMicButton({
               >
                 {(
                   [
-                    ['mic', '🎙️ Microfone'],
-                    ['tab', '🖥️ Aba do Meet'],
+                    ['mic', '🎙️ Microfone', 'Captura o áudio do microfone deste computador — use em reunião presencial, ou quando todos falam perto dele.'],
+                    ['tab', '🖥️ Aba do Meet', 'Captura o áudio de uma aba do navegador (ex.: Google Meet) — use em reunião online para transcrever todos os participantes. Ao iniciar, escolha a aba e marque "Compartilhar áudio da aba".'],
                   ] as const
-                ).map(([value, label]) => (
+                ).map(([value, label, hint]) => (
                   <button
                     key={value}
                     type="button"
                     role="radio"
                     aria-checked={audioSource === value}
+                    title={hint}
                     onClick={() => setAudioSource(value)}
                     className={`rounded-[calc(var(--radius)-2px)] px-2.5 py-1.5 text-xs font-medium transition-colors ${
                       audioSource === value
@@ -336,6 +337,7 @@ export function LiveMicButton({
               type="button"
               onClick={() => void start()}
               disabled={state === 'starting'}
+              title="Começa a transcrever o áudio ao vivo na fonte escolhida ao lado. Os conselheiros passam a acompanhar a conversa e intervêm quando tiverem algo relevante no escopo deles."
               className="rounded-[var(--radius)] bg-white px-3 py-2 text-xs font-semibold text-surface-deep shadow-sm transition-colors hover:bg-white/90 disabled:opacity-50"
             >
               {state === 'starting' ? '… preparando' : '● Iniciar reunião ao vivo'}

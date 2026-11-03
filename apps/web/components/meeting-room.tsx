@@ -36,7 +36,6 @@ export function MeetingRoom({
   token,
   wsBaseUrl,
   startForm,
-  synthesisForm,
   endMeetingButton,
   closed,
   agents,
@@ -47,7 +46,6 @@ export function MeetingRoom({
   token: string;
   wsBaseUrl: string;
   startForm?: React.ReactNode;
-  synthesisForm: React.ReactNode;
   endMeetingButton?: React.ReactNode;
   closed?: boolean;
   agents: readonly StripCounselor[];
@@ -207,10 +205,10 @@ export function MeetingRoom({
                 onClick={() => setVoiceMuted((m) => !m)}
                 title={
                   focusMode
-                    ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar'
+                    ? 'Voz desligada pelo Modo Foco — saia do Modo Foco para religar.'
                     : voiceMuted
-                      ? 'Ativar voz dos conselheiros'
-                      : 'Silenciar voz dos conselheiros'
+                      ? 'Os conselheiros estão sem voz (só aparecem como texto no painel). Clique para voltar a ouvi-los falar suas intervenções.'
+                      : 'Os conselheiros leem suas intervenções em voz alta. Clique para silenciar — elas continuam aparecendo como texto.'
                 }
                 className="rounded-[var(--radius)] border border-white/25 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
               >
@@ -220,7 +218,7 @@ export function MeetingRoom({
                 type="button"
                 aria-pressed={focusMode}
                 onClick={toggleFocusMode}
-                title="Só pontos de atenção aparecem e a voz é desligada (tecla F)"
+                title="Reduz o ruído: o painel mostra só os pontos de atenção (⚠️) e a voz dos conselheiros é desligada. Clique de novo (ou tecla F) para voltar ao normal."
                 className={`rounded-[var(--radius)] px-3 py-2 text-xs font-semibold transition-colors ${
                   focusMode
                     ? 'bg-white text-surface-deep'
@@ -230,7 +228,6 @@ export function MeetingRoom({
                 🎯 Modo Foco <kbd className="ml-1 rounded bg-black/20 px-1">F</kbd>
               </button>
               <SilentModeToggle meetingId={meetingId} />
-              {synthesisForm}
             </ToolbarGroup>
           </div>
         )}

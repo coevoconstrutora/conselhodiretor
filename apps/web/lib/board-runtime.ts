@@ -611,12 +611,6 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   return { llmLabel: label };
 }
 
-/** Síntese sob demanda (FR18). */
-export async function requestSynthesis(meetingId: string): Promise<void> {
-  const runtime = await getBoardRuntime();
-  await runtime.active.get(meetingId)?.orchestrator.synthesizeNow();
-}
-
 /**
  * Insumos dos relatórios finais: transcript acumulado + contribuições do board.
  * A4: o banco é a fonte durável — sessão ativa usa o superset (banco pode

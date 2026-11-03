@@ -55,6 +55,7 @@ export function EndMeetingButton({ meetingId }: { meetingId: string }) {
       <button
         type="button"
         onClick={() => setConfirming(true)}
+        title="Encerra de vez: para a captação, trava a reunião e gera automaticamente os relatórios dos conselheiros, a síntese final do Presidente, as decisões/ações e a ata da Secretária. Pede uma confirmação antes."
         className="rounded-[var(--radius)] border border-red-400/40 px-3 py-2 text-xs font-semibold text-red-200 transition-colors hover:bg-red-500/10"
       >
         ⏹ Encerrar reunião

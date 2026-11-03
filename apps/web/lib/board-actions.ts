@@ -9,7 +9,6 @@ import { getEncryptionKey } from './crypto-key';
 import { generateReportsCore } from './report-actions';
 import {
   startDemoBoard,
-  requestSynthesis,
   startLiveBoard,
   stopLiveBoard,
   renameSpeaker,
@@ -143,20 +142,6 @@ export async function toggleSilentModeAction(
       : 'Modo silencioso desligado — o board volta a opinar ao vivo.',
     silentMode: enabled,
   };
-}
-
-/** Server action: síntese do Aurélio sob demanda (FR18). */
-export async function requestSynthesisAction(formData: FormData): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user) throw new Error('Não autenticado.');
-  if (!canWrite(user)) throw new Error('Convidados não podem pedir síntese.');
-  const meetingId = String(formData.get('meetingId') ?? '');
-  if (!meetingId) throw new Error('meetingId ausente.');
-  const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
-    throw new Error('Reunião não encontrada.');
-  }
-  await requestSynthesis(meetingId);
 }
 
 /**
