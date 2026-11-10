@@ -1,6 +1,7 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { getAgentProfiles } from '@conselho/kb';
-import { requireCurrentUser, canWrite } from '@/lib/auth';
+import { requireCurrentUser, canWrite, isAdmin } from '@/lib/auth';
 import { getDb } from '@/lib/db';
 import { getEncryptionKey } from '@/lib/crypto-key';
 import { listMeetings } from '@conselho/meetings';
@@ -8,6 +9,7 @@ import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { formatMeetingDuration, formatDateTimeBR, formatTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
 import { MeetingsBrowser, type MeetingListItem } from '@/components/meetings-browser';
+import { AgendaUpcoming } from '@/components/agenda-upcoming';
 import { CounselorsGrid } from '@/components/counselors-grid';
 import { DashboardShell } from '@/components/dashboard-shell';
 
@@ -46,6 +48,9 @@ export default async function DashboardPage() {
       sharedCount: m.sharedCount,
     };
   });
+  // Período padrão da lista: últimos 30 dias (data local do servidor, AAAA-MM-DD)
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const defaultFrom = `${thirtyDaysAgo.getFullYear()}-${String(thirtyDaysAgo.getMonth() + 1).padStart(2, '0')}-${String(thirtyDaysAgo.getDate()).padStart(2, '0')}`;
   const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
 
   return (
@@ -73,6 +78,12 @@ export default async function DashboardPage() {
         ) : null}
       </section>
 
+      {canWrite(user) ? (
+        <Suspense fallback={null}>
+          <AgendaUpcoming companyId={user.companyId} isAdmin={isAdmin(user)} />
+        </Suspense>
+      ) : null}
+
       {meetings.length === 0 ? (
         <section className="card-premium gold-hairline mt-8 p-10 text-center">
           <p className="text-sm text-ink-muted">
@@ -81,7 +92,7 @@ export default async function DashboardPage() {
           </p>
         </section>
       ) : (
-        <MeetingsBrowser meetings={listItems} viewerId={user.id} />
+        <MeetingsBrowser meetings={listItems} viewerId={user.id} defaultFrom={defaultFrom} />
       )}
 
       {/* Conselheiros — o "NotebookLM" de cada agente */}

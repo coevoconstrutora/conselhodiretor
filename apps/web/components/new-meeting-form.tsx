@@ -29,7 +29,11 @@ export function NewMeetingForm({
   types,
   defaultTypeId,
   previousByType = {},
+  prefillTitle,
+  prefillMeetingUrl,
 }: {
+  prefillTitle?: string;
+  prefillMeetingUrl?: string;
   types: readonly MeetingTypeOption[];
   defaultTypeId: string | undefined;
   previousByType?: Record<string, PreviousMeetingPreviewOption | null>;
@@ -48,6 +52,7 @@ export function NewMeetingForm({
         <span className="text-sm font-medium text-ink">Título da reunião</span>
         <input
           name="title"
+          defaultValue={prefillTitle}
           required
           placeholder="Ex.: Diretoria — aprovação do terreno da zona norte"
           className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
@@ -127,6 +132,7 @@ export function NewMeetingForm({
         </span>
         <input
           name="meetingUrl"
+          defaultValue={prefillMeetingUrl}
           type="url"
           placeholder="https://meet.google.com/xxx-xxxx-xxx"
           className="mt-1.5 w-full rounded-[var(--radius)] border border-ink/15 bg-white px-3.5 py-2.5 text-sm text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"

@@ -6,7 +6,13 @@ import { findLatestClosedMeetingOfType } from '@conselho/meeting-report';
 import { NewMeetingForm } from '@/components/new-meeting-form';
 
 /** Nova reunião: título + tipo (escopa quais conselheiros participam) + pauta opcional. */
-export default async function NewMeetingPage() {
+export default async function NewMeetingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ title?: string; meetingUrl?: string }>;
+}) {
+  // Pré-preenchimento vindo da Agenda ("Criar reunião") — só texto, o usuário revisa antes de criar.
+  const { title: prefillTitle, meetingUrl: prefillUrl } = await searchParams;
   const user = await requireCurrentUser();
 
   const types = await listMeetingTypes(user.companyId);
@@ -53,7 +59,10 @@ export default async function NewMeetingPage() {
         </p>
       </header>
 
-      <NewMeetingForm types={types} defaultTypeId={defaultType?.id} previousByType={previousByType} />
+      <NewMeetingForm
+        prefillTitle={prefillTitle?.slice(0, 200)}
+        prefillMeetingUrl={/^https:\/\//.test(prefillUrl ?? '') ? prefillUrl : undefined}
+        types={types} defaultTypeId={defaultType?.id} previousByType={previousByType} />
     </main>
   );
 }
