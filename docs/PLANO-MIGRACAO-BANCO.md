@@ -98,6 +98,48 @@ Após 7 dias estáveis: guardar um último dump cifrado, `fly mpg destroy n83v7r
 (2 em `conselho-diretor`, 2 em `conselho-voice-embed`). Configurar PITR do Neon (7 dias, se disponível no plano)
 e, opcionalmente, um `pg_dump` semanal para fora do Neon (backup no mesmo fornecedor não é backup completo).
 
+## 5a. Resultado da Fase 1 — medição (2026-11-03, MPG `fly-db`, PG 16.15)
+
+- **`pg_database_size` = 17 MB** (não 4,9 GB: aquilo era o cluster inteiro — WAL, sistema, volume alocado de 20 GB).
+  Maiores tabelas: `transcript_segment` 3,8 MB, `agent_report` 1,4 MB, `meeting_contribution` 0,6 MB,
+  `kb_source` 0,5 MB, `audit_log` 0,4 MB. Contagens EXATAS (as de `n_live_tup` estavam defasadas: davam 727 segmentos
+  e 4 reuniões): **9.975 segmentos, 23 reuniões, 33 migrations**.
+- **Consequência:** storage deixa de importar (17 MB ≈ US$ 0,01/mês) e o plano **grátis** do Neon (0,5 GB) comporta o
+  banco com folga. Custo do banco passa a ser só compute: US$ 0 (Free) a ~US$ 1–3 (Launch).
+- **Extensões no MPG:** `pg_stat_monitor` e `pgaudit` (gerenciadas pelo Fly, o app não usa) + `plpgsql`. O dump/restore
+  para outro provedor deve **excluí-las**: `pg_dump --exclude-extension=pgaudit --exclude-extension=pg_stat_monitor`
+  (opção do pg_dump 17). Sem isso o restore no Neon falha em `CREATE EXTENSION`.
+- **Decisão do dono (2026-11-03): Neon plano Launch** (≈ US$ 1–3/mês; janela de restauração maior que a do Free).
+- **Fase 2 — ensaio de restore (2026-11-03): OK.** 31 tabelas no Neon, contagem exata por tabela IDÊNTICA à do MPG;
+  trigger `audit_log_immutable` presente (UPDATE rejeitado). Lição: o restore feito pela connection string **pooled**
+  (`-pooler`) deixou `search_path` vazio nas sessões do pooler ("relation does not exist" para nomes sem schema);
+  na conexão **direta** o `search_path` é `"$user", public`. O `DATABASE_URL` do app e o restore usam SEMPRE a direta.
+- **Cold start medido** (Node + `pg` com a mesma config do `createPool`, TLS verificado, após 6 min parado): 1ª conexão
+  **≈ 1,0 s**; banco quente ≈ 0,26 s; 3 queries seguintes 44–120 ms. Transação em client dedicado ok;
+  `channel_binding=require` funciona com `pg` 8.21.
+- **Aviso do `pg`:** `sslmode=require` hoje equivale a `verify-full`, mas no `pg` v9 passará a semântica fraca do libpq
+  (sem verificação de certificado). Usar **`sslmode=verify-full`** explícito no `DATABASE_URL` e manter `pg` em `^8`.
+- Pendente na Fase 2: ler transcrição criptografada (precisa da `DATA_ENCRYPTION_KEY` de produção) — validar no teste do corte.
+
+## 5c. Corte executado (2026-11-10)
+
+- 1ª tentativa (03/11) abortada no dump (senha do MPG digitada errada); app religado, sem perda. Retomada em 10/11.
+- Dump final (3.038 KB) → `pg_restore --clean --if-exists` no Neon (direto, `neondb`): único erro ignorado foi
+  `SET transaction_timeout` (parâmetro do PG17; Neon está no PG16) — inofensivo. 31 tabelas, contagens idênticas
+  às do MPG, trigger de auditoria ativo.
+- `DATABASE_URL` do Fly trocado para a string **direta** do Neon com `sslmode=verify-full` (digest
+  `213d7fb32de0225a` → `cb209a7cec827d30`). Downtime ≈ minutos.
+- Prova de escrita no Neon: após uma reunião de teste, Neon 25 reuniões / 9.976 segmentos × MPG congelado em
+  24 / 9.975.
+- **Lições:** (a) `psql`/`pg_dump`/`pg_restore` (libpq) no Windows não verificam o certificado com
+  `sslrootcert=system` — usar `sslmode=require` só nessas ferramentas locais; o app (`pg` Node) usa `verify-full`.
+  (b) Nunca usar o host `-pooler` no restore nem no app. (c) Não redefinir a senha do `fly-user` do MPG: o
+  `DATABASE_URL` antigo dependia dela.
+- **MPG mantido ligado como rollback até ~17/11.** Rollback = `fly secrets set DATABASE_URL=<string antiga do MPG>`;
+  só se perderia o que foi gravado no Neon depois do corte.
+- Pendente: observar 1 dia se o compute do Neon suspende; hibernação do app (5b); `fly mpg destroy` após os 7 dias;
+  atualizar `CLAUDE.md`, `docs/TUTORIAL.md`, `docs/HISTORICO.md` e `/admin/costs`.
+
 ## 5b. Hibernação do app (noites, fins de semana, dias sem reunião)
 
 Decisão do dono: não precisa ficar ligado 24/7. **Em vez de horário fixo (22h–7h, sem fins de semana), usar parada
