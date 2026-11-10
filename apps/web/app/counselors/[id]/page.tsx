@@ -69,7 +69,7 @@ export default async function CounselorPage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <DashboardShell pageTitle={profile.displayName}>
+    <DashboardShell pageTitle={profile.displayName} back={{ href: '/counselors', label: 'Conselheiros' }}>
       {!isSecretary ? <CounselorBriefingCard agentId={agentId} briefing={profile.briefing ?? null} /> : null}
 
       <div className="mt-2 flex items-center gap-2">

@@ -38,7 +38,7 @@ export default async function ExperimentDetailPage({ params }: { params: Promise
   const avgLatency = average(eligibleResults.flatMap((r) => (r.candidateLatencyMs !== null ? [r.candidateLatencyMs] : [])));
 
   return (
-    <DashboardShell pageTitle={experiment.name}>
+    <DashboardShell pageTitle={experiment.name} back={{ href: '/improvements', label: 'Melhorias' }}>
       <div className="mt-6 flex items-center gap-2">
         <Link href="/improvements" className="text-xs text-ink-muted hover:text-ink hover:underline">
           ← Aprendizado do Conselho

@@ -32,7 +32,7 @@ export default async function ParticipantProfilePage({ params }: { params: Promi
   const history = await listParticipantMeetingHistory(db, user.companyId, id);
 
   return (
-    <DashboardShell pageTitle={participant.name}>
+    <DashboardShell pageTitle={participant.name} back={{ href: '/participants', label: 'Participantes' }}>
       <section aria-label="Dados do participante" className="card-premium mt-8 p-6">
         <h2 className="font-display text-base font-semibold text-ink">
           <span className="blueprint-index mr-2 text-brand/70">01/</span>

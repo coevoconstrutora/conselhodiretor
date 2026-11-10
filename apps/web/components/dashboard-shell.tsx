@@ -18,8 +18,11 @@ import { ConfigMenu, type ConfigMenuItem } from './config-menu';
 export async function DashboardShell({
   pageTitle,
   subtitle,
+  back,
   children,
 }: {
+  /** Páginas de detalhe: botão "← Voltar" para a lista de origem (sem reabrir o menu Configuração). */
+  back?: { href: string; label: string };
   /** Omitido na home — lá "Conselho" já é o título. Nas demais, vira "Conselho · {pageTitle}". */
   pageTitle?: string;
   subtitle?: ReactNode;
@@ -64,6 +67,14 @@ export async function DashboardShell({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {back ? (
+            <Link
+              href={back.href}
+              className="rounded-[var(--radius)] border border-brand/40 bg-brand/5 px-3.5 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand/10"
+            >
+              ← Voltar para {back.label}
+            </Link>
+          ) : null}
           {pageTitle ? (
             <Link
               href="/"
