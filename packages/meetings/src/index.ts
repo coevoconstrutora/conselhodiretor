@@ -18,6 +18,7 @@ export {
   meetingAccessSql,
   meetingVisibleSql,
   canAccessMeeting,
+  userCanViewMeeting,
   setMeetingConfidential,
   shareMeeting,
   unshareMeeting,

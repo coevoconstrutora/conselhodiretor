@@ -3,7 +3,7 @@ import type { IncomingMessage, IncomingHttpHeaders, Server as HttpServer } from 
 import type { Duplex } from 'node:stream';
 import type { SqlExecutor } from '@conselho/db';
 import { validateSession } from '@conselho/auth';
-import { meetingAccessSql } from '@conselho/meetings';
+import { userCanViewMeeting } from '@conselho/meetings';
 import type { BoardContributionEvent } from '@conselho/board';
 import { verifyRecallRequest } from './recall-verify';
 
@@ -335,8 +335,10 @@ export class BoardGateway {
     // (não ao usuário que a criou — várias pessoas da empresa podem acompanhar a
     // mesma reunião). Autorizado se: super-admin, empresa "casa" (mesma regra de
     // fallback de `getCurrentUser`), ou membership explícita em company_member.
-    const res = await this.db.query<{ id: string }>(
-      `SELECT m.id FROM meeting m
+    let allowed: boolean;
+    try {
+      const res = await this.db.query<{ id: string }>(
+        `SELECT m.id FROM meeting m
        JOIN app_user u ON u.id = $2
        WHERE m.id = $1
          AND (
@@ -346,11 +348,20 @@ export class BoardGateway {
              SELECT 1 FROM company_member cm
              WHERE cm.company_id = m.company_id AND cm.user_id = u.id
            )
-         )
-         AND ${meetingAccessSql('m', '$2')}`, // reunião confidencial: só criador/presentes/convidados
-      [meetingId, session.userId],
-    );
-    if (res.rows.length === 0) {
+         )`,
+        [meetingId, session.userId],
+      );
+      // reunião confidencial: só criador/presentes/convidados (ver nota em userCanViewMeeting
+      // sobre por que NÃO se monta o fragmento SQL aqui dentro)
+      allowed = res.rows.length > 0 && (await userCanViewMeeting(this.db, meetingId, session.userId));
+    } catch (error) {
+      // falha de banco na autorização: fecha com erro explícito em vez de deixar
+      // o handshake pendurado (unhandledRejection) sem a sala saber o porquê
+      console.error('[board-gateway] falha ao autorizar conexão WS:', error);
+      socket.close(1011, 'erro interno ao autorizar a conexão');
+      return;
+    }
+    if (!allowed) {
       socket.close(4403, 'reunião não encontrada para este usuário');
       return;
     }

@@ -52,6 +52,33 @@ export async function canAccessMeeting(
   return res.rows.length > 0;
 }
 
+/**
+ * O usuário pode VER a reunião (confidencial incluída)? Sem checar empresa —
+ * quem chama já resolveu isso. Existe como função própria para o gateway WS
+ * NÃO chamar `meetingAccessSql` direto: no build de produção o Turbopack
+ * inlinava a chamada única `meetingAccessSql('m', '$2')` dentro da query do
+ * gateway e quebrava o SQL (`$2OR EXISTS (...`), derrubando toda conexão WS —
+ * sem transcrição nem participantes na sala. Aqui o fragmento continua
+ * sendo usado em mais de um ponto do módulo, então não é inlinado.
+ */
+export async function userCanViewMeeting(
+  db: SqlExecutor,
+  meetingId: string,
+  userId: string,
+): Promise<boolean> {
+  // A referência do parâmetro é montada em tempo de execução DE PROPÓSITO: com o
+  // literal '$2' o Turbopack faz constant-folding da chamada e corrompe o SQL no
+  // build de produção (confirmado inspecionando o chunk compilado).
+  const params: unknown[] = [meetingId];
+  params.push(userId);
+  const userRef = '$' + String(params.length);
+  const res = await db.query<{ id: string }>(
+    `SELECT m.id FROM meeting m WHERE m.id = $1 AND ${meetingAccessSql('m', userRef)}`,
+    params,
+  );
+  return res.rows.length > 0;
+}
+
 export interface MeetingShareEntry {
   readonly userId: string;
   readonly displayName: string;
