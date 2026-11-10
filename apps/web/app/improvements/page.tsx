@@ -21,7 +21,7 @@ export default async function ImprovementsPage() {
   if (!canWrite(user)) redirect('/');
 
   const db = await getDb();
-  const improvements = await listMeetingImprovements(db, user.companyId, getEncryptionKey());
+  const improvements = await listMeetingImprovements(db, user.companyId, getEncryptionKey(), 50, user.id);
   await loadAndApplyProfileOverrides(db, user.companyId);
   const profiles = getAgentProfiles(user.companyId);
   const experiments = await listExperiments(db, user.companyId);

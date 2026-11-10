@@ -3,6 +3,7 @@ import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
 import { stripJsonFences, type ILlmProvider, type AgentContribution, type AgentId } from '@conselho/providers';
 import type { MeetingDecisionRecord, MeetingActionItemRecord } from './decisions';
+import { meetingVisibleSql } from '@conselho/meetings';
 import {
   scoreDecisionClarity,
   scoreActionItemQuality,
@@ -314,6 +315,8 @@ export async function listMeetingImprovements(
   companyId: string,
   encryptionKey: Buffer,
   limit = 50,
+  /** Quem vai ver a lista; null (uso sistêmico) ⇒ só reuniões NÃO confidenciais. */
+  viewerUserId: string | null = null,
 ): Promise<MeetingImprovement[]> {
   const res = await db.query<{
     id: string;
@@ -327,9 +330,9 @@ export async function listMeetingImprovements(
     `SELECT DISTINCT ON (mi.meeting_id) mi.id, mi.meeting_id, m.title_enc, mi.content_enc, mi.structured_enc, mi.model_version, mi.created_at
      FROM meeting_improvement mi
      JOIN meeting m ON m.id = mi.meeting_id
-     WHERE mi.company_id = $1
+     WHERE mi.company_id = $1 AND ${meetingVisibleSql('m', '$2')}
      ORDER BY mi.meeting_id, mi.created_at DESC`,
-    [companyId],
+    [companyId, viewerUserId],
   );
   return res.rows
     .flatMap((row) => {

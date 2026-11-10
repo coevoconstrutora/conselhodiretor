@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
+import { canAccessMeeting, getMeeting } from '@conselho/meetings';
 import { getAgentProfiles } from '@conselho/kb';
 import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID } from '@conselho/providers';
 import { getDb } from '@/lib/db';
@@ -26,12 +26,12 @@ export async function GET(
 
   const { id: meetingId } = await params;
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
   const key = getEncryptionKey();
-  const meeting = await getMeeting(db, meetingId, user.companyId, key);
+  const meeting = await getMeeting(db, meetingId, user.companyId, key, user.id);
   const reports = await loadReports(meetingId);
   if (!meeting || reports.length === 0) {
     return NextResponse.json({ error: 'no_reports' }, { status: 404 });

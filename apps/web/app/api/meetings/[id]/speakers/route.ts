@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { meetingBelongsToCompany } from '@conselho/meetings';
+import { canAccessMeeting } from '@conselho/meetings';
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { listKnownSpeakers } from '@/lib/board-runtime';
@@ -20,7 +20,7 @@ export async function GET(
 
   const { id: meetingId } = await params;
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 

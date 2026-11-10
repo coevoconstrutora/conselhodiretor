@@ -29,7 +29,7 @@ export default async function NewMeetingPage() {
     } | null
   > = {};
   for (const t of types) {
-    const preview = await findLatestClosedMeetingOfType(db, user.companyId, t.id, key).catch(() => null);
+    const preview = await findLatestClosedMeetingOfType(db, user.companyId, t.id, key, user.id).catch(() => null);
     previousByType[t.id] = preview
       ? {
           meetingId: preview.meetingId,

@@ -1,6 +1,7 @@
 import type { SqlExecutor } from '@conselho/db';
 import { decryptField } from '@conselho/crypto';
 import { listMeetingDecisions, listMeetingActionItems, type MeetingDecisionRecord, type MeetingActionItemRecord } from './decisions';
+import { meetingVisibleSql } from '@conselho/meetings';
 
 /**
  * Contexto ENTRE reuniões (Etapa "Histórico de reuniões", Seções 10/15) —
@@ -88,12 +89,15 @@ export async function findLatestClosedMeetingOfType(
   companyId: string,
   meetingTypeId: string,
   encryptionKey: Buffer,
+  /** Quem vai ver o preview — reunião confidencial só entra se ele tiver acesso. */
+  viewerUserId: string | null = null,
 ): Promise<PreviousMeetingPreview | null> {
   const res = await db.query<{ id: string; title_enc: string; closed_at: Date | string }>(
-    `SELECT id, title_enc, closed_at FROM meeting
-     WHERE company_id = $1 AND meeting_type_id = $2 AND status = 'closed' AND closed_at IS NOT NULL
-     ORDER BY closed_at DESC LIMIT 1`,
-    [companyId, meetingTypeId],
+    `SELECT m.id, m.title_enc, m.closed_at FROM meeting m
+     WHERE m.company_id = $1 AND m.meeting_type_id = $2 AND m.status = 'closed' AND m.closed_at IS NOT NULL
+       AND ${meetingVisibleSql('m', '$3')}
+     ORDER BY m.closed_at DESC LIMIT 1`,
+    [companyId, meetingTypeId, viewerUserId],
   );
   const row = res.rows[0];
   if (!row) return null;

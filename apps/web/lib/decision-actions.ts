@@ -7,7 +7,7 @@ import {
   type DecisionStatus,
   type ActionItemStatus,
 } from '@conselho/meeting-report';
-import { meetingBelongsToCompany } from '@conselho/meetings';
+import { canAccessMeeting } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 
@@ -30,7 +30,7 @@ export async function updateDecisionStatusAction(formData: FormData): Promise<vo
   if (!meetingId || !decisionId) throw new Error('Dados incompletos.');
   if (!DECISION_STATUSES.has(status as DecisionStatus)) throw new Error('Status inválido.');
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) throw new Error('Reunião não encontrada.');
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) throw new Error('Reunião não encontrada.');
   await updateDecisionStatus(db, decisionId, status as DecisionStatus);
   revalidatePath(`/meetings/${meetingId}`);
 }
@@ -45,7 +45,7 @@ export async function updateActionItemStatusAction(formData: FormData): Promise<
   if (!meetingId || !actionItemId) throw new Error('Dados incompletos.');
   if (!ACTION_ITEM_STATUSES.has(status as ActionItemStatus)) throw new Error('Status inválido.');
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) throw new Error('Reunião não encontrada.');
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) throw new Error('Reunião não encontrada.');
   await updateActionItemStatus(db, actionItemId, status as ActionItemStatus);
   revalidatePath(`/meetings/${meetingId}`);
 }

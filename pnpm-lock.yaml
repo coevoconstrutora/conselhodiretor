@@ -382,6 +382,9 @@ importers:
       '@conselho/kb':
         specifier: workspace:*
         version: link:../kb
+      '@conselho/meetings':
+        specifier: workspace:*
+        version: link:../meetings
       '@conselho/providers':
         specifier: workspace:*
         version: link:../providers

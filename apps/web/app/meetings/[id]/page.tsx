@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { getMeeting, getMeetingGuidance, getMeetingUrl } from '@conselho/meetings';
+import { getMeeting, getMeetingGuidance, getMeetingUrl, listMeetingShares } from '@conselho/meetings';
 import { listSyntheses, listTranscriptFinals, loadTranscriptReview } from '@conselho/meeting-report';
 import { getAgentProfiles } from '@conselho/kb';
 import { loadCompanyProfile } from '@/lib/company-profile';
@@ -37,6 +37,7 @@ import { SecretaryMinutesButton } from '@/components/secretary-minutes-button';
 import { ReportExportBar } from '@/components/report-export-bar';
 import { DiagnosticsPanel } from '@/components/diagnostics-panel';
 import { TelemetryReport } from '@/components/telemetry-report';
+import { MeetingAccessPanel } from '@/components/meeting-access-panel';
 import { HistoricalMeetingTabs } from '@/components/historical-meeting-tabs';
 import {
   ContributionsPanel,
@@ -53,9 +54,25 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
 
   const { id } = await params;
   const db = await getDb();
-  const meeting = await getMeeting(db, id, user.companyId, getEncryptionKey());
+  const meeting = await getMeeting(db, id, user.companyId, getEncryptionKey(), user.id);
   if (!meeting) notFound();
   const companyProfile = await loadCompanyProfile(db, user.companyId, getEncryptionKey());
+
+  // Compartilhamento (só o criador vê e usa): quem já tem acesso e quem ainda pode receber.
+  const isOwner = meeting.creatorId === user.id;
+  const shares = isOwner ? await listMeetingShares(db, id) : [];
+  const shareCandidates = isOwner
+    ? (
+        await db.query<{ id: string; display_name: string; email: string }>(
+          `SELECT u.id, u.display_name, u.email FROM company_member cm
+           JOIN app_user u ON u.id = cm.user_id
+           WHERE cm.company_id = $1 AND u.id <> $2
+             AND NOT EXISTS (SELECT 1 FROM meeting_share s WHERE s.meeting_id = $3 AND s.user_id = u.id)
+           ORDER BY u.display_name ASC`,
+          [user.companyId, user.id, id],
+        )
+      ).rows.map((r) => ({ userId: r.id, displayName: r.display_name, email: r.email }))
+    : [];
 
   const authorized = meeting.recordingConfirmed;
   const closed = meeting.status === 'closed';
@@ -218,6 +235,16 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="mx-auto max-w-7xl p-4 sm:p-6">
+        <MeetingAccessPanel
+          meetingId={id}
+          creatorName={meeting.creatorName}
+          meetingTypeName={meeting.meetingTypeName}
+          confidential={meeting.confidential}
+          isOwner={meeting.creatorId === user.id}
+          shares={shares.map((x) => ({ userId: x.userId, displayName: x.displayName, email: x.email }))}
+          candidates={shareCandidates}
+          attendees={meeting.attendees}
+        />
         {!authorized ? (
           <section className="card-premium gold-hairline mx-auto mt-14 max-w-md p-7">
             <h2 className="font-display text-lg font-semibold text-ink">

@@ -7,6 +7,7 @@ import { listMeetings } from '@conselho/meetings';
 import { loadAndApplyProfileOverrides } from '@/lib/kb-sources';
 import { formatMeetingDuration, formatDateTimeBR, formatTimeBR } from '@/lib/format';
 import { buildAgentRoster } from '@/lib/agent-display';
+import { MeetingsBrowser, type MeetingListItem } from '@/components/meetings-browser';
 import { CounselorsGrid } from '@/components/counselors-grid';
 import { DashboardShell } from '@/components/dashboard-shell';
 
@@ -16,9 +17,35 @@ export default async function DashboardPage() {
 
   const db = await getDb();
   const key = getEncryptionKey();
-  const meetings = await listMeetings(db, user.companyId, key);
+  const meetings = await listMeetings(db, user.companyId, key, user.id);
   await loadAndApplyProfileOverrides(db, user.companyId); // nomes personalizados no grid
   const profiles = getAgentProfiles(user.companyId);
+  // rótulos de data/estado formatados aqui (servidor) — o componente de lista só filtra e exibe
+  const listItems: MeetingListItem[] = meetings.map((m) => {
+    const closed = m.status === 'closed';
+    const listState: MeetingListItem['state'] = closed ? 'closed' : m.recordingConfirmed ? 'live' : 'pending';
+    const stateLabel = closed
+      ? `🔒 encerrada${m.closedAt ? ` às ${formatTimeBR(m.closedAt)}` : ''}`
+      : m.recordingConfirmed
+        ? '🟢 gravação confirmada'
+        : '🔒 gravação pendente';
+    return {
+      id: m.id,
+      title: m.title,
+      createdAtIso: m.createdAt.toISOString(),
+      dateLabel: formatDateTimeBR(m.createdAt),
+      state: listState,
+      stateLabel,
+      durationLabel: formatMeetingDuration(m.confirmedAt ?? m.createdAt, m.closedAt) || null,
+      creatorId: m.creatorId,
+      creatorName: m.creatorName,
+      confidential: m.confidential,
+      typeName: m.meetingTypeName,
+      attendees: m.attendees,
+      participantCount: m.participantCount,
+      sharedCount: m.sharedCount,
+    };
+  });
   const specialistCount = Object.keys(profiles).filter((id) => id !== 'presidente').length;
 
   return (
@@ -54,36 +81,7 @@ export default async function DashboardPage() {
           </p>
         </section>
       ) : (
-        <ul className="mt-8 space-y-3">
-          {meetings.map((m) => {
-            const closed = m.status === 'closed';
-            const duration = formatMeetingDuration(m.confirmedAt ?? m.createdAt, m.closedAt);
-            return (
-              <li key={m.id}>
-                <Link
-                  href={`/meetings/${m.id}`}
-                  className="card-premium flex items-center justify-between p-5 transition-shadow hover:shadow-md"
-                >
-                  <div>
-                    <p className="font-medium text-ink">{m.title}</p>
-                    <p className="text-xs text-ink-muted">
-                      {formatDateTimeBR(m.createdAt)} ·{' '}
-                      {closed
-                        ? '🔒 encerrada'
-                        : m.recordingConfirmed
-                          ? '🟢 gravação confirmada'
-                          : '🔒 gravação pendente'}
-                      {closed && m.closedAt ? ` às ${formatTimeBR(m.closedAt)}` : ''}
-                      {duration ? ` · ⏱ ${duration}` : ''}
-                      {m.participantCount ? ` · 👥 ${m.participantCount}` : ''}
-                    </p>
-                  </div>
-                  <span className="text-sm text-ink-muted">abrir →</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <MeetingsBrowser meetings={listItems} viewerId={user.id} />
       )}
 
       {/* Conselheiros — o "NotebookLM" de cada agente */}

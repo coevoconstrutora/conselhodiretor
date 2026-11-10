@@ -861,4 +861,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_participant_company_app_user
   ON participant(company_id, app_user_id) WHERE app_user_id IS NOT NULL;
 `,
   },
+  {
+    name: '0035_meeting_confidential_sharing',
+    sql: `
+-- Reunião confidencial + compartilhamento (Etapa "lista de reuniões"): confidencial
+-- = só quem criou (meeting.user_id), quem esteve presente E tem conta vinculada
+-- (meeting_speaker -> participant.app_user_id) e quem foi convidado aqui
+-- (meeting_share) enxergam o conteúdo. Default false: nada muda para as reuniões
+-- existentes (continuam visíveis a toda a empresa, como sempre foi).
+ALTER TABLE meeting ADD COLUMN IF NOT EXISTS confidential boolean NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS meeting_share (
+  meeting_id uuid NOT NULL REFERENCES meeting(id) ON DELETE CASCADE,
+  user_id    uuid NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+  shared_by  uuid REFERENCES app_user(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (meeting_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_share_user ON meeting_share(user_id);
+`,
+  },
 ];

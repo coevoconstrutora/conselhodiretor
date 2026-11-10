@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { meetingVisibleSql } from '@conselho/meetings';
 import {
   generateCounselorReport,
   generatePresidentSynthesis,
@@ -47,16 +48,17 @@ async function listEligibleMeetings(
   companyId: string,
   targetAgentId: string,
   limit: number,
+  viewerUserId: string,
 ): Promise<Array<{ id: string; title: string }>> {
   const db = await getDb();
   const res = await db.query<{ id: string; title_enc: string }>(
     `SELECT m.id, m.title_enc
      FROM meeting m
      JOIN agent_report r ON r.meeting_id = m.id AND r.agent_id = $2
-     WHERE m.company_id = $1 AND m.status = 'closed'
+     WHERE m.company_id = $1 AND m.status = 'closed' AND ${meetingVisibleSql('m', '$4')}
      ORDER BY m.closed_at DESC
      LIMIT $3`,
-    [companyId, targetAgentId, limit],
+    [companyId, targetAgentId, limit, viewerUserId],
   );
   const key = getEncryptionKey();
   return res.rows.map((r) => {
@@ -113,7 +115,7 @@ export async function createExperimentAction(
     reportAgentId = 'presidente';
   }
 
-  const eligible = await listEligibleMeetings(user.companyId, reportAgentId, MAX_MEETINGS);
+  const eligible = await listEligibleMeetings(user.companyId, reportAgentId, MAX_MEETINGS, user.id);
   if (eligible.length === 0) {
     return { error: 'Nenhuma reunião encerrada com relatório deste alvo ainda — gere relatórios antes de experimentar.' };
   }
@@ -160,7 +162,7 @@ export async function runExperimentAction(
   if (!experiment) return { error: 'Experimento não encontrado.' };
 
   const reportAgentId = experiment.targetType === 'counselor' ? experiment.targetAgentId! : 'presidente';
-  const eligible = await listEligibleMeetings(user.companyId, reportAgentId, MAX_MEETINGS);
+  const eligible = await listEligibleMeetings(user.companyId, reportAgentId, MAX_MEETINGS, user.id);
 
   try {
     await setExperimentStatus(db, experimentId, 'running');

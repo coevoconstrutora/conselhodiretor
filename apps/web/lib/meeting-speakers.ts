@@ -6,6 +6,7 @@ import type { KnownSpeaker } from './speaker-names';
 import { touchParticipantLastMeeting } from './participants';
 import { getEncryptionKey } from './crypto-key';
 import type { ParticipantSignal } from './participant-signals';
+import { meetingVisibleSql } from '@conselho/meetings';
 
 /**
  * Gap (ms) abaixo do qual uma troca de locutor conta como "troca abrupta de
@@ -244,6 +245,8 @@ export async function listParticipantMeetingHistory(
   db: SqlExecutor,
   companyId: string,
   participantId: string,
+  /** Quem vai ver o histórico — reunião confidencial só aparece para quem tem acesso a ela. */
+  viewerUserId: string,
 ): Promise<ParticipantMeetingHistoryEntry[]> {
   const res = await db.query<{
     meeting_id: string;
@@ -262,9 +265,9 @@ export async function listParticipantMeetingHistory(
      JOIN meeting m ON m.id = ms.meeting_id AND m.company_id = $1
      LEFT JOIN participant_meeting_analytics a ON a.meeting_id = ms.meeting_id AND a.participant_id = ms.participant_id
      LEFT JOIN participant_speech_tone st ON st.meeting_id = ms.meeting_id AND st.participant_id = ms.participant_id
-     WHERE ms.participant_id = $2
+     WHERE ms.participant_id = $2 AND ${meetingVisibleSql('m', '$3')}
      ORDER BY m.updated_at DESC`,
-    [companyId, participantId],
+    [companyId, participantId, viewerUserId],
   );
   const key = getEncryptionKey();
   return res.rows.map((r) => {

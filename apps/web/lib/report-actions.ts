@@ -13,7 +13,7 @@ import {
   insufficientPresidentSynthesis,
   insufficientSecretaryMinutes,
 } from '@conselho/meeting-report';
-import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
+import { canAccessMeeting, getMeeting } from '@conselho/meetings';
 import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID, type AgentId, type ILlmProvider } from '@conselho/providers';
 import { getAgentProfiles } from '@conselho/kb';
 import type { SqlExecutor } from '@conselho/db';
@@ -50,7 +50,7 @@ export async function generateReportsCore(meetingId: string, user: CurrentUser):
   }
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const inputs = await getNoteInputs(meetingId);
@@ -242,7 +242,7 @@ export async function generatePresidentSynthesisAction(meetingId: string): Promi
   }
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const key = getEncryptionKey();
@@ -279,7 +279,7 @@ export async function generateSecretaryMinutesAction(meetingId: string): Promise
   }
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const key = getEncryptionKey();
@@ -336,7 +336,7 @@ export async function generateMeetingOutcomeAction(meetingId: string): Promise<A
   }
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const key = getEncryptionKey();
@@ -377,7 +377,7 @@ export async function saveAgentReportAction(formData: FormData): Promise<void> {
   const content = String(formData.get('content') ?? '').trim();
   if (!meetingId || !content) throw new Error('Dados incompletos.');
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     throw new Error('Reunião não encontrada.');
   }
   await loadAndApplyProfileOverrides(db, user.companyId);
@@ -409,7 +409,7 @@ export async function sendReportsEmailAction(
   try {
     const db = await getDb();
     const key = getEncryptionKey();
-    const meeting = await getMeeting(db, meetingId, user.companyId, key);
+    const meeting = await getMeeting(db, meetingId, user.companyId, key, user.id);
     if (!meeting) return { error: 'Reunião não encontrada.' };
     const reports = await listAgentReports(db, meetingId, key);
     if (reports.length === 0) return { error: 'Gere os relatórios antes de enviar por e-mail.' };

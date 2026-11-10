@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { saveTranscriptReview } from '@conselho/meeting-report';
-import { meetingBelongsToCompany } from '@conselho/meetings';
+import { canAccessMeeting } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
@@ -22,7 +22,7 @@ export async function saveTranscriptReviewAction(formData: FormData): Promise<vo
   const content = String(formData.get('content') ?? '').trim();
   if (!content) throw new Error('Transcrição vazia — não há o que salvar.');
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     throw new Error('Reunião não encontrada.');
   }
   await saveTranscriptReview(db, meetingId, content, getEncryptionKey());

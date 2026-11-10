@@ -21,6 +21,7 @@
     "@conselho/db": "workspace:*",
     "@conselho/engines": "workspace:*",
     "@conselho/kb": "workspace:*",
+    "@conselho/meetings": "workspace:*",
     "@conselho/providers": "workspace:*"
   },
   "devDependencies": {

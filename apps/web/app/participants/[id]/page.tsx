@@ -29,7 +29,7 @@ export default async function ParticipantProfilePage({ params }: { params: Promi
 
   const voiceStatus = await getParticipantVoiceStatus(db, user.companyId, id);
   const consent = await getActiveConsent(db, id);
-  const history = await listParticipantMeetingHistory(db, user.companyId, id);
+  const history = await listParticipantMeetingHistory(db, user.companyId, id, user.id);
 
   return (
     <DashboardShell pageTitle={participant.name} back={{ href: '/participants', label: 'Participantes' }}>

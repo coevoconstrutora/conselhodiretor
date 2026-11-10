@@ -111,6 +111,16 @@ export function NewMeetingForm({
           ) : null}
         </div>
       ) : null}
+      <label className="flex items-start gap-2.5 rounded-[var(--radius)] border border-ink/10 bg-surface-muted/40 p-3">
+        <input type="checkbox" name="confidential" className="mt-0.5" />
+        <span className="text-sm text-ink">
+          <strong>🔐 Reunião confidencial</strong>
+          <span className="mt-0.5 block text-xs text-ink-muted">
+            Só você, quem esteve presente (com conta no sistema) e quem você convidar veem o conteúdo. Você pode
+            mudar isso depois, dentro da reunião.
+          </span>
+        </span>
+      </label>
       <label className="block">
         <span className="text-sm font-medium text-ink">
           Link do Google Meet/Zoom/Teams <span className="font-normal text-ink-muted">(opcional)</span>

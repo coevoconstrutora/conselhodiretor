@@ -78,6 +78,7 @@ describe('Migrations — schema base', () => {
       '0032_meeting_url',
       '0033_decisions_actions_tracking',
       '0034_participant_app_user_unique',
+      '0035_meeting_confidential_sharing',
     ]);
   });
 

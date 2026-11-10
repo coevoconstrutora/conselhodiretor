@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { encryptField } from '@conselho/crypto';
-import { meetingBelongsToCompany } from '@conselho/meetings';
+import { canAccessMeeting } from '@conselho/meetings';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
@@ -37,7 +37,7 @@ export async function startRecallBotAction(meetingId: string, meetingUrl: string
   }
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const existing = await db.query<{ status: string }>(
@@ -119,7 +119,7 @@ export async function stopRecallBotAction(meetingId: string): Promise<ActionResu
   if (!user) return { ok: false, code: 'unauthenticated' };
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const res = await db.query<{ bot_id: string }>(

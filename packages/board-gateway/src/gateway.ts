@@ -3,6 +3,7 @@ import type { IncomingMessage, IncomingHttpHeaders, Server as HttpServer } from 
 import type { Duplex } from 'node:stream';
 import type { SqlExecutor } from '@conselho/db';
 import { validateSession } from '@conselho/auth';
+import { meetingAccessSql } from '@conselho/meetings';
 import type { BoardContributionEvent } from '@conselho/board';
 import { verifyRecallRequest } from './recall-verify';
 
@@ -345,7 +346,8 @@ export class BoardGateway {
              SELECT 1 FROM company_member cm
              WHERE cm.company_id = m.company_id AND cm.user_id = u.id
            )
-         )`,
+         )
+         AND ${meetingAccessSql('m', '$2')}`, // reunião confidencial: só criador/presentes/convidados
       [meetingId, session.userId],
     );
     if (res.rows.length === 0) {

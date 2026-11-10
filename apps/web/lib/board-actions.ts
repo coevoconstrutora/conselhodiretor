@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { closeMeeting, meetingBelongsToCompany } from '@conselho/meetings';
+import { closeMeeting, canAccessMeeting } from '@conselho/meetings';
 import { listAgentReports } from '@conselho/meeting-report';
 import { getCurrentUser, canWrite } from './auth';
 import { getDb } from './db';
@@ -34,7 +34,7 @@ export async function startDemoBoardAction(formData: FormData): Promise<void> {
   const meetingId = String(formData.get('meetingId') ?? '');
   if (!meetingId) throw new Error('meetingId ausente.');
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     throw new Error('Reunião não encontrada.');
   }
   await startDemoBoard(meetingId);
@@ -61,7 +61,7 @@ export async function renameSpeakerAction(
   if (!meetingId || !speakerNum) return { error: 'Dados incompletos.' };
   if (!name) return { error: 'Informe um nome.' };
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     return { error: 'Reunião não encontrada.' };
   }
   const applied = await renameSpeaker(meetingId, speakerNum, name, area || null);
@@ -93,7 +93,7 @@ export async function identifySpeakerByVoiceAction(
   if (!meetingId || !speakerNum || !audio) return { ok: false, code: 'invalid-input' };
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     const buffer = Buffer.from(await audio.arrayBuffer());
@@ -131,7 +131,7 @@ export async function toggleSilentModeAction(
   if (!meetingId) return { error: 'meetingId ausente.' };
   const enabled = formData.get('enabled') === '1';
   const db = await getDb();
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     return { error: 'Reunião não encontrada.' };
   }
   const applied = await setSilentMode(meetingId, enabled);
@@ -156,7 +156,7 @@ export async function startLiveBoardAction(meetingId: string): Promise<ActionRes
   if (!meetingId) return { ok: false, code: 'invalid-input' };
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     await startLiveBoard(meetingId);
@@ -202,11 +202,11 @@ export async function endMeetingAction(meetingId: string): Promise<ActionResult>
   if (!meetingId) return { ok: false, code: 'invalid-input' };
   try {
     const db = await getDb();
-    if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+    if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
       return { ok: false, code: 'invalid-input' };
     }
     await stopLiveBoard(meetingId);
-    await closeMeeting(db, meetingId, user.companyId);
+    await closeMeeting(db, meetingId, user.companyId, user.id);
     revalidatePath(`/meetings/${meetingId}`);
 
     const existingReports = await listAgentReports(db, meetingId, getEncryptionKey()).catch(() => []);

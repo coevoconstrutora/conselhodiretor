@@ -14,3 +14,14 @@ export {
   type MeetingSummary,
   type MeetingGuidanceInput,
 } from './meetings';
+export {
+  meetingAccessSql,
+  meetingVisibleSql,
+  canAccessMeeting,
+  setMeetingConfidential,
+  shareMeeting,
+  unshareMeeting,
+  listMeetingShares,
+  type MeetingShareEntry,
+  type ShareResult,
+} from './access';

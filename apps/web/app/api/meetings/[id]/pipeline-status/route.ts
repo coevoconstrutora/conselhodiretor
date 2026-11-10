@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { meetingBelongsToCompany } from '@conselho/meetings';
+import { canAccessMeeting } from '@conselho/meetings';
 import { getDb } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { getPipelineStatus } from '@/lib/board-runtime';
@@ -21,7 +21,7 @@ export async function GET(
   const { id: meetingId } = await params;
   const db = await getDb();
   // a reunião precisa pertencer à empresa do usuário autenticado
-  if (!(await meetingBelongsToCompany(db, meetingId, user.companyId))) {
+  if (!(await canAccessMeeting(db, meetingId, { userId: user.id, companyId: user.companyId }))) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
