@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { AgentId } from '@conselho/providers';
 import { createCounselorAction, deleteCounselorAction, type CounselorActionState } from '@/lib/counselor-actions';
@@ -29,6 +29,22 @@ export function CreateCounselorForm() {
     createCounselorAction,
     null,
   );
+  // Fechado por padrão: o formulário só abre quando o usuário pede um novo conselheiro.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (state?.ok) setOpen(false); // criou: recolhe o formulário e mantém só a confirmação
+  }, [state]);
+
+  if (!open) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => setOpen(true)} className={buttonCls}>
+          + Novo conselheiro
+        </button>
+        {state?.ok ? <p className="text-xs text-success">✓ {state.ok}</p> : null}
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="card-premium space-y-3 p-5">
@@ -100,9 +116,19 @@ export function CreateCounselorForm() {
         ) : (
           <span />
         )}
-        <button type="submit" disabled={pending} className={buttonCls}>
-          {pending ? 'Criando…' : 'Criar conselheiro'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            disabled={pending}
+            className="rounded-[var(--radius)] border border-ink/15 px-3 py-2 text-xs font-semibold text-ink transition-colors hover:bg-surface-muted disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button type="submit" disabled={pending} className={buttonCls}>
+            {pending ? 'Criando…' : 'Criar conselheiro'}
+          </button>
+        </div>
       </div>
     </form>
   );
