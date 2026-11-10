@@ -188,6 +188,90 @@ export async function linkParticipantToAppUser(
   );
 }
 
+/** Participante vinculado a esta conta NESTA empresa (no máx. 1 — índice único parcial da migration 0034). */
+export async function findParticipantByAppUser(
+  db: SqlExecutor,
+  companyId: string,
+  appUserId: string,
+): Promise<Participant | null> {
+  const res = await db.query(`${SELECT_BASE} WHERE p.company_id = $1 AND p.app_user_id = $2`, [companyId, appUserId]);
+  const row = res.rows[0] as Parameters<typeof mapRow>[0] | undefined;
+  return row ? mapRow(row) : null;
+}
+
+/**
+ * Garante o participante da PRÓPRIA conta nesta empresa ("Meu perfil"):
+ * 1) já vinculado → devolve; 2) existe um participante sem conta com o MESMO
+ * e-mail (cadastrado antes por um admin, possivelmente já com voz) → vincula
+ * a ele em vez de duplicar; 3) senão cria um novo já vinculado. Idempotente
+ * e seguro contra corrida (índice único): quem perde a corrida relê o vencedor.
+ */
+export async function ensureParticipantForUser(
+  db: SqlExecutor,
+  companyId: string,
+  user: { id: string; email: string; displayName: string },
+): Promise<Participant> {
+  const existing = await findParticipantByAppUser(db, companyId, user.id);
+  if (existing) return existing;
+
+  try {
+    const sameEmail = await db.query<{ id: string }>(
+      `SELECT id FROM participant
+       WHERE company_id = $1 AND app_user_id IS NULL AND lower(email) = lower($2)
+       ORDER BY created_at ASC LIMIT 1`,
+      [companyId, user.email],
+    );
+    const matchId = sameEmail.rows[0]?.id;
+    if (matchId) {
+      await linkParticipantToAppUser(db, companyId, matchId, user.id);
+    } else {
+      const created = await createParticipant(db, companyId, { name: user.displayName, email: user.email });
+      await linkParticipantToAppUser(db, companyId, created.id, user.id);
+    }
+  } catch (err) {
+    // perdeu a corrida para outra aba/requisição: o vencedor já está vinculado
+    const winner = await findParticipantByAppUser(db, companyId, user.id);
+    if (winner) return winner;
+    throw err;
+  }
+  const linked = await findParticipantByAppUser(db, companyId, user.id);
+  if (!linked) throw new Error('Falha ao vincular o participante à sua conta.');
+  return linked;
+}
+
+/**
+ * Atualiza os dados do participante da PRÓPRIA conta (nome/cargo/área) e
+ * mantém o nome denormalizado em `voice_profile` em sincronia — é esse nome
+ * que o reconhecimento de voz devolve na transcrição.
+ */
+export async function updateOwnParticipantProfile(
+  db: SqlExecutor,
+  companyId: string,
+  participantId: string,
+  input: { name: string; jobTitle: string | null; department: string | null },
+): Promise<void> {
+  const name = input.name.trim().slice(0, NAME_MAX);
+  const jobTitle = input.jobTitle?.trim().slice(0, TEXT_FIELD_MAX) || null;
+  const department = input.department?.trim().slice(0, TEXT_FIELD_MAX) || null;
+  await auditedClinicalWrite(
+    db,
+    { triggeredBy: 'participant-self-edit', kbSources: [], modelVersion: 'human-edit' },
+    async (tx) => {
+      await tx.query(
+        `UPDATE participant SET name = $3, job_title = $4, department = $5, updated_at = now()
+         WHERE id = $1 AND company_id = $2`,
+        [participantId, companyId, name, jobTitle, department],
+      );
+      await tx.query(
+        `UPDATE voice_profile SET name = $3, area = $4
+         WHERE participant_id = $1 AND company_id = $2 AND status = 'active'`,
+        [participantId, companyId, name, department],
+      );
+      return null;
+    },
+  );
+}
+
 export async function getParticipant(db: SqlExecutor, companyId: string, id: string): Promise<Participant | null> {
   const res = await db.query(`${SELECT_BASE} WHERE p.id = $1 AND p.company_id = $2`, [id, companyId]);
   const row = res.rows[0] as Parameters<typeof mapRow>[0] | undefined;

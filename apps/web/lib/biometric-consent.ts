@@ -74,6 +74,7 @@ export async function revokeBiometricConsent(
   db: SqlExecutor,
   participantId: string,
   revokedByUserId: string,
+  source = 'admin_revocation',
 ): Promise<void> {
   await auditedClinicalWrite(
     db,
@@ -81,8 +82,8 @@ export async function revokeBiometricConsent(
     async (tx) => {
       await tx.query(
         `INSERT INTO participant_biometric_consent (participant_id, consent_type, status, version, revoked_at, granted_by, source)
-         VALUES ($1, 'voice_biometrics', 'revoked', $2, now(), $3, 'admin_revocation')`,
-        [participantId, CONSENT_VERSION, revokedByUserId],
+         VALUES ($1, 'voice_biometrics', 'revoked', $2, now(), $3, $4)`,
+        [participantId, CONSENT_VERSION, revokedByUserId, source],
       );
       return null;
     },

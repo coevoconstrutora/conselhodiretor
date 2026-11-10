@@ -62,3 +62,19 @@ export async function setActiveCompany(
 export async function deleteSession(db: SqlExecutor, token: string): Promise<void> {
   await db.query('DELETE FROM session WHERE token_hash = $1', [hashToken(token)]);
 }
+
+/** Encerra todas as sessões do usuário, exceto a do token informado (null = encerra todas). */
+export async function deleteOtherSessions(
+  db: SqlExecutor,
+  userId: string,
+  keepToken: string | null,
+): Promise<void> {
+  if (keepToken) {
+    await db.query('DELETE FROM session WHERE user_id = $1 AND token_hash <> $2', [
+      userId,
+      hashToken(keepToken),
+    ]);
+  } else {
+    await db.query('DELETE FROM session WHERE user_id = $1', [userId]);
+  }
+}

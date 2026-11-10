@@ -9,6 +9,9 @@ import {
   listAgentReports,
   extractMeetingOutcome,
   saveMeetingOutcome,
+  assessTranscriptSubstance,
+  insufficientPresidentSynthesis,
+  insufficientSecretaryMinutes,
 } from '@conselho/meeting-report';
 import { meetingBelongsToCompany, getMeeting } from '@conselho/meetings';
 import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID, type AgentId, type ILlmProvider } from '@conselho/providers';
@@ -134,6 +137,26 @@ async function synthesizePresidentReport(
   key: Buffer,
   transcriptFinals: readonly string[],
 ): Promise<void> {
+  // Transcrição sem conteúdo (só "bom dia"/teste de áudio): síntese e ata fixas,
+  // zero decisões/ações — sem chamar a IA, que inventaria tudo a partir de
+  // recomendações genéricas. Regenerar com isto sobrescreve o que já tinha sido
+  // (mal) gerado antes da trava.
+  const substance = assessTranscriptSubstance(transcriptFinals);
+  if (!substance.sufficient) {
+    await saveAgentReport(db, meetingId, 'presidente', insufficientPresidentSynthesis(substance), key, {
+      action: 'generate',
+      modelVersion: 'sem-conteudo',
+    });
+    await saveMeetingOutcome(db, meetingId, { decisions: [], actionItems: [] }, key).catch((error) =>
+      console.error('[relatorios] limpar decisões/ações falhou:', error),
+    );
+    await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, insufficientSecretaryMinutes(substance), key, {
+      action: 'generate',
+      modelVersion: 'sem-conteudo',
+    });
+    return;
+  }
+
   // "raciocínio da síntese final" da Configuração do Presidente (tipicamente
   // xhigh/max, só aqui, 1x por reunião).
   await loadAndApplyPresidentConfig(db, user.companyId);
@@ -266,6 +289,15 @@ export async function generateSecretaryMinutesAction(meetingId: string): Promise
       return { ok: false, code: 'invalid-input', detail: 'Gere a síntese do Presidente antes da ata.' };
     }
     const inputs = await getNoteInputs(meetingId);
+    const substance = assessTranscriptSubstance(inputs?.finals ?? []);
+    if (!substance.sufficient) {
+      await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, insufficientSecretaryMinutes(substance), key, {
+        action: 'generate',
+        modelVersion: 'sem-conteudo',
+      });
+      revalidatePath(`/meetings/${meetingId}`);
+      return { ok: true };
+    }
     await loadAndApplyPresidentConfig(db, user.companyId);
     const presidentConfig = getPresidentConfig(user.companyId);
     const { llm, label: modelLabel } = createLlm({ longForm: true, maxTokens: 12000, timeoutMs: 180_000 });

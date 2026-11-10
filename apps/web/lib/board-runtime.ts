@@ -508,6 +508,21 @@ async function loadMeetingGuidance(
   }
 }
 
+/** Reunião virgem: sem nenhum trecho de transcrição nem contribuição do conselho gravados. */
+async function meetingHasNoActivity(db: SqlExecutor, meetingId: string): Promise<boolean> {
+  try {
+    const res = await db.query<{ n: number }>(
+      `SELECT (SELECT count(*) FROM transcript_segment WHERE meeting_id = $1)::int +
+              (SELECT count(*) FROM meeting_contribution WHERE meeting_id = $1)::int AS n`,
+      [meetingId],
+    );
+    return Number(res.rows[0]?.n ?? 0) === 0;
+  } catch (error) {
+    console.error('[board] checar atividade da reunião falhou:', error);
+    return false; // na dúvida, não repete as opiniões
+  }
+}
+
 /** Empresa DONA da reunião — nunca confiar em companyId vindo só do cliente. */
 async function getMeetingCompanyId(db: SqlExecutor, meetingId: string): Promise<string> {
   const res = await db.query<{ company_id: string }>('SELECT company_id FROM meeting WHERE id = $1', [
@@ -879,9 +894,15 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     const { llm } = makeLlm(hooks.onUsage);
     const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
     const meetingGuidance = await loadMeetingGuidance(db, meetingId, companyId);
+    // Opiniões sobre a pauta só na PRIMEIRA abertura: se a reunião já tem fala ou
+    // contribuição gravada (reconexão/reinício), o conselho já passou dessa fase.
+    const agendaOpinions =
+      Boolean(meetingGuidance) &&
+      (await meetingHasNoActivity(db, meetingId));
     const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
     const extraTriggers = await getCompanyExtraTriggers(db, companyId);
     orchestrator = new FullBoardOrchestrator(companyId, db, session, llm, kb, {
+      agendaOpinions,
       // "quiet board": segurar não-críticos até uma pausa natural de verdade —
     // 2.5s cortava no meio de frases com respiração natural (ADR-008/FR12).
     pauseMs: envNumber('BOARD_PAUSE_MS', 4000),

@@ -8,6 +8,8 @@ import {
   validatePasswordResetToken,
   consumePasswordResetToken,
 } from './password-reset';
+import { changeUserPassword } from './change-password';
+import { deleteOtherSessions } from './session';
 
 
 describe('Password hashing (scrypt)', () => {
@@ -127,5 +129,79 @@ describe('Password reset tokens (DB-backed)', () => {
     const { token } = await createPasswordResetToken(exec, userId);
     await consumePasswordResetToken(exec, token);
     expect(await validatePasswordResetToken(exec, token)).toBeNull();
+  });
+});
+
+describe('changeUserPassword', () => {
+  let db: PGlite;
+  let exec: SqlExecutor;
+  let userId: string;
+
+  beforeAll(async () => {
+    db = new PGlite();
+    exec = pgliteExecutor(db);
+    await runMigrations(exec);
+    const company = await exec.query<{ id: string }>("SELECT id FROM company WHERE slug = 'coevo'");
+    const res = await exec.query<{ id: string }>(
+      'INSERT INTO app_user (email, display_name, password_hash, company_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      ['troca@conselho.test', 'Troca Senha', hashPassword('senha-atual-1'), company.rows[0]!.id],
+    );
+    userId = res.rows[0]!.id;
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  async function currentHash(): Promise<string> {
+    const r = await exec.query<{ password_hash: string }>('SELECT password_hash FROM app_user WHERE id = $1', [userId]);
+    return r.rows[0]!.password_hash;
+  }
+
+  it('rejeita senha atual errada sem alterar nada', async () => {
+    const before = await currentHash();
+    const res = await changeUserPassword(exec, {
+      userId,
+      currentPassword: 'errada',
+      newPassword: 'nova-senha-123',
+      keepSessionToken: null,
+    });
+    expect(res).toEqual({ ok: false, reason: 'wrong_current' });
+    expect(await currentHash()).toBe(before);
+  });
+
+  it('rejeita senha nova curta e senha nova igual à atual', async () => {
+    expect(
+      await changeUserPassword(exec, { userId, currentPassword: 'senha-atual-1', newPassword: 'curta', keepSessionToken: null }),
+    ).toEqual({ ok: false, reason: 'too_short' });
+    expect(
+      await changeUserPassword(exec, { userId, currentPassword: 'senha-atual-1', newPassword: 'senha-atual-1', keepSessionToken: null }),
+    ).toEqual({ ok: false, reason: 'same_as_current' });
+  });
+
+  it('troca a senha, mantém a sessão atual e encerra as outras + links de recuperação', async () => {
+    const keep = await createSession(exec, userId);
+    const other = await createSession(exec, userId);
+    const reset = await createPasswordResetToken(exec, userId);
+
+    const res = await changeUserPassword(exec, {
+      userId,
+      currentPassword: 'senha-atual-1',
+      newPassword: 'nova-senha-123',
+      keepSessionToken: keep.token,
+    });
+    expect(res).toEqual({ ok: true });
+
+    expect(verifyPassword('nova-senha-123', await currentHash())).toBe(true);
+    expect(verifyPassword('senha-atual-1', await currentHash())).toBe(false);
+    expect(await validateSession(exec, keep.token)).not.toBeNull();
+    expect(await validateSession(exec, other.token)).toBeNull();
+    expect(await validatePasswordResetToken(exec, reset.token)).toBeNull();
+  });
+
+  it('deleteOtherSessions com keepToken null encerra todas', async () => {
+    const a = await createSession(exec, userId);
+    await deleteOtherSessions(exec, userId, null);
+    expect(await validateSession(exec, a.token)).toBeNull();
   });
 });

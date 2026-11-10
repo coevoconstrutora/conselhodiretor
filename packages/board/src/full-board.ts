@@ -113,6 +113,14 @@ export interface FullBoardConfig extends GatekeeperConfig {
    */
   readonly meetingGuidance?: string;
   /**
+   * Rodada de abertura sobre a pauta: ao `start()`, cada conselheiro que tiver
+   * algo a dizer sobre os itens DA SUA ÁREA opina uma vez (quem não tem
+   * item pertinente fica em silêncio — o modelo devolve skip). Exige
+   * `meetingGuidance`; o chamador liga só na PRIMEIRA abertura da reunião
+   * (reconexão/reinício não repete). Default desligado.
+   */
+  readonly agendaOpinions?: boolean;
+  /**
    * Roteador de relevância por IA (Etapa "Orquestração" — Meeting
    * Orchestrator). `undefined` ⇒ comportamento de sempre, só triggers regex
    * (compat total). Quando presente, roda ADITIVO ao lado do TriggerDetector
@@ -127,6 +135,13 @@ export interface FullBoardConfig extends GatekeeperConfig {
    */
   readonly presidentConfig?: PresidentConfig;
 }
+
+/** Instrução da rodada de abertura sobre a pauta (nenhuma fala ocorreu ainda). */
+const AGENDA_OPINION_INSTRUCTION =
+  'A reunião está começando e ninguém falou ainda. Acima está a PAUTA/ROTEIRO. Dê sua opinião inicial ' +
+  'sobre os itens da pauta que pertencem ao SEU escopo: o ponto de atenção, o risco ou a pergunta que ' +
+  'você levaria à mesa, citando o item. Comente SOMENTE o que é da sua área — se nenhum item da pauta ' +
+  'for da sua área, devolva skip. Não invente números nem fatos fora da pauta e do seu conhecimento.';
 
 /** B2: default do limiar de dedup semântico (compartilhado pré e pós LLM). */
 export const DEFAULT_SEMANTIC_DEDUP_THRESHOLD = 0.5;
@@ -160,6 +175,9 @@ export class FullBoardOrchestrator {
   private readonly priorMeetingsContext: string | undefined;
   /** Pauta/roteiro desta reunião (Etapa "guia de reunião"). */
   private readonly meetingGuidance: string | undefined;
+  private readonly agendaOpinions: boolean;
+  /** Rodada de opiniões sobre a pauta (fire-and-forget — não bloqueia a cadeia de segmentos). */
+  private agendaRun: Promise<void> = Promise.resolve();
   /**
    * Modo silencioso (Etapa "board silencioso"): grava e atualiza o CaseState
    * normalmente, mas não gera contribuições/sínteses/case-review AO VIVO —
@@ -221,6 +239,7 @@ export class FullBoardOrchestrator {
     });
     this.priorMeetingsContext = config.priorMeetingsContext;
     this.meetingGuidance = config.meetingGuidance;
+    this.agendaOpinions = config.agendaOpinions ?? false;
     this.now = config.now ?? Date.now;
     this.config = {
       tickMs: config.tickMs ?? 1000,
@@ -250,6 +269,7 @@ export class FullBoardOrchestrator {
       this.pending = this.pending.then(() => this.tick());
     }, this.config.tickMs);
     this.ticker.unref?.();
+    if (this.agendaOpinions && this.meetingGuidance) this.agendaRun = this.opineOnAgenda();
   }
 
   stop(): void {
@@ -268,7 +288,7 @@ export class FullBoardOrchestrator {
   }
 
   flush(): Promise<void> {
-    return this.pending;
+    return this.pending.then(() => this.agendaRun);
   }
 
   /** Liga/desliga o modo silencioso — vale a partir do próximo segmento/tick. */
@@ -294,6 +314,62 @@ export class FullBoardOrchestrator {
   async synthesizeNow(): Promise<void> {
     this.pending = this.pending.then(() => this.synthesize('on-demand'));
     return this.pending;
+  }
+
+  /**
+   * Rodada de abertura: cada conselheiro (um por vez — sem rajada de
+   * chamadas) lê a pauta e opina SÓ sobre o que é da sua área; sem item
+   * pertinente o modelo devolve skip e o conselheiro não aparece. Passa
+   * pelos mesmos guarda-corpos (dedup semântico, auditoria) mas não pelo
+   * rate-limit do gate — a abertura é uma rodada deliberada, não ruído.
+   * Nunca derruba a reunião.
+   */
+  private async opineOnAgenda(): Promise<void> {
+    const agenda = this.meetingGuidance;
+    if (!agenda) return;
+    const agentIds = Object.values(this.profiles)
+      .filter(
+        (p) =>
+          p.agentId !== 'presidente' &&
+          p.agentId !== 'secretaria' &&
+          (!this.activeAgentIds || this.activeAgentIds.has(p.agentId)),
+      )
+      .map((p) => p.agentId);
+    for (const agentId of agentIds) {
+      if (this.silentMode || !this.unsubscribe) return; // parou/silenciou no meio da rodada
+      try {
+        const contribution = await this.reasoner.reason({
+          agentId,
+          query: agenda.slice(0, 1500), // a recuperação da KB parte da própria pauta
+          transcript: AGENDA_OPINION_INSTRUCTION,
+          previousContributions: this.history.slice(-20),
+          caseState: agenda,
+        });
+        if (contribution.skip) continue; // nenhum item da pauta é da área dele
+        if (this.semanticDedup.isDuplicate(contribution.text).duplicate) continue;
+        const eventId = randomUUID();
+        await writeAudit(this.db, eventId, {
+          triggeredBy: 'pauta',
+          kbSources: [...(contribution.kbSources ?? [])],
+          modelVersion: contribution.modelVersion ?? 'unknown',
+        });
+        this.round.push({ contribution, topicKey: `pauta-${agentId}` });
+        this.lastContributionAt = this.now();
+        this.synthesized = false;
+        this.emit({
+          type: 'contribution',
+          id: eventId,
+          meetingId: this.session.meetingId,
+          contribution: { ...contribution, type: contribution.type ?? 'sugestao', severity: 'normal' },
+          agentIds: [agentId],
+          divergent: false,
+          triggeredBy: 'pauta',
+          at: this.now(),
+        });
+      } catch {
+        // falha de um conselheiro não impede os demais de opinarem
+      }
+    }
   }
 
   private async onFinalSegment(text: string, at: number): Promise<void> {

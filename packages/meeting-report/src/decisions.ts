@@ -3,6 +3,7 @@ import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
 import { stripJsonFences, type ILlmProvider } from '@conselho/providers';
 import { keywordSet, jaccard } from '@conselho/engines';
+import { assessTranscriptSubstance } from './substance';
 
 /**
  * Decision Ledger + Ações (Etapa "Histórico de reuniões", Seções 5/7) —
@@ -70,6 +71,11 @@ export const DECISION_EXTRACTION_SYSTEM =
   '"actionItems":[{"action":"...","responsible":"...","deadline":"YYYY-MM-DD ou null",' +
   '"relatedDecisionTopic":"... ou null"}]}. ' +
   'Campos sem informação no texto: "responsible" e "evidence" viram string vazia, "deadline" vira null. ' +
+  'REGRA DE FIDELIDADE: a síntese e os relatórios são RECOMENDAÇÕES de IA — não provam que algo foi ' +
+  'tratado. Só extraia um item se a TRANSCRIÇÃO mostrar que o tema foi realmente discutido na reunião, ' +
+  'e preencha "evidence" com o trecho da transcrição que o sustenta. Sugestões genéricas (ex.: "obter a ' +
+  'pauta", "acompanhar na próxima reunião", "registrar responsáveis") NÃO são decisão nem ação. ' +
+  'Sem transcrição com conteúdo, ou se a conversa foi só saudação/teste de áudio, responda vazio. ' +
   'Se não houver nenhuma decisão nem ação identificável, responda {"decisions":[],"actionItems":[]}.';
 
 export interface ExtractedDecision {
@@ -162,6 +168,11 @@ export async function extractMeetingOutcome(
   transcriptFinals?: readonly string[],
 ): Promise<ExtractedMeetingOutcome | null> {
   if (typeof llm.completeText !== 'function') return null;
+  // Transcrição informada porém sem conteúdo (só saudação/teste): nada a extrair — e
+  // nenhuma chamada de IA, que preencheria o vazio com as recomendações da síntese.
+  if (transcriptFinals && !assessTranscriptSubstance(transcriptFinals).sufficient) {
+    return { decisions: [], actionItems: [] };
+  }
   try {
     const transcriptBlock =
       transcriptFinals && transcriptFinals.length > 0

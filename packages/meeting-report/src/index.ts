@@ -101,3 +101,11 @@ export {
   type MeetingDecisionRecord,
   type MeetingActionItemRecord,
 } from './decisions';
+export {
+  assessTranscriptSubstance,
+  insufficientCounselorReport,
+  insufficientPresidentSynthesis,
+  insufficientSecretaryMinutes,
+  MIN_SUBSTANTIVE_WORDS,
+  type TranscriptSubstance,
+} from './substance';

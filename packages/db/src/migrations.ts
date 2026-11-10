@@ -849,4 +849,16 @@ ALTER TABLE meeting_action_item ADD CONSTRAINT meeting_action_item_status_check
   CHECK (status IN ('pendente', 'concluida'));
 `,
   },
+  {
+    name: '0034_participant_app_user_unique',
+    sql: `
+-- "Meu perfil" (autoatendimento): cada usuário do sistema pode ter UM
+-- participante vinculado por empresa (é por ele que a voz/ata o reconhecem).
+-- O índice parcial garante isso no banco — duas abas criando o vínculo ao
+-- mesmo tempo não geram participante duplicado. Participantes sem conta
+-- (app_user_id NULL) continuam ilimitados.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_participant_company_app_user
+  ON participant(company_id, app_user_id) WHERE app_user_id IS NOT NULL;
+`,
+  },
 ];

@@ -74,6 +74,13 @@ export async function DashboardShell({
           ) : null}
           <CompanySwitcher userId={user.id} isSuperAdmin={user.isSuperAdmin} currentCompanyId={user.companyId} />
           <ConfigMenu items={items} />
+          <Link
+            href="/profile"
+            title="Meu perfil — nome, senha e voz"
+            className="max-w-[10rem] truncate rounded-[var(--radius)] border border-ink/15 px-3.5 py-1.5 text-sm text-ink transition-colors hover:bg-surface-muted"
+          >
+            👤 {user.displayName.split(/\s+/)[0]}
+          </Link>
           <form action={logoutAction}>
             <button
               type="submit"

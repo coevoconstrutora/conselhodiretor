@@ -121,7 +121,10 @@ describe('extractMeetingOutcome — degradação graciosa (nunca derruba a gera�
       },
     };
     await extractMeetingOutcome(llm, 'Decidimos selecionar o fornecedor B.', undefined, undefined, [
+      'Marina: precisamos escolher o fornecedor das esquadrias, a proposta B tem melhor prazo de entrega e preço.',
       'Vinícius: eu cuido da automação das certidões.',
+      'Marina: o orçamento da obra estourou e o cronograma financeiro precisa ser refeito com urgência.',
+      'Marina: combinado, fechamos com o fornecedor B e revisamos o contrato até sexta-feira.',
     ]);
     expect(received!.prompt).toContain('Vinícius: eu cuido da automação das certidões.');
     expect(received!.prompt).toContain('Decidimos selecionar o fornecedor B.');

@@ -148,6 +148,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       onCaseReview?: (outcome: 'skip' | 'contribution' | 'discarded') => void;
       activeAgentIds?: readonly AgentId[];
       meetingGuidance?: string;
+      agendaOpinions?: boolean;
       relevanceRouter?: RelevanceRouter;
       presidentConfig?: PresidentConfig;
     } = {},
@@ -171,6 +172,7 @@ describe('FullBoardOrchestrator — conselho completo', () => {
       onCaseReview: opts.onCaseReview,
       activeAgentIds: opts.activeAgentIds,
       meetingGuidance: opts.meetingGuidance,
+      agendaOpinions: opts.agendaOpinions,
       relevanceRouter: opts.relevanceRouter,
       presidentConfig: opts.presidentConfig,
     });
@@ -645,6 +647,41 @@ describe('FullBoardOrchestrator — conselho completo', () => {
     await board.flush();
     const contributionCall = llm.calls.find((c) => !c.system.includes('SÍNTESE'));
     expect(contributionCall!.transcript).toContain('PAUTA DESTA REUNIÃO');
+    board.stop();
+    await session.stop();
+  });
+
+  it('rodada da pauta: opina quem tem item na sua área; quem não tem fica em silêncio', async () => {
+    const stt = new PushSttProvider();
+    const session = await startMeetingSession(exec, meetingId, companyId, stt);
+    const llm = new EchoLlm();
+    // Legal "não tem item pertinente" ⇒ o modelo devolve skip
+    llm.skipIf = (req) => req.system.includes('Legal e Compliance');
+    const board = new FullBoardOrchestrator('test-company', exec, session, llm, makeStore(), {
+      tickMs: 100000,
+      meetingGuidance: 'PAUTA: 1) fluxo de caixa e funding do empreendimento Aurora',
+      agendaOpinions: true,
+      activeAgentIds: ['cfo', 'legal'],
+    });
+    const events: FullBoardEvent[] = [];
+    board.subscribe((e) => events.push(e));
+    board.start();
+    await board.flush();
+
+    const agendaEvents = events.filter((e) => e.triggeredBy === 'pauta');
+    expect(agendaEvents.map((e) => e.contribution.agentId)).toEqual(['cfo']);
+    // a instrução manda opinar só na própria área e a pauta vai no prompt
+    const cfoCall = llm.calls.find((c) => c.system.includes('CFO'));
+    expect(cfoCall!.transcript).toContain('PAUTA: 1) fluxo de caixa');
+    expect(cfoCall!.transcript).toContain('SOMENTE o que é da sua área');
+    board.stop();
+    await session.stop();
+  });
+
+  it('sem agendaOpinions (reconexão/reinício) a pauta não gera nova rodada de opiniões', async () => {
+    const { session, board, events } = await setup({ meetingGuidance: 'PAUTA: 1) fluxo de caixa' });
+    await board.flush();
+    expect(events.filter((e) => e.triggeredBy === 'pauta')).toHaveLength(0);
     board.stop();
     await session.stop();
   });

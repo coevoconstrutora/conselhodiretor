@@ -77,6 +77,7 @@ describe('Migrations — schema base', () => {
       '0031_recall_bot',
       '0032_meeting_url',
       '0033_decisions_actions_tracking',
+      '0034_participant_app_user_unique',
     ]);
   });
 

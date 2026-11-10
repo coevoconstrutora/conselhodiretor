@@ -176,8 +176,9 @@ function VoiceEnrollmentWizard({
           <li>calcular métricas objetivas de participação</li>
         </ul>
         <p className="text-xs text-ink-muted">
-          A biometria <strong>não</strong> é usada para login, pode ser excluída por um administrador
-          a qualquer momento, e fica protegida separadamente dos dados comuns do perfil.
+          A biometria <strong>não</strong> é usada para login, pode ser revogada ou excluída a qualquer
+          momento (pelo próprio participante ou por um administrador), e fica protegida separadamente
+          dos dados comuns do perfil.
         </p>
         <label className="flex items-start gap-2 text-xs font-medium text-ink">
           <input type="checkbox" name="consent" required className="mt-0.5" />

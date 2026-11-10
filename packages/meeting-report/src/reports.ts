@@ -4,6 +4,7 @@ import { auditedClinicalWrite } from '@conselho/audit';
 import { getAgentProfiles, companyProfileBlock } from '@conselho/kb';
 import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/providers';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
+import { assessTranscriptSubstance, insufficientCounselorReport } from './substance';
 
 /**
  * Relatórios finais da reunião: 1 por conselheiro (a visão daquela
@@ -37,8 +38,11 @@ function counselorReportSystem(agentId: AgentId, companyId: string): string {
     `dentro do seu escopo (${profile.scope}), em português do Brasil, markdown leve, com as seções: ` +
     '## Minha leitura da reunião / ## Riscos no meu escopo / ## Oportunidades / ## Recomendações. ' +
     'Seja fiel ao que foi dito — NÃO invente números, fatos ou decisões que não apareceram. ' +
-    'Se a reunião não tocou no seu escopo, diga isso honestamente em 2-3 frases e aponte o que ' +
-    'você acompanharia na próxima. Tom consultivo: a decisão é sempre do empresário. ' +
+    'Tudo que você escrever (leitura, riscos, oportunidades e recomendações) deve decorrer de algo que ' +
+    'FOI DITO na transcrição — se o tema não foi discutido, NÃO crie recomendação sobre ele. ' +
+    'Se a reunião não tocou no seu escopo, diga isso honestamente em 2-3 frases e escreva "Nenhuma" ' +
+    'em Riscos, Oportunidades e Recomendações — sem recomendações genéricas nem "o que eu acompanharia". ' +
+    'Tom consultivo: a decisão é sempre do empresário. ' +
     'Termine com a linha "_Rascunho gerado por IA — revisado e validado pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE para esta tarefa: ignore qualquer limite de 1-3 frases — ' +
     'o campo text deve conter o RELATÓRIO COMPLETO em markdown (use \\n para quebras de linha).' +
@@ -127,8 +131,11 @@ function secretarySystem(companyId: string): string {
     '## Metas Estabelecidas / ## Ações a Realizar (liste cada ação com responsável e prazo, ' +
     'quando informados) / ## Pendências. ' +
     'Você NÃO é conselheira: não avalie, não recomende, não opine — só registre com fidelidade ' +
-    'o que a transcrição e os relatórios sustentam. NUNCA invente decisão, meta, responsável ou ' +
-    'prazo que não apareça nas fontes — quando algo não foi definido, escreva "não definido". ' +
+    'o que FOI DITO na reunião. A TRANSCRIÇÃO é a fonte da verdade: decisão, meta ou ação só entra ' +
+    'na ata se alguém a disse/combinou na transcrição. Os relatórios dos conselheiros e a síntese ' +
+    'contêm RECOMENDAÇÕES de IA que NÃO foram discutidas — nunca as transforme em decisão, meta ou ' +
+    'ação. NUNCA invente decisão, meta, responsável ou prazo que não apareça na transcrição — ' +
+    'quando nada foi decidido/definido, escreva "Nenhuma" (ou "não definido" para um campo avulso). ' +
     'Termine com a linha "_Ata gerada por IA — revisada e validada pelo responsável._" ' +
     'EXCEÇÃO IMPORTANTE para esta tarefa: ignore qualquer limite de 1-3 frases — o campo text ' +
     'deve conter a ATA COMPLETA em markdown (use \\n para quebras de linha).' +
@@ -184,6 +191,10 @@ export async function generateCounselorReport(
   modelOverride?: string,
   reasoningEffortOverride?: string,
 ): Promise<string> {
+  // Sem conteúdo real na transcrição (só "bom dia"/teste de som) não há o que
+  // relatar: texto fixo, sem chamar a IA (que inventaria recomendações genéricas).
+  const substance = assessTranscriptSubstance(transcriptFinals);
+  if (!substance.sufficient) return insufficientCounselorReport(substance);
   const transcript = transcriptFinals.map((t, i) => `${i + 1}. ${t}`).join('\n');
   const own = contributions.filter((c) => c.agentId === agentId);
   const saidBlock =
