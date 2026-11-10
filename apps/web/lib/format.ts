@@ -2,6 +2,12 @@
  * usuário usa ESTE fuso, nunca o do processo, senão horários saem 3h adiantados. */
 const TIME_ZONE = 'America/Sao_Paulo';
 
+/** Meia-noite de HOJE no fuso de Brasília, como instante absoluto (o Brasil não tem horário de verão desde 2019: UTC-3 fixo). */
+export function startOfTodayBR(now: Date = new Date()): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE }).format(now); // AAAA-MM-DD
+  return new Date(`${ymd}T00:00:00-03:00`);
+}
+
 export function formatDateTimeBR(date: Date): string {
   return date.toLocaleString('pt-BR', { timeZone: TIME_ZONE });
 }

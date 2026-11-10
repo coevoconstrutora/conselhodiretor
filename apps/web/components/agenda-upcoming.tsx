@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
-import { formatDateBR, formatTimeBR } from '@/lib/format';
+import { formatDateBR, formatTimeBR, startOfTodayBR } from '@/lib/format';
 import { agendaConfigFromEnv, listCouncilMeetings, type AgendaMeeting } from '@/lib/agenda-client';
 
 const WINDOW_DAYS = 30;
@@ -45,7 +45,9 @@ export async function AgendaUpcoming({ companyId, isAdmin }: { companyId: string
 
   const now = new Date();
   const result = await listCouncilMeetings(config, {
-    from: now,
+    // desde o INÍCIO de hoje: a API só devolve reuniões que terminam depois de `from`,
+    // então com `from = agora` a reunião da manhã sumia assim que acabava.
+    from: startOfTodayBR(now),
     to: new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000),
   });
 
@@ -53,21 +55,32 @@ export async function AgendaUpcoming({ companyId, isAdmin }: { companyId: string
     <section aria-label="Agenda do comitê" className="mt-8">
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="font-display text-lg font-semibold text-ink">📅 Agenda do comitê</h2>
-        <span className="text-xs text-ink-muted">próximos {WINDOW_DAYS} dias · reuniões marcadas com "Enviar ao comitê"</span>
+        <span className="text-xs text-ink-muted">hoje e próximos {WINDOW_DAYS} dias · marcadas com "Enviar ao comitê"</span>
       </div>
 
       {result.status === 'error' ? (
         <p className="card-premium mt-3 p-4 text-sm text-ink-muted">⚠ {result.message}</p>
       ) : result.status === 'ok' && result.meetings.length === 0 ? (
-        <p className="card-premium mt-3 p-4 text-sm text-ink-muted">Nenhuma reunião do comitê agendada nos próximos {WINDOW_DAYS} dias.</p>
+        <p className="card-premium mt-3 p-4 text-sm text-ink-muted">Nenhuma reunião do comitê hoje nem nos próximos {WINDOW_DAYS} dias. Confira na Agenda se o evento foi salvo, está aprovado e marcado com "Enviar ao comitê".</p>
       ) : result.status === 'ok' ? (
         <ul className="mt-3 space-y-2">
           {result.meetings.slice(0, MAX_ITEMS).map((m) => {
+            const ended = m.endAt.getTime() < now.getTime();
             const accepted = m.participants.filter((p) => p.response === 'accepted').length;
             return (
-              <li key={m.id} className="card-premium flex flex-wrap items-center justify-between gap-3 p-4">
+              <li
+                key={m.id}
+                className={`card-premium flex flex-wrap items-center justify-between gap-3 p-4 ${ended ? 'opacity-70' : ''}`}
+              >
                 <div className="min-w-0 space-y-0.5">
-                  <p className="font-medium text-ink">{m.title}</p>
+                  <p className="font-medium text-ink">
+                    {m.title}
+                    {ended ? (
+                      <span className="ml-2 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+                        já aconteceu hoje
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="text-xs text-ink-muted">
                     {whenLabel(m)}
                     {m.roomName ? ` · ${m.roomName}` : ''}
