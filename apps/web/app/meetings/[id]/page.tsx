@@ -144,6 +144,47 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
       ])
     : undefined;
 
+  const transcriptIntro = hasTranscript
+    ? 'Revise e corrija o que a transcrição automática captou. Os relatórios dos conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.'
+    : 'Esta reunião não tem transcrição gravada. Cole abaixo a transcrição feita por outro meio (uma fala por linha, de preferência com o nome de quem falou) e salve — os relatórios dos conselheiros serão gerados a partir dela. Cifrada em repouso e auditada.';
+
+  /** Formulário da transcrição (revisão ou colagem manual) — reusado no histórico e no layout ao vivo. */
+  function renderTranscriptForm(rows: number) {
+    if (!canWrite(user)) {
+      return <p className="text-sm text-ink-muted">Não há transcrição armazenada para esta reunião.</p>;
+    }
+    return (
+      <form action={saveTranscriptReviewAction} className="space-y-3">
+        <input type="hidden" name="meetingId" value={id} />
+        <textarea
+          key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
+          name="content"
+          defaultValue={transcriptText}
+          rows={rows}
+          required
+          placeholder={hasTranscript ? undefined : 'Cole aqui a transcrição da reunião…'}
+          aria-label="Transcrição da reunião"
+          className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+        />
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-ink-muted">
+            {transcriptReview
+              ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
+              : hasTranscript
+                ? 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'
+                : 'Depois de salvar, gere (ou regenere) os relatórios do conselho.'}
+          </p>
+          <button
+            type="submit"
+            className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            {hasTranscript ? '💾 Salvar transcrição corrigida' : '💾 Salvar transcrição'}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   /** 1 relatório editável — reusado nas abas Ata/Síntese (histórico) e no layout ao vivo. */
   function renderReportDetails(report: (typeof reports)[number]) {
     return (
@@ -337,40 +378,10 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
             {closed ? (
               <HistoricalMeetingTabs
                 transcricao={
-                  hasTranscript ? (
-                    <div>
-                      <p className="mb-3 text-xs text-ink-muted">
-                        Revise e corrija o que a transcrição automática captou. Os relatórios dos
-                        conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.
-                      </p>
-                      <form action={saveTranscriptReviewAction} className="space-y-3">
-                        <input type="hidden" name="meetingId" value={id} />
-                        <textarea
-                          key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
-                          name="content"
-                          defaultValue={transcriptText}
-                          rows={16}
-                          aria-label="Transcrição da reunião"
-                          className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                        />
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs text-ink-muted">
-                            {transcriptReview
-                              ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
-                              : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
-                          </p>
-                          <button
-                            type="submit"
-                            className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-                          >
-                            💾 Salvar transcrição corrigida
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-ink-muted">Não há transcrição armazenada para esta reunião.</p>
-                  )
+                  <div>
+                    <p className="mb-3 text-xs text-ink-muted">{transcriptIntro}</p>
+                    {renderTranscriptForm(16)}
+                  </div>
                 }
                 contribuicoes={<ContributionsPanel contributions={contributions} profiles={profiles} />}
                 participantes={<ParticipantSignalsPanel signals={participantSignals} speechTone={speechTone} />}
@@ -474,44 +485,20 @@ export default async function MeetingPage({ params }: { params: Promise<{ id: st
               <>
                 {/* Revisão do transcript: o empresário corrige o que o STT ouviu ANTES
                     de gerar os relatórios — a versão revisada vira a fonte. */}
-                {hasTranscript && (
+                {/* Sempre visível (inclusive vazia): reunião que não foi gravada
+                    pode ter a transcrição colada à mão — vira a fonte dos relatórios. */}
+                {canWrite(user) || hasTranscript ? (
                   <section aria-label="Transcrição da reunião" className="card-premium mt-6 p-6">
                     <div>
                       <h2 className="font-display text-base font-semibold text-ink">
                         <span className="blueprint-index mr-2 text-brand/70">02/</span>
                         📝 Transcrição da reunião
                       </h2>
-                      <p className="text-xs text-ink-muted">
-                        Revise e corrija o que a transcrição automática captou. Os relatórios dos
-                        conselheiros são gerados a partir desta versão. Cifrada em repouso e auditada.
-                      </p>
+                      <p className="text-xs text-ink-muted">{transcriptIntro}</p>
                     </div>
-                    <form action={saveTranscriptReviewAction} className="mt-4 space-y-3">
-                      <input type="hidden" name="meetingId" value={id} />
-                      <textarea
-                        key={transcriptReview?.updatedAt.getTime() ?? 'raw'}
-                        name="content"
-                        defaultValue={transcriptText}
-                        rows={12}
-                        aria-label="Transcrição da reunião"
-                        className="w-full rounded-[var(--radius)] border border-ink/15 bg-white p-4 text-sm leading-relaxed text-ink transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                      />
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs text-ink-muted">
-                          {transcriptReview
-                            ? `Revisada em ${formatDateTimeBR(transcriptReview.updatedAt)} — regenere os relatórios para refletir as correções.`
-                            : 'Ainda mostra a transcrição automática. Corrija nomes, números e termos antes de gerar os relatórios.'}
-                        </p>
-                        <button
-                          type="submit"
-                          className="shrink-0 rounded-[var(--radius)] bg-brand px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-                        >
-                          💾 Salvar transcrição corrigida
-                        </button>
-                      </div>
-                    </form>
+                    <div className="mt-4">{renderTranscriptForm(12)}</div>
                   </section>
-                )}
+                ) : null}
 
                 {/* Relatórios finais: 1 por conselheiro + síntese do Presidente */}
                 <section aria-label="Relatórios do conselho" className="card-premium mt-6 p-6">
