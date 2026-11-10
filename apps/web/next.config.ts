@@ -34,6 +34,9 @@ const nextConfig: NextConfig = {
   ],
   // Drivers de banco rodam no servidor — não empacotar (require nativo em runtime).
   serverExternalPackages: ['pg', '@electric-sql/pglite'],
+  // O cadastro de voz envia 6 gravações numa única Server Action (multipart) —
+  // o limite padrão de 1 MB estoura. Sempre atrás de login.
+  experimental: { serverActions: { bodySizeLimit: '8mb' } },
 };
 
 export default nextConfig;

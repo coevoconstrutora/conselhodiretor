@@ -13,6 +13,7 @@ import {
 } from './participants';
 import type { SqlExecutor } from '@conselho/db';
 import type { CurrentUser } from './auth';
+import { VOICE_REQUIRED_SAMPLES } from './voice-quality';
 import { grantBiometricConsent, revokeBiometricConsent, hasActiveConsent } from './biometric-consent';
 import {
   enrollParticipantVoice,
@@ -163,14 +164,16 @@ export async function enrollParticipantVoiceAction(
     }
 
     const samples: VoiceSample[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < VOICE_REQUIRED_SAMPLES; i++) {
       const file = formData.get(`sample${i}`);
       const durationMs = Number(formData.get(`sample${i}DurationMs`) ?? '0');
       if (!(file instanceof File) || file.size === 0) continue;
       const audio = Buffer.from(await file.arrayBuffer());
       samples.push({ audio, mimeType: file.type || 'audio/webm', durationMs });
     }
-    if (samples.length < 3) return { error: 'Grave pelo menos 3 amostras de voz.' };
+    if (samples.length < VOICE_REQUIRED_SAMPLES) {
+      return { error: `Grave as ${VOICE_REQUIRED_SAMPLES} amostras de voz (2 rodadas) — se a tela estava aberta antes de uma atualização, recarregue a página.` };
+    }
 
     const { qualityScore } = await enrollParticipantVoice(
       db,

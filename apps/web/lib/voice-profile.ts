@@ -3,7 +3,7 @@ import type { SqlExecutor } from '@conselho/db';
 import { auditedClinicalWrite } from '@conselho/audit';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { cosineSimilarity } from './voice-similarity';
-import { assessSampleQuality, averageEmbeddings } from './voice-quality';
+import { assessSampleQuality, averageEmbeddings, analyzeEmbeddingConsistency } from './voice-quality';
 
 export { assessSampleQuality } from './voice-quality';
 export type { SampleQuality, SampleQualityReport } from './voice-quality';
@@ -103,8 +103,19 @@ export async function enrollParticipantVoice(
     totalQuality += quality.quality === 'good' ? 1 : 0.7;
     embeddings.push(await embedAudioClip(sample.audio, sample.mimeType));
   }
-  const embedding = averageEmbeddings(embeddings);
-  const qualityScore = Math.min(1, totalQuality / samples.length);
+  // Só amostras da MESMA voz entram no perfil: descarta as atípicas (ruído/outra
+  // pessoa) e recusa o cadastro se não sobrar consistência suficiente.
+  const consistency = analyzeEmbeddingConsistency(embeddings);
+  if (!consistency.consistent) {
+    throw new Error(
+      'As gravações não ficaram consistentes entre si (ruído, eco ou outra pessoa falando). ' +
+        'Grave de novo, sozinho(a), em um lugar silencioso e a uma distância normal do microfone.',
+    );
+  }
+  const embedding = averageEmbeddings(consistency.keptIndexes.map((i) => embeddings[i]!));
+  const keptCount = consistency.keptIndexes.length;
+  const durationScore = Math.min(1, totalQuality / samples.length);
+  const qualityScore = Math.round(Math.min(durationScore, consistency.meanSimilarity) * 100) / 100;
   const embeddingEnc = encryptField(JSON.stringify(embedding), key);
 
   await auditedClinicalWrite(
@@ -128,7 +139,7 @@ export async function enrollParticipantVoice(
           participantName.trim().slice(0, 160),
           participantArea?.trim().slice(0, 160) || null,
           embeddingEnc,
-          samples.length,
+          keptCount,
           qualityScore,
         ],
       );
