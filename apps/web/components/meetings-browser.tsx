@@ -38,6 +38,9 @@ const ACCESS_FILTERS = [
   { value: 'shared', label: '👥 Compartilhadas' },
 ] as const;
 
+/** Máximo de reuniões exibidas de uma vez — as mais recentes; refine os filtros para achar as demais. */
+const MAX_VISIBLE = 20;
+
 const fieldCls =
   'rounded-[var(--radius)] border border-ink/15 bg-white px-2.5 py-1.5 text-xs text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20';
 
@@ -49,13 +52,23 @@ function normalize(text: string): string {
 }
 
 /** Lista de reuniões com tags, criador, presentes e filtros (tudo no cliente — poucas dezenas de itens). */
-export function MeetingsBrowser({ meetings, viewerId }: { meetings: MeetingListItem[]; viewerId: string }) {
+export function MeetingsBrowser({
+  meetings,
+  viewerId,
+  defaultFrom,
+}: {
+  meetings: MeetingListItem[];
+  viewerId: string;
+  /** Início do período padrão (AAAA-MM-DD) — hoje menos 30 dias, calculado no servidor. */
+  defaultFrom: string;
+}) {
   const [query, setQuery] = useState('');
   const [type, setType] = useState('all');
   const [state, setState] = useState<(typeof STATE_FILTERS)[number]['value']>('all');
   const [creator, setCreator] = useState('all');
   const [access, setAccess] = useState<(typeof ACCESS_FILTERS)[number]['value']>('all');
-  const [from, setFrom] = useState('');
+  // Sempre abre filtrando os últimos 30 dias (e "Limpar filtros" volta a isso).
+  const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState('');
 
   const typeOptions = useMemo(
@@ -93,15 +106,22 @@ export function MeetingsBrowser({ meetings, viewerId }: { meetings: MeetingListI
     });
   }, [meetings, query, type, state, creator, access, from, to, viewerId]);
 
+  const visible = filtered.slice(0, MAX_VISIBLE); // já vem da mais recente para a mais antiga
   const hasFilter =
-    query !== '' || type !== 'all' || state !== 'all' || creator !== 'all' || access !== 'all' || from !== '' || to !== '';
+    query !== '' ||
+    type !== 'all' ||
+    state !== 'all' ||
+    creator !== 'all' ||
+    access !== 'all' ||
+    from !== defaultFrom ||
+    to !== '';
   function clear() {
     setQuery('');
     setType('all');
     setState('all');
     setCreator('all');
     setAccess('all');
-    setFrom('');
+    setFrom(defaultFrom);
     setTo('');
   }
 
@@ -174,16 +194,22 @@ export function MeetingsBrowser({ meetings, viewerId }: { meetings: MeetingListI
             </button>
           ) : null}
           <span className="ml-auto text-xs text-ink-muted" aria-live="polite">
-            {filtered.length} de {meetings.length} reunião(ões)
+            {filtered.length > MAX_VISIBLE
+              ? `Mostrando as ${MAX_VISIBLE} mais recentes de ${filtered.length}`
+              : `${filtered.length} reunião(ões)`}
+            {from === defaultFrom && to === '' ? ' · últimos 30 dias' : ''}
           </span>
         </div>
       </div>
 
       {filtered.length === 0 ? (
-        <p className="card-premium p-8 text-center text-sm text-ink-muted">Nenhuma reunião com esses filtros.</p>
+        <p className="card-premium p-8 text-center text-sm text-ink-muted">
+          Nenhuma reunião com esses filtros
+          {from === defaultFrom ? ' nos últimos 30 dias — para ver reuniões mais antigas, altere a data "de".' : '.'}
+        </p>
       ) : (
         <ul className="space-y-3">
-          {filtered.map((m) => (
+          {visible.map((m) => (
             <li key={m.id}>
               <Link
                 href={`/meetings/${m.id}`}
