@@ -822,7 +822,7 @@ export async function getPipelineStatus(meetingId: string): Promise<PipelineStat
 }
 
 /** Fila de áudio: o WS /audio empurra; o adapter STT consome (AsyncIterable). */
-function createAudioQueue() {
+function createAudioQueue(onEnded?: () => void) {
   const queue: Array<Uint8Array | null> = [];
   let wake: (() => void) | null = null;
   const push = (item: Uint8Array | null) => {
@@ -845,9 +845,20 @@ function createAudioQueue() {
       }
     },
   };
+  let ended = false;
   return {
     iterable,
-    sink: { push: (chunk: Uint8Array) => push(chunk), end: () => push(null) },
+    sink: {
+      push: (chunk: Uint8Array) => push(chunk),
+      end: () => {
+        push(null);
+        // dispara UMA vez (unregister + fechamento do socket chamam end() os dois)
+        if (!ended) {
+          ended = true;
+          onEnded?.();
+        }
+      },
+    },
   };
 }
 
@@ -873,7 +884,21 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     runtime.gateway.unregisterAudioSink(meetingId);
   }
 
-  const audio = createAudioQueue();
+  // Captação perdida (aba fechada/recarregada/queda de rede SEM "Parar captação"): o canal /audio
+  // fecha, o Deepgram encerra o stream com 1000 e a sessão ficava "live" para sempre — STT
+  // "ativo", relógio de custo rodando e UI achando que ainda captava. Após uma carência (para
+  // dar tempo de o navegador reconectar via startLiveBoard), encerra a sessão.
+  const audio = createAudioQueue(() => {
+    const graceMs = envNumber('BOARD_AUDIO_LOST_GRACE_MS', 120_000);
+    const timer = setTimeout(() => {
+      const current = runtime.active.get(meetingId);
+      // reinício (nova sessão) ou encerramento normal já trataram: não há o que fazer
+      if (!current || current.session !== session || current.session.getSnapshot().status === 'ended') return;
+      console.warn(`[board] áudio da reunião ${meetingId} sem fonte há ${graceMs}ms — encerrando a captação.`);
+      void stopLiveBoard(meetingId).catch((error) => console.error('[board] auto-encerrar captação falhou:', error));
+    }, graceMs);
+    timer.unref?.();
+  });
   let session: MeetingSession | undefined;
   let orchestrator: FullBoardOrchestrator | undefined;
   try {
