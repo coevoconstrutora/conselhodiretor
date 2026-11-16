@@ -1,6 +1,6 @@
 import 'server-only';
 import type { CostRange, ProviderCostResult } from './types';
-import { sumOpenAiCostUsd, type OpenAiCostBucket } from './calc';
+import { sumOpenAiCostUsd, breakdownOpenAiCost, type OpenAiCostBucket } from './calc';
 
 /**
  * OpenAI Costs API (/v1/organization/costs) — exige uma Admin API key
@@ -29,7 +29,7 @@ export async function getOpenAiCost(range: CostRange): Promise<ProviderCostResul
     };
   }
   try {
-    let totalUsd = 0;
+    const buckets: OpenAiCostBucket[] = [];
     let page: string | null = null;
     do {
       const params = new URLSearchParams({
@@ -38,6 +38,8 @@ export async function getOpenAiCost(range: CostRange): Promise<ProviderCostResul
         bucket_width: '1d',
         limit: '180',
       });
+      // detalha por item faturado (modelo + tipo de token) — a soma por bucket não muda
+      params.append('group_by', 'line_item');
       if (page) params.set('page', page);
       const res = await fetch(`${COSTS_URL}?${params.toString()}`, {
         headers: { authorization: `Bearer ${apiKey}` },
@@ -48,10 +50,16 @@ export async function getOpenAiCost(range: CostRange): Promise<ProviderCostResul
         throw new Error(`HTTP ${res.status} — ${body.slice(0, 200)}`);
       }
       const json = (await res.json()) as CostsResponse;
-      totalUsd += sumOpenAiCostUsd(json.data);
+      buckets.push(...json.data);
       page = json.has_more ? json.next_page : null;
     } while (page);
-    return { providerId: 'openai', label: 'OpenAI', amountUsd: totalUsd, kind: 'billed' };
+    return {
+      providerId: 'openai',
+      label: 'OpenAI',
+      amountUsd: sumOpenAiCostUsd(buckets),
+      kind: 'billed',
+      breakdown: breakdownOpenAiCost(buckets),
+    };
   } catch (err) {
     return {
       providerId: 'openai',

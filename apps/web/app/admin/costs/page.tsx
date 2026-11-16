@@ -10,6 +10,45 @@ const KIND_BADGE: Record<string, string> = {
   unavailable: '— indisponível',
 };
 
+/** `2026-11-14` → `14/11` (a Costs API agrupa em dias UTC). */
+function formatDayLabel(isoDay: string): string {
+  return `${isoDay.slice(8, 10)}/${isoDay.slice(5, 7)}`;
+}
+
+/** Lista com barra proporcional ao maior valor — sem biblioteca de gráfico. */
+function BreakdownCard({
+  title,
+  rows,
+  scrollable = false,
+}: {
+  title: string;
+  rows: readonly { label: string; usd: number }[];
+  scrollable?: boolean;
+}) {
+  const max = Math.max(0, ...rows.map((r) => r.usd));
+  return (
+    <div className="card-premium p-5">
+      <h3 className="font-display text-sm font-semibold text-ink">{title}</h3>
+      <ul className={`mt-3 space-y-2 ${scrollable ? 'max-h-80 overflow-y-auto pr-1' : ''}`}>
+        {rows.map((row) => (
+          <li key={row.label} className="min-w-0">
+            <div className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="min-w-0 break-words text-ink">{row.label}</span>
+              <span className="shrink-0 tabular-nums text-ink-muted">{formatUsd(row.usd)}</span>
+            </div>
+            <div className="mt-1 h-1.5 rounded-full bg-surface-muted">
+              <div
+                className="h-1.5 rounded-full bg-emerald-500"
+                style={{ width: `${max > 0 ? Math.max(row.usd > 0 ? 2 : 0, (row.usd / max) * 100) : 0}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Custos de infraestrutura (Anthropic/OpenAI/Deepgram/Recall.ai/Fly.io) — só o dono da plataforma. */
 export default async function CostsAdminPage() {
   const user = await requireCurrentUser();
@@ -67,6 +106,22 @@ export default async function CostsAdminPage() {
           </div>
         ))}
       </section>
+
+      {results.map((r) =>
+        r.breakdown && (r.breakdown.byItem.length > 0 || r.breakdown.byDay.length > 0) ? (
+          <section key={`${r.providerId}-detail`} className="mt-6">
+            <h2 className="font-display text-base font-semibold text-ink">{r.label} — detalhamento</h2>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              <BreakdownCard title="Por modelo e tipo de token" rows={r.breakdown.byItem.slice(0, 12)} />
+              <BreakdownCard
+                title="Por dia (UTC)"
+                rows={r.breakdown.byDay.map((d) => ({ label: formatDayLabel(d.label), usd: d.usd }))}
+                scrollable
+              />
+            </div>
+          </section>
+        ) : null,
+      )}
     </DashboardShell>
   );
 }

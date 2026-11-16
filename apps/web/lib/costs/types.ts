@@ -13,6 +13,23 @@ export interface CostRange {
   readonly end: Date;
 }
 
+/** Uma linha de detalhamento de custo (rótulo + US$). */
+export interface CostBreakdownRow {
+  readonly label: string;
+  readonly usd: number;
+}
+
+/**
+ * Detalhamento opcional do custo de um provedor: por item faturado (na OpenAI,
+ * "modelo, tipo de token" — ex.: saída de raciocínio vs entrada) e por dia.
+ */
+export interface CostBreakdown {
+  /** Maior custo primeiro; só itens com custo > 0. */
+  readonly byItem: readonly CostBreakdownRow[];
+  /** Dias (UTC, `YYYY-MM-DD`) em ordem cronológica, inclusive dias sem custo. */
+  readonly byDay: readonly CostBreakdownRow[];
+}
+
 export interface ProviderCostResult {
   readonly providerId: 'anthropic' | 'openai' | 'deepgram' | 'recall' | 'fly';
   readonly label: string;
@@ -25,4 +42,6 @@ export interface ProviderCostResult {
    */
   readonly kind: CostKind;
   readonly detail?: string;
+  /** Detalhamento por item e por dia, quando a API do provedor fornece. */
+  readonly breakdown?: CostBreakdown;
 }

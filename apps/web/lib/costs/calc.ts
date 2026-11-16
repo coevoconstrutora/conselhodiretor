@@ -6,6 +6,8 @@
  * cada provedor já devolveu.
  */
 
+import type { CostBreakdown } from './types';
+
 export interface CostReportBucket {
   readonly results: ReadonlyArray<{ readonly amount: string }>;
 }
@@ -20,7 +22,41 @@ export function sumAnthropicCostUsd(buckets: readonly CostReportBucket[]): numbe
 }
 
 export interface OpenAiCostBucket {
-  readonly results: ReadonlyArray<{ readonly amount: { readonly value: number } }>;
+  /** Início do bucket diário (segundos Unix, UTC). */
+  readonly start_time?: number;
+  readonly results: ReadonlyArray<{
+    readonly amount: { readonly value: number };
+    /** Presente quando a consulta usa `group_by=line_item` (ex.: "modelo, tipo de token"). */
+    readonly line_item?: string | null;
+  }>;
+}
+
+const NO_LINE_ITEM_LABEL = '(sem detalhe)';
+
+/**
+ * Agrega a Costs API da OpenAI por item faturado e por dia. Puro: o rótulo do
+ * item é o `line_item` que a API devolveu, sem interpretação.
+ */
+export function breakdownOpenAiCost(buckets: readonly OpenAiCostBucket[]): CostBreakdown {
+  const items = new Map<string, number>();
+  const days = new Map<string, number>();
+  for (const bucket of buckets) {
+    const day =
+      typeof bucket.start_time === 'number' ? new Date(bucket.start_time * 1000).toISOString().slice(0, 10) : null;
+    if (day && !days.has(day)) days.set(day, 0);
+    for (const r of bucket.results) {
+      const label = r.line_item?.trim() || NO_LINE_ITEM_LABEL;
+      items.set(label, (items.get(label) ?? 0) + r.amount.value);
+      if (day) days.set(day, (days.get(day) ?? 0) + r.amount.value);
+    }
+  }
+  return {
+    byItem: [...items.entries()]
+      .filter(([, usd]) => usd > 0)
+      .map(([label, usd]) => ({ label, usd }))
+      .sort((a, b) => b.usd - a.usd),
+    byDay: [...days.entries()].map(([label, usd]) => ({ label, usd })).sort((a, b) => a.label.localeCompare(b.label)),
+  };
 }
 
 /** OpenAI Costs API: `amount.value` já vem em USD. */

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   sumAnthropicCostUsd,
   sumOpenAiCostUsd,
+  breakdownOpenAiCost,
   sumDeepgramCostUsd,
   estimateRecallCostUsd,
   estimateFlyMonthlyCostUsd,
@@ -29,6 +30,45 @@ describe('sumOpenAiCostUsd — Costs API já devolve amount.value em USD', () =>
       { results: [{ amount: { value: 0.07 } }] },
     ]);
     expect(total).toBeCloseTo(0.2, 5);
+  });
+});
+
+describe('breakdownOpenAiCost — detalhamento por item e por dia', () => {
+  const day1 = Date.UTC(2026, 10, 14) / 1000; // 2026-11-14
+  const day2 = Date.UTC(2026, 10, 15) / 1000;
+
+  it('soma por line_item (maior primeiro) e por dia (cronológico, inclusive dia sem custo)', () => {
+    const b = breakdownOpenAiCost([
+      {
+        start_time: day2,
+        results: [
+          { amount: { value: 1.5 }, line_item: 'gpt-5.6-sol, output' },
+          { amount: { value: 0.25 }, line_item: 'gpt-5.6-luna, input' },
+        ],
+      },
+      { start_time: day1, results: [] },
+      { start_time: day2 + 86400, results: [{ amount: { value: 0.5 }, line_item: 'gpt-5.6-sol, output' }] },
+    ]);
+    expect(b.byItem).toEqual([
+      { label: 'gpt-5.6-sol, output', usd: 2 },
+      { label: 'gpt-5.6-luna, input', usd: 0.25 },
+    ]);
+    expect(b.byDay.map((d) => d.label)).toEqual(['2026-11-14', '2026-11-15', '2026-11-16']);
+    expect(b.byDay.map((d) => d.usd)).toEqual([0, 1.75, 0.5]);
+  });
+
+  it('sem line_item cai em "(sem detalhe)" e sem start_time não entra por dia', () => {
+    const b = breakdownOpenAiCost([{ results: [{ amount: { value: 0.3 } }] }]);
+    expect(b.byItem).toEqual([{ label: '(sem detalhe)', usd: 0.3 }]);
+    expect(b.byDay).toEqual([]);
+  });
+
+  it('o total do detalhamento bate com sumOpenAiCostUsd', () => {
+    const buckets = [
+      { start_time: day1, results: [{ amount: { value: 0.1 }, line_item: 'a' }, { amount: { value: 0.2 }, line_item: 'b' }] },
+    ];
+    const b = breakdownOpenAiCost(buckets);
+    expect(b.byItem.reduce((s, r) => s + r.usd, 0)).toBeCloseTo(sumOpenAiCostUsd(buckets), 10);
   });
 });
 
