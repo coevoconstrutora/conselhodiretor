@@ -15,7 +15,7 @@ import {
 } from '@conselho/meeting-report';
 import { canAccessMeeting, getMeeting } from '@conselho/meetings';
 import { PRESIDENT_AGENT_ID, SECRETARY_AGENT_ID, type AgentId, type ILlmProvider } from '@conselho/providers';
-import { getAgentProfiles } from '@conselho/kb';
+import { getAgentProfiles, capReasoningEffort } from '@conselho/kb';
 import type { SqlExecutor } from '@conselho/db';
 import { getCurrentUser, canWrite, type CurrentUser } from './auth';
 import { getDb } from './db';
@@ -28,6 +28,9 @@ import { loadAndApplyPresidentConfig, getPresidentConfig } from './president-con
 import { listMeetingParticipantSignals, formatParticipantSignalsBlock } from './meeting-speakers';
 import { buildReportsPdf } from './report-export';
 import { sendReportsEmail } from './email';
+
+/** Ata e extração de decisões/ações são tarefas de registro — raciocínio limitado a 'medium' (custo). */
+const MINUTES_MAX_EFFORT = 'medium' as const;
 
 export type CounselorEmailState = { error?: string; ok?: string } | null;
 
@@ -182,7 +185,7 @@ async function synthesizePresidentReport(
     llm,
     synthesis,
     presidentConfig.synthesisModel,
-    presidentConfig.synthesisReasoningEffort,
+    capReasoningEffort(presidentConfig.synthesisReasoningEffort, MINUTES_MAX_EFFORT),
     transcriptFinals,
   );
   if (outcome) {
@@ -201,7 +204,7 @@ async function synthesizePresidentReport(
       transcriptFinals,
       [...reports, { agentId: PRESIDENT_AGENT_ID, content: synthesis }],
       presidentConfig.synthesisModel,
-      presidentConfig.synthesisReasoningEffort,
+      capReasoningEffort(presidentConfig.synthesisReasoningEffort, MINUTES_MAX_EFFORT),
     );
     await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, minutes, key, {
       action: 'generate',
@@ -307,7 +310,7 @@ export async function generateSecretaryMinutesAction(meetingId: string): Promise
       inputs?.finals ?? [],
       allReports.filter((r) => r.agentId !== SECRETARY_AGENT_ID),
       presidentConfig.synthesisModel,
-      presidentConfig.synthesisReasoningEffort,
+      capReasoningEffort(presidentConfig.synthesisReasoningEffort, MINUTES_MAX_EFFORT),
     );
     await saveAgentReport(db, meetingId, SECRETARY_AGENT_ID, minutes, key, { action: 'generate', modelVersion: modelLabel });
     revalidatePath(`/meetings/${meetingId}`);
@@ -352,7 +355,7 @@ export async function generateMeetingOutcomeAction(meetingId: string): Promise<A
       llm,
       presidentReport.content,
       presidentConfig.synthesisModel,
-      presidentConfig.synthesisReasoningEffort,
+      capReasoningEffort(presidentConfig.synthesisReasoningEffort, MINUTES_MAX_EFFORT),
       inputs?.finals ?? [],
     );
     if (!outcome) {

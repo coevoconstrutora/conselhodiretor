@@ -30,6 +30,11 @@ function requireProfile(companyId: string, agentId: AgentId) {
   return profile;
 }
 
+/** `system` comum a todos os relatórios de conselheiro (prefixo cacheável); a persona vem em `taskInstruction`. */
+const COUNSELOR_REPORT_SHARED_SYSTEM =
+  'Você é um conselheiro de IA de uma incorporadora imobiliária redigindo o relatório pós-reunião para o empresário. ' +
+  'Leia a transcrição e siga as INSTRUÇÕES DESTA TAREFA ao final da mensagem do usuário.';
+
 function counselorReportSystem(agentId: AgentId, companyId: string): string {
   const profile = requireProfile(companyId, agentId);
   return (
@@ -201,12 +206,16 @@ export async function generateCounselorReport(
     own.length > 0
       ? `\n\nO que VOCÊ apontou ao vivo durante a reunião:\n${own.map((c) => `- ${c.text}`).join('\n')}`
       : '';
+  // Custo: `system` + transcrição são IDÊNTICOS para todos os conselheiros desta
+  // reunião (prefixo cacheável pelo provedor); persona, escopo e o que ele disse
+  // ao vivo vão no FIM (`taskInstruction`), nunca antes da transcrição.
   const result = await llm.complete({
-    system: counselorReportSystem(agentId, companyId),
+    system: COUNSELOR_REPORT_SHARED_SYSTEM,
     model: modelOverride,
     reasoningEffort: reasoningEffortOverride,
     context: [],
-    transcript: `Transcrição da reunião:\n${transcript}${saidBlock}`,
+    transcript: `Transcrição da reunião:\n${transcript}`,
+    taskInstruction: `${counselorReportSystem(agentId, companyId)}${saidBlock}`,
   });
   if (result.skip || !result.text.trim()) {
     throw new Error(

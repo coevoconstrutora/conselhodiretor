@@ -52,6 +52,14 @@ export interface LlmCompletionRequest {
   /** ADITIVO (B1): autoriza o modelo a responder {"skip":true} quando não há nada novo. */
   readonly allowSkip?: boolean;
   /**
+   * ADITIVO (custo): instrução ESPECÍFICA da chamada, anexada ao FIM da
+   * mensagem do usuário (depois da transcrição). Permite que várias chamadas
+   * sobre a MESMA transcrição (ex.: os relatórios dos conselheiros) compartilhem
+   * `system` + transcrição como prefixo idêntico, habilitando o cache automático
+   * de prompt do provedor (entrada em cache sai bem mais barata).
+   */
+  readonly taskInstruction?: string;
+  /**
    * Configuração INDIVIDUAL do conselheiro (Etapa "IA por conselheiro") —
    * sobrepõe o modelo/esforço de raciocínio default do provider PARA ESTA
    * chamada. `undefined` ⇒ o provider usa o próprio default. Só o adapter

@@ -29,6 +29,7 @@ export {
 export {
   applyPresidentConfig,
   getPresidentConfig,
+  capReasoningEffort,
   DEFAULT_PRESIDENT_CONFIG,
   type PresidentConfig,
 } from './president-config';

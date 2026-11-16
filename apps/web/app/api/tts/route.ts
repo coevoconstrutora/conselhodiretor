@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { getAgentProfiles } from '@conselho/kb';
 import { getCurrentUser } from '@/lib/auth';
@@ -46,21 +47,43 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
   const voice = profile.voice ?? resolveAgentVoice(agentId);
   const instructions =
     profile.voiceInstructions?.trim() || buildVoiceInstructions(profile.displayName, profile.riskPosture);
-  const response = await synthesizeSpeech({
-    apiKey,
-    voice,
-    input: expandForSpeech(text).slice(0, MAX_CHARS),
-    instructions,
-    speed: profile.speechRate ?? DEFAULT_SPEECH_RATE,
-  });
+  const input = expandForSpeech(text).slice(0, MAX_CHARS);
+  const speed = profile.speechRate ?? DEFAULT_SPEECH_RATE;
 
-  if (!response.ok || !response.body) {
-    const detail = await response.text().catch(() => '');
-    console.error(`[tts] OpenAI falhou (${response.status}): ${detail.slice(0, 200)}`);
-    return NextResponse.json({ error: 'tts-failed' }, { status: 502 });
+  // Custo: a mesma fala é pedida por cada navegador conectado à reunião. Cache em
+  // memória (por voz/estilo/velocidade/texto) + deduplicação de requisições em voo:
+  // a OpenAI cobra o áudio UMA vez por contribuição, não uma por ouvinte.
+  const cacheKey = createHash('sha256').update(`${voice}\n${instructions}\n${speed}\n${input}`).digest('hex');
+  let audio = ttsCache.get(cacheKey);
+  if (!audio) {
+    audio = synthesizeToBuffer({ apiKey, voice, input, instructions, speed });
+    ttsCache.set(cacheKey, audio);
+    while (ttsCache.size > TTS_CACHE_MAX_ENTRIES) {
+      ttsCache.delete(ttsCache.keys().next().value as string);
+    }
+    audio.catch(() => ttsCache.delete(cacheKey)); // falha nunca fica em cache
   }
 
-  return new Response(response.body, {
-    headers: { 'content-type': 'audio/mpeg', 'cache-control': 'no-store' },
-  });
+  try {
+    const buffer = await audio;
+    return new Response(new Uint8Array(buffer), {
+      headers: { 'content-type': 'audio/mpeg', 'cache-control': 'private, max-age=3600' },
+    });
+  } catch (error) {
+    console.error(`[tts] OpenAI falhou: ${error instanceof Error ? error.message : String(error)}`);
+    return NextResponse.json({ error: 'tts-failed' }, { status: 502 });
+  }
+}
+
+/** Cache de áudio em memória (reuniões ao vivo no mesmo processo) — limitado em nº de entradas. */
+const TTS_CACHE_MAX_ENTRIES = 60;
+const ttsCache = new Map<string, Promise<Buffer>>();
+
+async function synthesizeToBuffer(opts: Parameters<typeof synthesizeSpeech>[0]): Promise<Buffer> {
+  const response = await synthesizeSpeech(opts);
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`${response.status} ${detail.slice(0, 200)}`);
+  }
+  return Buffer.from(await response.arrayBuffer());
 }

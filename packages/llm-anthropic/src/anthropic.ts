@@ -160,7 +160,9 @@ export class AnthropicLlmProvider implements ILlmProvider {
           messages: [
             {
               role: 'user',
-              content: `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}`,
+              content:
+                `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}` +
+                (req.taskInstruction ? `\n\nINSTRUÇÕES DESTA TAREFA:\n${req.taskInstruction}` : ''),
             },
           ],
         }),

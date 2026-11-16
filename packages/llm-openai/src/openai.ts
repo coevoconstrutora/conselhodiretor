@@ -152,7 +152,8 @@ export class OpenAiLlmProvider implements ILlmProvider {
 
     const data = await this.callApi(
       `${req.system}\n\n${outputInstructions(this.config.longForm ?? false, req.allowSkip ?? false)}`,
-      `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}`,
+      `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}` +
+        (req.taskInstruction ? `\n\nINSTRUÇÕES DESTA TAREFA:\n${req.taskInstruction}` : ''),
       this.config.maxTokens ?? 300,
       true,
       req.model,

@@ -61,6 +61,13 @@ export type FullBoardListener = (event: FullBoardEvent) => void;
 export interface FullBoardConfig extends GatekeeperConfig {
   /** Intervalo do tick de release (pausa/fila). Default 1000ms. */
   readonly tickMs?: number;
+  /**
+   * Síntese do Presidente AO VIVO (automática, ao fim de cada rodada). Default
+   * `false`: o Presidente sintetiza apenas ao final da reunião (relatório final).
+   * A síntese ao vivo era a chamada mais cara do board (modelo/raciocínio altos
+   * a cada rodada) e, ao falhar, era retentada a cada tick sem limite.
+   */
+  readonly autoSynthesis?: boolean;
   /** Síntese automática: contribuições mínimas de personas distintas (default 2). */
   readonly synthesisMinPersonas?: number;
   /** Silêncio p/ síntese automática (default 12s). */
@@ -194,11 +201,14 @@ export class FullBoardOrchestrator {
   /** B4 — case review periódico. */
   private lastSpeechAt = 0;
   private lastCaseReviewAt = 0;
+  /** Falas finais novas desde o último case review (0 ⇒ review pulado). */
+  private finalsSinceReview = 0;
   private caseReviewInFlight = false;
   private caseReviewRun: Promise<void> = Promise.resolve();
   private synthesized = false;
   private pending: Promise<void> = Promise.resolve();
   private readonly now: () => number;
+  private readonly autoSynthesis: boolean;
   private readonly config: Required<Pick<FullBoardConfig, 'tickMs' | 'synthesisMinPersonas' | 'synthesisQuietMs'>>;
   private readonly config2: Pick<FullBoardConfig, 'onDecision' | 'onContributionLatency'>;
   private readonly configReview: Pick<FullBoardConfig, 'caseReviewMs' | 'onCaseReview' | 'pauseMs'>;
@@ -241,6 +251,7 @@ export class FullBoardOrchestrator {
     this.meetingGuidance = config.meetingGuidance;
     this.agendaOpinions = config.agendaOpinions ?? false;
     this.now = config.now ?? Date.now;
+    this.autoSynthesis = config.autoSynthesis ?? false;
     this.config = {
       tickMs: config.tickMs ?? 1000,
       synthesisMinPersonas: config.synthesisMinPersonas ?? 2,
@@ -374,6 +385,7 @@ export class FullBoardOrchestrator {
 
   private async onFinalSegment(text: string, at: number): Promise<void> {
     this.recentFinals.push(text);
+    this.finalsSinceReview++;
     if (this.recentFinals.length > 8) this.recentFinals.shift();
     this.caseState.onFinalSegment(text); // B3: alimenta a memória do caso
     // fire-and-forget: o update roda em paralelo à fala (o tracker impede 2 em voo)
@@ -426,9 +438,11 @@ export class FullBoardOrchestrator {
       this.config2.onDecision?.('deliver'); // liberado da pausa/fila (E10)
       await this.produce(candidate);
     }
-    // síntese automática ao fim da rodada (FR6): atividade + silêncio prolongado
+    // síntese automática ao fim da rodada (FR6): atividade + silêncio prolongado.
+    // Desligada por padrão — o Presidente sintetiza só ao final da reunião.
     const distinct = new Set(this.round.map((r) => r.contribution.agentId));
     if (
+      this.autoSynthesis &&
       !this.synthesized &&
       distinct.size >= this.config.synthesisMinPersonas &&
       this.lastContributionAt > 0 &&
@@ -459,10 +473,12 @@ export class FullBoardOrchestrator {
     const intervalMs = this.configReview.caseReviewMs;
     if (!intervalMs || typeof this.llm.completeText !== 'function' || this.caseReviewInFlight) return;
     if (this.recentFinals.length === 0) return; // reunião ainda sem fala
+    if (this.finalsSinceReview === 0) return; // nada novo desde o último review — não gasta token em silêncio
     if (now - this.lastSpeechAt < (this.configReview.pauseMs ?? 2500)) return; // fora de pausa
     if (now - this.lastCaseReviewAt < intervalMs) return;
     this.caseReviewInFlight = true;
     this.lastCaseReviewAt = now;
+    this.finalsSinceReview = 0;
     try {
       const scopes = Object.values(this.profiles)
         .filter(

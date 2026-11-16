@@ -198,7 +198,11 @@ export class GeminiLlmProvider implements ILlmProvider {
         {
           role: 'user',
           parts: [
-            { text: `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}` },
+            {
+              text:
+                `Transcrição recente da reunião:\n"""${req.transcript}"""${kbContext}${priorsBlock}` +
+                (req.taskInstruction ? `\n\nINSTRUÇÕES DESTA TAREFA:\n${req.taskInstruction}` : ''),
+            },
           ],
         },
       ],

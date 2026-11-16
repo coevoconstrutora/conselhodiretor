@@ -46,6 +46,18 @@ export const DEFAULT_PRESIDENT_CONFIG: PresidentConfig = {
   speechToneAnalysisEnabled: false,
 };
 
+const EFFORT_ORDER = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+
+/**
+ * Limita o esforço de raciocínio a um teto (tokens de raciocínio são cobrados
+ * como saída). Usado em tarefas de TRANSCRIÇÃO/EXTRAÇÃO (ata, decisões/ações),
+ * que não precisam do esforço da síntese final. Valor desconhecido ⇒ o teto.
+ */
+export function capReasoningEffort(effort: string | undefined, max: (typeof EFFORT_ORDER)[number]): string {
+  const i = EFFORT_ORDER.indexOf((effort ?? max) as (typeof EFFORT_ORDER)[number]);
+  return i === -1 || i > EFFORT_ORDER.indexOf(max) ? max : EFFORT_ORDER[i]!;
+}
+
 const configByCompany = new Map<string, PresidentConfig>();
 
 export function applyPresidentConfig(companyId: string, config: Partial<PresidentConfig>): void {
