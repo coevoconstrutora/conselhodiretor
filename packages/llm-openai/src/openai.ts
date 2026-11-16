@@ -35,7 +35,14 @@ export interface OpenAiLlmConfig {
   /** Documentos longos (ex.: relatório da reunião): remove o limite de 1-3 frases. */
   readonly longForm?: boolean;
   /** Telemetria (E10): tokens consumidos por chamada (custo NFR7). */
-  readonly onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  readonly onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    /** Parte de `inputTokens` servida do cache de prompt (cobrada mais barato). */
+    cachedInputTokens?: number;
+    /** Modelo que respondeu (base do custo em US$ por modelo). */
+    model?: string;
+  }) => void;
   readonly fetchImpl?: typeof fetch;
   /** Timeout por chamada em ms (default 60s). */
   readonly timeoutMs?: number;
@@ -124,7 +131,11 @@ function outputInstructions(longForm: boolean, allowSkip: boolean): string {
 interface OpenAiResponse {
   model?: string;
   choices?: Array<{ message?: { content?: string } }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number };
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
   error?: { message?: string };
 }
 
@@ -254,6 +265,8 @@ export class OpenAiLlmProvider implements ILlmProvider {
     this.config.onUsage?.({
       inputTokens: data.usage?.prompt_tokens ?? 0,
       outputTokens: data.usage?.completion_tokens ?? 0,
+      cachedInputTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      model: data.model ?? model,
     });
 
     return data;

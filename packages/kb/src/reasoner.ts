@@ -7,6 +7,14 @@ import type {
 import { companyProfileBlock } from './company-profile';
 
 /**
+ * Padrão dos CONSELHEIROS (não do Presidente/Secretária) quando o perfil não
+ * define modelo/raciocínio próprios: Luna com raciocínio médio. Vale ao vivo e
+ * nos relatórios finais; cada conselheiro pode sobrepor no próprio perfil.
+ */
+export const COUNSELOR_DEFAULT_MODEL = 'gpt-5.6-luna';
+export const COUNSELOR_DEFAULT_REASONING_EFFORT = 'medium';
+
+/**
  * Agent Reasoner.
  *
  * Após o Gate aprovar um candidato: recupera KB SÓ do namespace do agente →
@@ -344,8 +352,8 @@ export class AgentReasoner {
       // Etapa "IA por conselheiro": modelo/esforço INDIVIDUAIS, não o default
       // global do board — `undefined` quando o conselheiro não configurou
       // nada, e o provider cai no próprio default.
-      model: profile.aiModel ?? undefined,
-      reasoningEffort: profile.reasoningEffort ?? undefined,
+      model: profile.aiModel ?? COUNSELOR_DEFAULT_MODEL,
+      reasoningEffort: profile.reasoningEffort ?? COUNSELOR_DEFAULT_REASONING_EFFORT,
     });
     if (contribution.skip) return { ...contribution, agentId: input.agentId };
     return {

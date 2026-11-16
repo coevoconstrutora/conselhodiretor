@@ -79,6 +79,8 @@ describe('Migrations — schema base', () => {
       '0033_decisions_actions_tracking',
       '0034_participant_app_user_unique',
       '0035_meeting_confidential_sharing',
+      '0037_system_setting',
+      '0038_counselors_luna_medium',
     ]);
   });
 

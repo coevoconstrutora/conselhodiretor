@@ -88,6 +88,19 @@ export function DiagnosticsPanel({ meetingId }: { meetingId: string }) {
           <Line ok={pipeline.wsConnected} label="Canal do board conectado (WS)" />
           <Line ok={report ? report.deepgramConfigured : null} label="Serviço de voz configurado (servidor)" />
           <Line ok={report ? report.anthropicConfigured : null} label="IA do board configurada (servidor)" />
+          {report?.costLimit ? (
+            <Line
+              ok={!report.costLimit.reached}
+              label={`Custo de IA ao vivo: US$ ${report.costLimit.spentUsd.toFixed(2)}${
+                report.costLimit.limitUsd > 0 ? ` de US$ ${report.costLimit.limitUsd.toFixed(2)}` : ' (sem limite)'
+              }`}
+              detail={
+                report.costLimit.reached
+                  ? 'limite atingido — conselho ao vivo pausado (relatórios finais não são afetados)'
+                  : 'não inclui os relatórios finais'
+              }
+            />
+          ) : null}
           <Line ok={report ? report.active : null} label="Consulta ativa no servidor" />
           <Line ok={report ? report.audioSinkRegistered : null} label="Canal de áudio ativo no servidor" />
           <Line

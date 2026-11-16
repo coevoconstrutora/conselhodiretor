@@ -881,4 +881,31 @@ CREATE TABLE IF NOT EXISTS meeting_share (
 CREATE INDEX IF NOT EXISTS idx_meeting_share_user ON meeting_share(user_id);
 `,
   },
+  {
+    name: '0037_system_setting',
+    sql: `
+-- Configurações GLOBAIS do sistema (não por empresa), editáveis pelo super-admin
+-- em /admin/costs: limite de custo de LLM por reunião ao vivo, tabela de preços
+-- por modelo etc. Chave/valor em texto; a validação fica na aplicação.
+CREATE TABLE IF NOT EXISTS system_setting (
+  key        text PRIMARY KEY,
+  value      text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by uuid REFERENCES app_user(id) ON DELETE SET NULL
+);
+`,
+  },
+  {
+    name: '0038_counselors_luna_medium',
+    sql: `
+-- Decisão do dono (16/11/2026): TODOS os conselheiros de TODAS as empresas em
+-- GPT-5.6 Luna com raciocínio médio (custo). Presidente e Secretária ficam de
+-- fora — têm configuração própria (president_config). Roda uma única vez; depois
+-- disso cada conselheiro pode ser ajustado normalmente no perfil.
+UPDATE agent_profile
+   SET ai_model = 'gpt-5.6-luna',
+       reasoning_effort = 'medium'
+ WHERE agent_id NOT IN ('presidente', 'secretaria');
+`,
+  },
 ];

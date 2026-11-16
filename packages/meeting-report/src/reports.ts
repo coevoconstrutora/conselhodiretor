@@ -1,7 +1,12 @@
 import type { SqlExecutor } from '@conselho/db';
 import { encryptField, decryptField } from '@conselho/crypto';
 import { auditedClinicalWrite } from '@conselho/audit';
-import { getAgentProfiles, companyProfileBlock } from '@conselho/kb';
+import {
+  getAgentProfiles,
+  companyProfileBlock,
+  COUNSELOR_DEFAULT_MODEL,
+  COUNSELOR_DEFAULT_REASONING_EFFORT,
+} from '@conselho/kb';
 import type { ILlmProvider, AgentContribution, AgentId } from '@conselho/providers';
 import { COUNSELOR_AGENT_IDS } from '@conselho/providers';
 import { assessTranscriptSubstance, insufficientCounselorReport } from './substance';
@@ -211,8 +216,12 @@ export async function generateCounselorReport(
   // ao vivo vão no FIM (`taskInstruction`), nunca antes da transcrição.
   const result = await llm.complete({
     system: COUNSELOR_REPORT_SHARED_SYSTEM,
-    model: modelOverride,
-    reasoningEffort: reasoningEffortOverride,
+    // override explícito (experimentos) > config do conselheiro > padrão Luna/médio
+    model: modelOverride ?? requireProfile(companyId, agentId).aiModel ?? COUNSELOR_DEFAULT_MODEL,
+    reasoningEffort:
+      reasoningEffortOverride ??
+      requireProfile(companyId, agentId).reasoningEffort ??
+      COUNSELOR_DEFAULT_REASONING_EFFORT,
     context: [],
     transcript: `Transcrição da reunião:\n${transcript}`,
     taskInstruction: `${counselorReportSystem(agentId, companyId)}${saidBlock}`,

@@ -3,6 +3,9 @@ import { requireCurrentUser } from '@/lib/auth';
 import { getAllProviderCosts, defaultCostRange } from '@/lib/costs';
 import { formatUsd, formatDateBR } from '@/lib/format';
 import { DashboardShell } from '@/components/dashboard-shell';
+import { CostSettingsForm } from '@/components/cost-settings-form';
+import { getDb } from '@/lib/db';
+import { getCostSettings } from '@/lib/system-settings';
 
 const KIND_BADGE: Record<string, string> = {
   billed: '✓ faturado',
@@ -59,6 +62,7 @@ export default async function CostsAdminPage() {
   const billedOrEstimated = results.filter((r) => r.amountUsd !== null);
   const total = billedOrEstimated.reduce((sum, r) => sum + (r.amountUsd ?? 0), 0);
   const hasEstimate = results.some((r) => r.kind === 'estimated');
+  const costSettings = await getCostSettings(await getDb());
 
   return (
     <DashboardShell
@@ -81,6 +85,13 @@ export default async function CostsAdminPage() {
           </p>
         ) : null}
       </section>
+
+      <CostSettingsForm
+        limitUsd={costSettings.meetingCostLimitUsd}
+        limitSource={costSettings.limitSource}
+        pricesJson={JSON.stringify(costSettings.modelPrices, null, 2)}
+        pricesSource={costSettings.pricesSource}
+      />
 
       <section className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {results.map((r) => (

@@ -9,6 +9,8 @@ export {
 export {
   AgentReasoner,
   DEFAULT_AGENT_PROFILES,
+  COUNSELOR_DEFAULT_MODEL,
+  COUNSELOR_DEFAULT_REASONING_EFFORT,
   getAgentProfiles,
   buildAgentSystem,
   applyAgentProfileOverrides,

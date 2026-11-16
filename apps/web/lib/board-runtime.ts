@@ -20,7 +20,17 @@ import {
 } from '@conselho/meeting-report';
 import { DeepgramSttProvider } from '@conselho/stt-deepgram';
 import { BUSINESS_VOCABULARY, COUNSELOR_AGENT_IDS, type AgentId, type ISttProvider, type SttSession, type TranscriptSegment, type ILlmProvider } from '@conselho/providers';
-import { TelemetryRegistry, type GateDecisionKind, type UiEventKind, type CaseReviewOutcome } from '@conselho/telemetry';
+import {
+  TelemetryRegistry,
+  MeetingCostGuard,
+  withCostGuard,
+  DEFAULT_MEETING_COST_LIMIT_USD,
+  DEFAULT_MODEL_PRICES,
+  type GateDecisionKind,
+  type UiEventKind,
+  type CaseReviewOutcome,
+  type LlmUsage,
+} from '@conselho/telemetry';
 import {
   saveSynthesis,
   saveTranscriptSegment,
@@ -38,6 +48,7 @@ import type { SqlExecutor } from '@conselho/db';
 import { getDb } from './db';
 import { getEncryptionKey } from './crypto-key';
 import { createLlm } from './llm';
+import { getCostSettings } from './system-settings';
 import { loadAndApplyProfileOverrides, rebuildAllKnowledge } from './kb-sources';
 import { loadAndApplyCompanyProfile } from './company-profile';
 import { loadAndApplyPresidentConfig } from './president-config-store';
@@ -78,6 +89,12 @@ interface BoardRuntime {
   lastFinalAt: Map<string, number>;
   /** Tier 2 — nomeação de locutor: 1 tracker vivo por reunião, pra correção manual alcançar a sessão certa. */
   speakerNames: Map<string, SpeakerNameTracker>;
+  /**
+   * Trava de custo de LLM AO VIVO — um medidor por reunião, que sobrevive a
+   * reconexões da sala (o gasto não zera ao reentrar). Zera num restart do
+   * processo. Não cobre os relatórios finais pós-reunião.
+   */
+  costGuards: Map<string, MeetingCostGuard>;
 }
 
 const globalForBoard = globalThis as unknown as {
@@ -132,6 +149,7 @@ async function init(): Promise<BoardRuntime> {
     active: new Map(),
     lastFinalAt: new Map(),
     speakerNames: new Map(),
+    costGuards: new Map(),
   };
 }
 
@@ -312,12 +330,57 @@ class ScriptedDemoStt implements ISttProvider {
   }
 }
 
-function makeLlm(onUsage?: (u: { inputTokens: number; outputTokens: number }) => void): {
+/**
+ * Medidor de custo de LLM da reunião ao vivo (um por reunião, reaproveitado em
+ * reconexões). Limite e preços vêm de `system_setting` (editáveis em
+ * /admin/costs); se o banco falhar, cai no padrão — a trava nunca derruba a reunião.
+ */
+function getCostGuard(runtime: BoardRuntime, db: SqlExecutor, meetingId: string): MeetingCostGuard {
+  let guard = runtime.costGuards.get(meetingId);
+  if (!guard) {
+    const settings = () =>
+      getCostSettings(db).catch(() => ({
+        meetingCostLimitUsd: DEFAULT_MEETING_COST_LIMIT_USD,
+        modelPrices: DEFAULT_MODEL_PRICES,
+      }));
+    guard = new MeetingCostGuard({
+      getLimitUsd: async () => (await settings()).meetingCostLimitUsd,
+      getPrices: async () => (await settings()).modelPrices,
+      onLimitReached: ({ spentUsd, limitUsd }) =>
+        console.warn(
+          `[custo] reunião ${meetingId}: limite de US$ ${limitUsd.toFixed(2)} atingido (gasto US$ ${spentUsd.toFixed(2)}) — chamadas de IA ao vivo pausadas; relatórios finais não são afetados.`,
+        ),
+    });
+    runtime.costGuards.set(meetingId, guard);
+    // memória limitada: descarta os medidores mais antigos
+    while (runtime.costGuards.size > 100) runtime.costGuards.delete(runtime.costGuards.keys().next().value as string);
+  }
+  return guard;
+}
+
+/** Soma o uso da chamada no medidor sem nunca lançar (log só se falhar). */
+function recordUsage(guard: MeetingCostGuard, usage: LlmUsage): void {
+  guard.record(usage).catch((error) => console.error('[custo] medir uso falhou:', error));
+}
+
+function makeLlm(
+  guard: MeetingCostGuard,
+  onUsage?: (u: { inputTokens: number; outputTokens: number }) => void,
+): {
   llm: ILlmProvider;
   label: string;
 } {
   // Factory única (lib/llm.ts): Gemini > Anthropic > fake, trocável por env.
-  return createLlm(onUsage ? { onUsage } : {});
+  const { llm, label } = createLlm({
+    // com raciocínio 'medium' o raciocínio interno divide o teto com a resposta
+    // (300 tokens esvaziava a saída — ver 089a186); só é cobrado o que for usado
+    maxTokens: 1200,
+    onUsage: (u) => {
+      onUsage?.(u);
+      recordUsage(guard, u);
+    },
+  });
+  return { llm: withCostGuard(llm, guard), label };
 }
 
 /**
@@ -438,10 +501,11 @@ function boardTuningFromEnv(): Pick<FullBoardConfig, 'caseReviewMs' | 'semanticD
  * default da empresa (createLlm) — não força um modelo "rápido" à parte,
  * já que gpt-5.6-luna (default de produção) já é o tier rápido/barato.
  */
-function createRelevanceRouter(): RelevanceRouter | undefined {
+function createRelevanceRouter(guard: MeetingCostGuard): RelevanceRouter | undefined {
   if (process.env.BOARD_RELEVANCE_ROUTER !== 'on') return undefined;
-  const { llm } = createLlm({ maxTokens: 300 });
-  return new RelevanceRouter(llm);
+  // mesma trava de custo da reunião: o roteador também gasta tokens ao vivo
+  const { llm } = createLlm({ maxTokens: 300, onUsage: (u) => recordUsage(guard, u) });
+  return new RelevanceRouter(withCostGuard(llm, guard));
 }
 
 /** Wiring comum de telemetria por reunião. */
@@ -586,7 +650,8 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
   );
   const hooks = telemetryHooks(runtime, meetingId);
   runtime.telemetry.sessionStarted(meetingId);
-  const { llm, label } = makeLlm(hooks.onUsage);
+  const costGuard = getCostGuard(runtime, db, meetingId);
+  const { llm, label } = makeLlm(costGuard, hooks.onUsage);
   const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
   const meetingGuidance = await loadMeetingGuidance(db, meetingId, companyId);
   const activeAgentIds = await getMeetingActiveAgentIds(db, meetingId);
@@ -608,7 +673,7 @@ export async function startDemoBoard(meetingId: string): Promise<{ llmLabel: str
     meetingGuidance,
     activeAgentIds,
     extraTriggers,
-    relevanceRouter: createRelevanceRouter(),
+    relevanceRouter: createRelevanceRouter(costGuard),
     presidentConfig: getPresidentConfig(companyId),
   });
   runtime.gateway.bind(meetingId, orchestrator);
@@ -794,6 +859,8 @@ export interface PipelineStatusReport {
   readonly deepgramConfigured: boolean;
   readonly anthropicConfigured: boolean;
   readonly persistedFinals: number;
+  /** Custo de IA ao vivo desta reunião (sem os relatórios finais) vs. o limite; `null` = reunião sem medidor. */
+  readonly costLimit: { readonly spentUsd: number; readonly limitUsd: number; readonly reached: boolean } | null;
 }
 
 export async function getPipelineStatus(meetingId: string): Promise<PipelineStatusReport> {
@@ -818,6 +885,10 @@ export async function getPipelineStatus(meetingId: string): Promise<PipelineStat
       process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY,
     ),
     persistedFinals,
+    costLimit: (() => {
+      const guard = runtime.costGuards.get(meetingId);
+      return guard ? { spentUsd: guard.spentUsd, limitUsd: guard.limitUsd, reached: guard.reached } : null;
+    })(),
   };
 }
 
@@ -916,7 +987,8 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
     runtime.gateway.registerAudioSink(meetingId, audio.sink);
     const hooks = telemetryHooks(runtime, meetingId);
     runtime.telemetry.sessionStarted(meetingId);
-    const { llm } = makeLlm(hooks.onUsage);
+    const costGuard = getCostGuard(runtime, db, meetingId);
+    const { llm } = makeLlm(costGuard, hooks.onUsage);
     const priorMeetingsContext = await loadPriorMeetingsContext(db, companyId, meetingId);
     const meetingGuidance = await loadMeetingGuidance(db, meetingId, companyId);
     // Opiniões sobre a pauta só na PRIMEIRA abertura: se a reunião já tem fala ou
@@ -945,7 +1017,7 @@ export async function startLiveBoard(meetingId: string): Promise<void> {
       extraTriggers,
       priorMeetingsContext,
       meetingGuidance,
-      relevanceRouter: createRelevanceRouter(),
+      relevanceRouter: createRelevanceRouter(costGuard),
       presidentConfig: getPresidentConfig(companyId),
     });
     runtime.gateway.bind(meetingId, orchestrator);

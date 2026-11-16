@@ -22,7 +22,12 @@ import { FakeLlmProvider, type ILlmProvider } from '@conselho/providers';
 export interface LlmOptions {
   readonly longForm?: boolean;
   readonly maxTokens?: number;
-  readonly onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  readonly onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cachedInputTokens?: number;
+    model?: string;
+  }) => void;
   /** Default do adapter é 60s — raciocínio alto (xhigh) em documentos longos pode passar disso. */
   readonly timeoutMs?: number;
 }
